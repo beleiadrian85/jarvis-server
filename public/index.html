@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#040608">
-<link rel="manifest" href="manifest.json">
 <title>JARVIS</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
@@ -52,7 +51,7 @@
   .context-panel{position:relative;z-index:10;background:var(--bg2);
     border-bottom:1px solid var(--border);overflow:hidden;
     transition:max-height 0.35s ease;max-height:0;flex-shrink:0}
-  .context-panel.open{max-height:220px}
+  .context-panel.open{max-height:280px}
   .context-inner{padding:12px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
   .ctx-card{background:var(--bg3);border:1px solid var(--border);border-radius:4px;
     padding:9px 10px 9px 14px;position:relative;overflow:hidden}
@@ -140,20 +139,28 @@
 <div class="context-panel" id="contextPanel">
   <div class="context-inner">
     <div class="ctx-card">
-      <div class="ctx-label">Proiect Principal</div>
-      <div class="ctx-value">Calea Șurii Mici<br><span style="font-size:11px;color:var(--text-dim)">~94 ap · 3 blocuri</span></div>
+      <div class="ctx-label">Bellresidence C3</div>
+      <div class="ctx-value">Calea Surii Mici<br><span style="font-size:11px;color:var(--text-dim)">30 ap + 197mp com.</span></div>
     </div>
     <div class="ctx-card">
-      <div class="ctx-label">Presiune Financiară</div>
-      <div class="ctx-value warn">IMM Invest<br><span style="font-size:11px">~3,4M lei · dec 2026</span></div>
+      <div class="ctx-label">IMM Invest</div>
+      <div class="ctx-value warn">~3,4M lei<br><span style="font-size:11px">rambursare dec 2026</span></div>
     </div>
     <div class="ctx-card">
       <div class="ctx-label">Dosar Hipodromului</div>
-      <div class="ctx-value alert">331 → 212<br><span style="font-size:11px">842.039 RON · în lucru</span></div>
+      <div class="ctx-value alert">331 → 212<br><span style="font-size:11px">842.039 RON</span></div>
     </div>
     <div class="ctx-card">
       <div class="ctx-label">Lease-back BT</div>
-      <div class="ctx-value ok">Activ<br><span style="font-size:11px">~15.000 €/lună</span></div>
+      <div class="ctx-value ok">Activ<br><span style="font-size:11px">~15.000 EUR/luna</span></div>
+    </div>
+    <div class="ctx-card">
+      <div class="ctx-label">Mers zilnic</div>
+      <div class="ctx-value ok">20 min<br><span style="font-size:11px">alarma 9:00</span></div>
+    </div>
+    <div class="ctx-card">
+      <div class="ctx-label">Racord Terraelectrica</div>
+      <div class="ctx-value alert">~668k lei<br><span style="font-size:11px">strategie escrow</span></div>
     </div>
   </div>
 </div>
@@ -161,7 +168,7 @@
 <div class="input-area">
   <div class="input-row">
     <div class="input-wrapper">
-      <textarea id="inputBox" placeholder="Scrie sau vorbește..." rows="1"
+      <textarea id="inputBox" placeholder="Scrie sau vorbeste..." rows="1"
         oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
     </div>
     <button class="btn mic" id="btnMic" onclick="toggleVoice()">
@@ -179,51 +186,82 @@
       </svg>
     </button>
   </div>
-  <div class="voice-status" id="voiceStatus">⬤ ASCULT...</div>
+  <div class="voice-status" id="voiceStatus">ASCULT...</div>
 </div>
 <script>
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
-}
+const SYSTEM_PROMPT = `Esti JARVIS, asistentul personal al lui Adrian Belei (Adi), 41 ani, dezvoltator imobiliar si investitor in Sibiu, Romania.
 
-const SYSTEM_PROMPT = `Ești JARVIS, asistentul personal al lui Adrian Belei (Adi), dezvoltator imobiliar și investitor în Sibiu, România.
+IDENTITATE SI FAMILIE:
+- Companie principala: SC Profi Concept SRL (CUI RO32366949)
+- Partenera: Mihaela (administrator, semnatar PV-uri); copii: Evelin si Cristi
+- Caracterul lui Adi: pragmatic, direct, ia decizii lent dar solid; toleranta mare la oameni incapabili (problema recunoscuta); tendinta de a amana problemele dureroase; se autosacrifca pentru altii
 
-CONTEXT:
-- Companie: SC Profi Concept SRL (CUI RO32366949)
-- Parteneră: Mihaela; copii: Evelin și Cristi
-- Portofoliu: office Hipodromului (chiriaș Infosys), Calea Șurii Mici (~94 ap), bloc Marșa
+PORTOFOLIU IMOBILIAR:
+1. Cladire office Hipodromului (Str. Hipodromului nr. 27, Sibiu): D+P+5E, ~1.364 mp utili, construit 2007, dat in folosinta 2010, renovat 2022 cu forta proprie. Chirias: Infosys Romania SRL, ~30.000 EUR/luna + TVA, contract pana end-2026+. Lease-back BT Leasing finalizat martie 2026: rata ~15.000 EUR/luna + TVA, termen 10 ani.
+2. Teren rezidential Calea Surii Mici: ~6.000 mp, parcelat in 3 loturi de ~2.000 mp. Proiect Bellresidence - 3 blocuri: C3 (30 ap + 197 mp spatiu comercial, 1.860 mp utili), C2 (34 ap, 1.860 mp utili), C1 (identic C2). Autorizatie construire valabila. Contract semnat Evo Management & Investment SRL (06.03.2026): DTAC + DDE. Preturi: early pre-sale 1.350 EUR/mp, normal 1.400-1.550 EUR/mp, white-box 1.600 EUR/mp, turnkey 1.750 EUR/mp (fara TVA). Cost constructie estimat 650-700 EUR/mp construit.
+3. Bloc Marsa: 122 camere nefamilisti, achizitie ~125.000 EUR, renovare estimata ~450.000 EUR, decizie neluata inca.
 
-PROBLEME ACTIVE:
-1. Dosar Hipodromului: reclasificare 331.05→212, 842.039,61 RON, PV 31.12.2025
-2. Cont 331 total ~4,5M lei - parțial rezolvat
-3. Calea Șurii Mici C3: autorizație OK, Evo Management semnat, EMCO fără angajament, racord ~668k lei, pre-vânzări verbale ~370-400k€ neconvertite
-4. IMM Invest/CEC: ~3,1-3,7M lei, rambursare dec 2026
-5. Lease-back BT: ~15.000€/lună, Infosys ~30.000€/lună
-6. Șelimbăr >350.000€ fără sarcini - potențial colateral
+PROBLEME CONTABILE ACTIVE:
+1. PRIORITATE MAXIMA - Dosar Hipodromului: Reclasificare cont 331.05 la cont 212, suma 842.039,61 RON (780.845 RON manopera + 61.194,61 RON materiale). PV datat 31.12.2025, amortizare din 01.01.2026. Lucrari executate 2022: demolari interioare, compartimentari gips-carton, finisaje, reparatii exterioare. Nu necesita autorizatie construire (art. 11 alin. 1 lit. b si c Legea 50/1991). Semnatari PV: Belei Mihaela Viorica + Expert Office SRL. Dosar structurat in 5 subdosare.
+2. Cont 331 total ~4,5M lei - partial rezolvat (842k reclasificat), restul neabordat inca.
+3. Deviz materiale Hipodromului: ~321.742 RON (fara TVA), fisier Deviz_Materiale_Hipodromului_320k.xlsx generat.
+4. Centralizator facturi SC SOMA SRL: 16 facturi ian-dec 2022, servicii colectare/transport deseuri constructii, obiectiv Selimbarului nr. 90, Cisnădie; cont contabil 4426/628.02=401.
+5. Expropriere Calea Surii Mici CF 137767: Primaria Sibiu a expropriat partial terenul pentru coridor de mobilitate. OCPI a respins cererea de indreptare eroare materiala a Primariei (dec 2025 + apr 2026). Primaria intentioneaza plangere la judecatorie.
 
-PROGRAM PERSONAL:
-- Mers pe jos 20 min zilnic la 9:00 (alarma setată)
-- Sistem în construcție: dimineață structurată, prima oră birou fără întreruperi, jurnal vocal seara
-- Analize apr 2026: normale; glicemie 99 (limită), GGT 35.4, fumător, fără sport
+FINANTARE SI LICHIDITATI:
+- IMM Invest / CEC: sold ~3,1-3,7 milioane lei, presiune rambursare pana dec 2026. Strategie discutata: sacrificare 4 apartamente pre-sale pentru stingere.
+- Lease-back BT: activ, rata ~15.000 EUR/luna.
+- Proprietate Selimbar (casa, fara sarcini, >350.000 EUR): recomandat ca colateral linie revolving CEC in loc de vanzare.
+- Linie capital de lucru: posibila pana la 50% CA 2025.
 
-STIL: Română întotdeauna. Direct, pragmatic, fără menajamente. Fiscal, contabil, bancar. Riscuri pe față. Concis pe mobil.`;
+PROIECT CALEA SURII MICI - BLOCAJE ACTUALE:
+- Racord electric: Terraelectrica cere plata integrala ~668.000 lei + TVA. Strategie: alimentare temporara organizare santier + invocare Ordin ANRE 59 + separare racord definitiv vs temporar + optiunea escrow in loc de plata cash.
+- EMCO (rosie + termoizolatie + hidroizolatie, compensare teren/apartamente C1-C2): lipseste angajament ferm.
+- Pre-vanzari verbale ~370-400k EUR: neconvertite in antecontracte notariale cu depozit 10%.
+- Sistem constructie analizat: Rokabuild (bolturi roca vulcanica - sistem alternativ BCA, mai scump dar performanta termica superioara).
+- Marketing: proiect Bellresidence, landing page creat, campanie Meta Ads + Google Ads planificata.
+
+SANATATE SI PROGRAM PERSONAL:
+- Varsta: 41 ani. Fumator. Fara sport pana acum.
+- Analize medicale apr 2026 (Synevo): toate in limite normale. Glicemie 99 mg/dL (limita superioara normala - risc prediabet). GGT 35.4 (ok dar de urmarit cu alcool/fumat). Hemoglobina si hematocrit usor spre limita superioara (fumat contributiv).
+- Program nou inceput (mai 2026): mers pe jos 20 minute zilnic, alarma setata la 9:00.
+- Ziua tipica: trezire 8-9, cafea + tigara + gazon, dus, birou. Ziua reactiva (ia problemele cum vin). Pleaca acasa 16-17. Masa cu familia, TV/telefon seara. Culcare ~23:00.
+- Sistem in constructie: prima ora la birou fara intreruperi, jurnal vocal seara 5 minute.
+
+CONTEXT PERSONAL (tratat cu discretie, nu adus in discutie daca Adi nu mentioneza):
+- Relatia cu Mihaela trece printr-o perioada dificila. Adi a constientizat un dezechilibru afectiv de lunga durata. A inceput un proces de introspectie.
+- Adi are tendinta de a pune pe altii pe primul loc si pe sine pe locul doi - lucreaza la asta.
+
+PROIECTE ANALIZATE / OPORTUNITATE:
+- BTS Infosys: Infosys cauta ~3.000 mp office in Sibiu (via Colliers). Parametri: chirie 14-15 EUR/mp/luna, service charge 3,5-4 EUR/mp/luna, contract 7-10 ani, break la an 5, fit-out allowance 125-150 EUR/mp, livrare 12-15 luni de la semnare.
+- PropTech AI verticalizat pentru developeri romani: idee de business identificata, piata goala, model SaaS B2B 300-800 EUR/luna/companie.
+- Parc fotovoltaic 5 MWh: analizat, capital intensiv, blocaj racord retea in Romania.
+
+STIL DE RASPUNS OBLIGATORIU:
+- Raspunde INTOTDEAUNA in romana
+- Direct, pragmatic, fara politete inutila si fara introduceri lungi
+- Gandeste fiscal, contabil si bancar
+- Spune riscurile pe fata, nu infrumuseta situatiile
+- Prioritizeaza cashflow, risc, bancabilitate, fiscalitate, structura juridica
+- Foloseste tabele pentru scenarii financiare cand e relevant
+- Cand Adi cere un mesaj de trimis: corecteaza gramatical, pastreaza tonul lui, fa-l clar si ferm
+- Nu inventa; daca nu stii, spune clar
+- Raspunsuri concise pe mobil - max 3-4 paragrafe daca nu e nevoie de mai mult
+- Esti un partener de gandire permanent, nu un consultant politicos`;
 
 let history = [];
 let recognition = null;
 let isRecording = false;
 
-setInterval(()=>{
+setInterval(function(){
   document.getElementById('clock').textContent =
     new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit',hour12:false});
 },1000);
 
-function toggleContext(){document.getElementById('contextPanel').classList.toggle('open')}
-
-function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,110)+'px'}
-
-function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
-
-function getTime(){return new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}
+function toggleContext(){document.getElementById('contextPanel').classList.toggle('open');}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,110)+'px';}
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
+function getTime(){return new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});}
 
 function fmt(t){
   return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -231,91 +269,91 @@ function fmt(t){
 }
 
 function appendMsg(role,text){
-  const m=document.getElementById('messages');
-  const d=document.createElement('div');
-  d.className=`message ${role}`;
-  d.innerHTML=`<div class="msg-avatar ${role}">${role==='jarvis'?'JAR':'ADI'}</div>
-    <div style="flex:1;min-width:0"><div class="msg-content">${fmt(text)}</div>
-    <div class="msg-meta">${getTime()}</div></div>`;
+  var m=document.getElementById('messages');
+  var d=document.createElement('div');
+  d.className='message '+role;
+  d.innerHTML='<div class="msg-avatar '+role+'">'+(role==='jarvis'?'JAR':'ADI')+'</div>'
+    +'<div style="flex:1;min-width:0"><div class="msg-content">'+fmt(text)+'</div>'
+    +'<div class="msg-meta">'+getTime()+'</div></div>';
   m.appendChild(d);
-  setTimeout(()=>{m.scrollTop=m.scrollHeight},50);
+  setTimeout(function(){m.scrollTop=m.scrollHeight;},50);
 }
 
 function showTyping(){
-  const m=document.getElementById('messages');
-  const d=document.createElement('div');
+  var m=document.getElementById('messages');
+  var d=document.createElement('div');
   d.className='message jarvis';d.id='typing';
   d.innerHTML='<div class="msg-avatar jarvis">JAR</div><div><div class="msg-content"><div class="typing"><span></span><span></span><span></span></div></div></div>';
   m.appendChild(d);m.scrollTop=m.scrollHeight;
 }
 
-function removeTyping(){const t=document.getElementById('typing');if(t)t.remove()}
+function removeTyping(){var t=document.getElementById('typing');if(t)t.remove();}
 
 async function sendMessage(){
-  const inp=document.getElementById('inputBox');
-  const text=inp.value.trim();
+  var inp=document.getElementById('inputBox');
+  var text=inp.value.trim();
   if(!text)return;
   inp.value='';inp.style.height='auto';
   appendMsg('user',text);
   history.push({role:'user',content:text});
   showTyping();
   try{
-    const r=await fetch('/api/chat',{
+    var r=await fetch('/api/chat',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({messages:history,system:SYSTEM_PROMPT})
     });
-    const data=await r.json();
+    var data=await r.json();
     removeTyping();
-    const reply=data.content?.map(b=>b.text||'').join('')||'Eroare de comunicare.';
+    var reply=data.content?data.content.map(function(b){return b.text||'';}).join(''):'Eroare de comunicare.';
     history.push({role:'assistant',content:reply});
     appendMsg('jarvis',reply);
   }catch(err){
     removeTyping();
-    appendMsg('jarvis','Eroare de conexiune. Verifică rețeaua și încearcă din nou.');
+    appendMsg('jarvis','Eroare: '+err.message);
   }
 }
 
 function toggleVoice(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){appendMsg('jarvis','Vocea necesită Chrome pe Android.');return}
-  const btn=document.getElementById('btnMic');
-  const status=document.getElementById('voiceStatus');
-  if(isRecording){recognition.stop();return}
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){appendMsg('jarvis','Vocea necesita Chrome pe Android.');return;}
+  var btn=document.getElementById('btnMic');
+  var status=document.getElementById('voiceStatus');
+  if(isRecording){recognition.stop();return;}
   recognition=new SR();
   recognition.lang='ro-RO';recognition.continuous=false;recognition.interimResults=true;
-  let ft='';
-  recognition.onstart=()=>{isRecording=true;ft='';btn.classList.add('recording');status.classList.add('active')};
-  recognition.onresult=(e)=>{
+  var ft='';
+  recognition.onstart=function(){isRecording=true;ft='';btn.classList.add('recording');status.classList.add('active');};
+  recognition.onresult=function(e){
     ft='';
-    for(let i=e.resultIndex;i<e.results.length;i++)
+    for(var i=e.resultIndex;i<e.results.length;i++)
       if(e.results[i].isFinal)ft+=e.results[i][0].transcript;
-    if(ft){document.getElementById('inputBox').value=ft;autoResize(document.getElementById('inputBox'))}
+    if(ft){document.getElementById('inputBox').value=ft;autoResize(document.getElementById('inputBox'));}
   };
-  recognition.onend=()=>{
+  recognition.onend=function(){
     isRecording=false;btn.classList.remove('recording');status.classList.remove('active');
-    const v=document.getElementById('inputBox').value.trim();
+    var v=document.getElementById('inputBox').value.trim();
     if(v)sendMessage();
   };
-  recognition.onerror=(e)=>{
+  recognition.onerror=function(e){
     isRecording=false;btn.classList.remove('recording');status.classList.remove('active');
-    if(e.error==='not-allowed')appendMsg('jarvis','Permisiunea microfonului refuzată. Setări > Chrome > Microfon.');
-    else if(e.error!=='no-speech'&&e.error!=='aborted')appendMsg('jarvis',`Eroare microfon: ${e.error}`);
+    if(e.error==='not-allowed')appendMsg('jarvis','Permisiunea microfonului refuzata. Setari > Chrome > Microfon.');
+    else if(e.error!=='no-speech'&&e.error!=='aborted')appendMsg('jarvis','Eroare microfon: '+e.error);
   };
-  try{recognition.start()}catch(e){appendMsg('jarvis','Nu am putut porni microfonul.')}
+  try{recognition.start();}catch(e){appendMsg('jarvis','Nu am putut porni microfonul.');}
 }
 
 if(window.visualViewport){
-  window.visualViewport.addEventListener('resize',()=>{
-    const m=document.getElementById('messages');
-    setTimeout(()=>{m.scrollTop=m.scrollHeight},100);
+  window.visualViewport.addEventListener('resize',function(){
+    var m=document.getElementById('messages');
+    setTimeout(function(){m.scrollTop=m.scrollHeight;},100);
   });
 }
 
-window.addEventListener('load',()=>{
-  const h=new Date().getHours();
-  const g=h<12?'Bună dimineața':h<18?'Bună ziua':'Bună seara';
-  const w=`${g}, Adi.\n\nSistem activ. Context încărcat.\n\nCe rezolvăm azi?`;
+window.addEventListener('load',function(){
+  var h=new Date().getHours();
+  var g=h<12?'Buna dimineata':h<18?'Buna ziua':'Buna seara';
+  var w=g+', Adi.\n\nSistem activ. Context complet incarcat — portofoliu, probleme deschise, sanatate, proiecte.\n\nCe rezolvam azi?';
   appendMsg('jarvis',w);
   history.push({role:'assistant',content:w});
 });

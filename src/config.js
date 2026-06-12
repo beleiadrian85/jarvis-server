@@ -19,6 +19,9 @@ export const config = {
 
   operationalMcpUrl: process.env.OPERATIONAL_MCP_URL || "",
 
+  // PIN-ul aplicatiei HUD. Daca lipseste, API-ul /api e oprit.
+  appSecret: process.env.APP_SECRET || "",
+
   weather: {
     lat: process.env.WEATHER_LAT || "45.7983",
     lon: process.env.WEATHER_LON || "24.1256",

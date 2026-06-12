@@ -1,12 +1,16 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { config, hasCalendar, hasOperational } from "./config.js";
 import { bot } from "./telegram.js";
+import { registerApi } from "./api.js";
 // import { startScheduler } from "./scheduler.js"; // ← FAZA 3
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 // Health check pentru Railway.
-app.get("/", (_req, res) => {
+app.get("/health", (_req, res) => {
   res.json({
     status: "JARVIS online",
     phase: 1,
@@ -17,6 +21,12 @@ app.get("/", (_req, res) => {
     },
   });
 });
+
+// API pentru HUD (chat + raport, protejat cu PIN).
+registerApi(app);
+
+// HUD-ul (PWA) — servit static de pe radacina.
+app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.listen(config.port, () => {
   console.log(`[http] health check pe :${config.port}`);

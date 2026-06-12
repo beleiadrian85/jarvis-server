@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#020617">
+<title>JARVIS</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020617;
+    --panel: rgba(15, 23, 42, 0.85);
+    --line: rgba(34, 211, 238, 0.18);
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34, 211, 238, 0.55);
+    --gold: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --danger: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Fira Code", monospace;
+    font-size: 16px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
+  /* grila de fundal subtila */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(34,211,238,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,.04) 1px, transparent 1px);
+    background-size: 44px 44px;
+    pointer-events: none;
+  }
+
+  #app { display: flex; flex-direction: column; height: 100%; height: 100dvh; max-width: 760px; margin: 0 auto; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(2,6,23,.95), rgba(2,6,23,.75));
+    backdrop-filter: blur(8px);
+    z-index: 20;
+  }
+  .reactor {
+    width: 44px; height: 44px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 50% 50%,
+      #e0faff 0%, var(--cyan) 22%, rgba(34,211,238,.25) 48%, transparent 70%);
+    box-shadow: 0 0 18px 2px rgba(34,211,238,.55), inset 0 0 8px rgba(255,255,255,.6);
+    position: relative;
+    animation: pulse 2.6s ease-in-out infinite;
+  }
+  .reactor::after {
+    content: ""; position: absolute; inset: -7px; border-radius: 50%;
+    border: 1px solid var(--cyan-dim);
+    border-top-color: transparent; border-bottom-color: transparent;
+    animation: spin 6s linear infinite;
+  }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 14px 1px rgba(34,211,238,.45), inset 0 0 8px rgba(255,255,255,.6);} 50% { box-shadow: 0 0 26px 5px rgba(34,211,238,.75), inset 0 0 10px rgba(255,255,255,.8);} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .head-text { flex: 1; min-width: 0; }
+  h1 {
+    font-family: "Share Tech Mono", monospace;
+    font-size: 22px; letter-spacing: .35em; color: var(--cyan);
+    text-shadow: 0 0 12px rgba(34,211,238,.5);
+  }
+  .status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 2.2s ease-in-out infinite; }
+  .dot.err { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+  .btn-raport {
+    font-family: "Share Tech Mono", monospace;
+    background: rgba(251,191,36,.08); color: var(--gold);
+    border: 1px solid rgba(251,191,36,.45); border-radius: 8px;
+    padding: 10px 16px; font-size: 14px; letter-spacing: .12em;
+    cursor: pointer; min-height: 44px;
+    transition: background .2s, box-shadow .2s;
+  }
+  .btn-raport:hover, .btn-raport:focus-visible { background: rgba(251,191,36,.16); box-shadow: 0 0 14px rgba(251,191,36,.35); outline: none; }
+  .btn-raport:disabled { opacity: .45; cursor: default; box-shadow: none; }
+
+  /* ── CHAT ── */
+  #chat {
+    flex: 1; overflow-y: auto; padding: 18px 16px 10px;
+    display: flex; flex-direction: column; gap: 12px;
+    scroll-behavior: smooth;
+  }
+  .msg {
+    max-width: 88%; padding: 11px 14px; border-radius: 10px;
+    white-space: pre-wrap; word-wrap: break-word;
+    border: 1px solid var(--line);
+    animation: rise .25s ease-out;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .msg.user {
+    align-self: flex-end;
+    background: rgba(34,211,238,.10);
+    border-color: rgba(34,211,238,.35);
+  }
+  .msg.jarvis { align-self: flex-start; background: var(--panel); }
+  .msg.jarvis.report { border-color: rgba(251,191,36,.4); box-shadow: 0 0 16px rgba(251,191,36,.08); }
+  .msg.error { align-self: center; color: var(--danger); border-color: rgba(248,113,113,.4); font-size: 14px; }
+  .msg .tag {
+    display: block; font-family: "Share Tech Mono", monospace;
+    font-size: 11px; letter-spacing: .2em; margin-bottom: 5px;
+  }
+  .msg.jarvis .tag { color: var(--cyan); }
+  .msg.jarvis.report .tag { color: var(--gold); }
+  .msg.user .tag { color: var(--cyan-dim); text-align: right; }
+
+  .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); animation: tp 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; }
+  .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes tp { 0%,60%,100% { opacity: .25; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  /* ── INPUT ── */
+  #bar {
+    display: flex; gap: 10px; align-items: flex-end;
+    padding: 10px 16px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: linear-gradient(0deg, rgba(2,6,23,.97), rgba(2,6,23,.8));
+  }
+  #inp {
+    flex: 1; resize: none; max-height: 120px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font: inherit; font-size: 16px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  #inp:focus { outline: none; border-color: var(--cyan-dim); box-shadow: 0 0 12px rgba(34,211,238,.2); }
+  #send {
+    width: 48px; height: 48px; flex: none; border-radius: 10px;
+    background: rgba(34,211,238,.12); border: 1px solid rgba(34,211,238,.45);
+    color: var(--cyan); cursor: pointer; display: grid; place-items: center;
+    transition: background .2s, box-shadow .2s;
+  }
+  #send:hover, #send:focus-visible { background: rgba(34,211,238,.22); box-shadow: 0 0 14px rgba(34,211,238,.35); outline: none; }
+  #send:disabled { opacity: .45; cursor: default; box-shadow: none; }
+
+  /* ── PIN GATE ── */
+  #gate {
+    position: fixed; inset: 0; z-index: 50;
+    background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    padding: 24px; text-align: center;
+  }
+  #gate.hidden { display: none; }
+  #gate .reactor { width: 84px; height: 84px; }
+  #gate h1 { font-size: 30px; }
+  #gate p { color: var(--muted); font-size: 14px; max-width: 300px; }
+  #pin {
+    background: var(--panel); color: var(--cyan); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px; font: inherit; font-size: 22px;
+    text-align: center; letter-spacing: .4em; width: 230px;
+  }
+  #pin:focus { outline: none; border-color: var(--cyan-dim); box-shadow: 0 0 14px rgba(34,211,238,.25); }
+  #gate button {
+    font-family: "Share Tech Mono", monospace;
+    background: rgba(34,211,238,.12); color: var(--cyan);
+    border: 1px solid rgba(34,211,238,.45); border-radius: 10px;
+    padding: 13px 36px; font-size: 16px; letter-spacing: .2em; cursor: pointer;
+    transition: background .2s, box-shadow .2s;
+  }
+  #gate button:hover, #gate button:focus-visible { background: rgba(34,211,238,.22); box-shadow: 0 0 16px rgba(34,211,238,.4); outline: none; }
+  #gate .err { color: var(--danger); font-size: 14px; min-height: 20px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="reactor" aria-hidden="true"></div>
+  <h1>JARVIS</h1>
+  <p>Sistem privat. Introdu codul de acces.</p>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Cod de acces" placeholder="••••••">
+  <div class="err" id="gate-err" role="alert"></div>
+  <button id="gate-go">ACCES</button>
+</div>
+
+<div id="app">
+  <header>
+    <div class="reactor" aria-hidden="true"></div>
+    <div class="head-text">
+      <h1>JARVIS</h1>
+      <div class="status"><span class="dot" id="dot"></span><span id="status-txt">conectare…</span></div>
+    </div>
+    <button class="btn-raport" id="btn-raport">RAPORT</button>
+  </header>
+
+  <main id="chat" aria-live="polite"></main>
+
+  <div id="bar">
+    <textarea id="inp" rows="1" placeholder="Spune-i lui Jarvis…" aria-label="Mesaj"></textarea>
+    <button id="send" aria-label="Trimite mesajul">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const chat = $("chat"), inp = $("inp"), btnSend = $("send"), btnRaport = $("btn-raport");
+let history = [];   // {role, content} — pastrat doar in sesiunea curenta
+let key = localStorage.getItem("jarvis_key") || "";
+
+// ── PIN gate ──
+async function tryKey(k) {
+  const r = await fetch("/api/status", { headers: { "x-jarvis-key": k } });
+  return r.ok ? r.json() : null;
+}
+async function unlock() {
+  const k = $("pin").value.trim();
+  if (!k) return;
+  $("gate-err").textContent = "";
+  const st = await tryKey(k).catch(() => null);
+  if (st) {
+    key = k;
+    localStorage.setItem("jarvis_key", k);
+    $("gate").classList.add("hidden");
+    boot(st);
+  } else {
+    $("gate-err").textContent = "Cod incorect.";
+    $("pin").value = "";
+    $("pin").focus();
+  }
+}
+$("gate-go").addEventListener("click", unlock);
+$("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+// ── UI helpers ──
+function addMsg(cls, tag, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  if (tag) {
+    const t = document.createElement("span");
+    t.className = "tag"; t.textContent = tag;
+    d.appendChild(t);
+  }
+  d.appendChild(document.createTextNode(text));
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+function addTyping() {
+  const d = document.createElement("div");
+  d.className = "msg jarvis";
+  d.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+function setBusy(b) {
+  btnSend.disabled = b; btnRaport.disabled = b; inp.disabled = b;
+  if (!b) inp.focus();
+}
+
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-jarvis-key": key },
+    body: JSON.stringify(body || {}),
+  });
+  if (r.status === 401) {
+    localStorage.removeItem("jarvis_key");
+    location.reload();
+    return null;
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ("Eroare " + r.status));
+  return data;
+}
+
+// ── Chat ──
+async function send() {
+  const text = inp.value.trim();
+  if (!text || btnSend.disabled) return;
+  inp.value = ""; inp.style.height = "auto";
+  addMsg("user", "TU", text);
+  history.push({ role: "user", content: text });
+  setBusy(true);
+  const t = addTyping();
+  try {
+    const data = await api("/api/chat", { messages: history });
+    if (!data) return;
+    t.remove();
+    addMsg("jarvis", "JARVIS", data.reply);
+    history.push({ role: "assistant", content: data.reply });
+  } catch (e) {
+    t.remove();
+    addMsg("error", "", e.message);
+    history.pop();
+  } finally {
+    setBusy(false);
+  }
+}
+btnSend.addEventListener("click", send);
+inp.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+inp.addEventListener("input", () => {
+  inp.style.height = "auto";
+  inp.style.height = Math.min(inp.scrollHeight, 120) + "px";
+});
+
+// ── Raport ──
+btnRaport.addEventListener("click", async () => {
+  if (btnRaport.disabled) return;
+  setBusy(true);
+  const t = addTyping();
+  try {
+    const data = await api("/api/raport");
+    if (!data) return;
+    t.remove();
+    addMsg("jarvis report", "RAPORT", data.report);
+  } catch (e) {
+    t.remove();
+    addMsg("error", "", e.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+// ── Boot ──
+function boot(st) {
+  $("dot").className = "dot on";
+  const srcs = [];
+  srcs.push("vreme " + st.city);
+  if (st.sources.operational) srcs.push("operational");
+  if (st.sources.calendar) srcs.push("calendar");
+  $("status-txt").textContent = "online · " + srcs.join(" · ");
+  if (!chat.children.length) {
+    addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
+  }
+  inp.focus();
+}
+(async () => {
+  if (key) {
+    const st = await tryKey(key).catch(() => null);
+    if (st) { $("gate").classList.add("hidden"); boot(st); return; }
+    localStorage.removeItem("jarvis_key");
+  }
+  $("pin").focus();
+})();
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+</script>
+</body>
+</html>

@@ -10,197 +10,283 @@
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #020617;
-    --panel: rgba(15, 23, 42, 0.85);
-    --line: rgba(34, 211, 238, 0.18);
     --cyan: #22d3ee;
+    --cyan-bright: #67e8f9;
     --cyan-dim: rgba(34, 211, 238, 0.55);
+    --cyan-faint: rgba(34, 211, 238, 0.14);
     --gold: #fbbf24;
-    --text: #e2e8f0;
-    --muted: #64748b;
+    --text: #cdf3fb;
+    --muted: #5b8aa0;
     --danger: #f87171;
+    --green: #34d399;
+    --orange: #fb923c;
+    --yellow: #facc15;
+    --panel: rgba(8, 20, 36, 0.72);
+    --line: rgba(34, 211, 238, 0.22);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
-    background: var(--bg);
+    background:
+      radial-gradient(1200px 800px at 50% 38%, rgba(8,40,64,.55), transparent 70%),
+      radial-gradient(900px 600px at 50% 120%, rgba(10,30,55,.5), transparent 70%),
+      var(--bg);
     color: var(--text);
     font-family: "Fira Code", monospace;
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 15px;
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
   }
-  /* grila de fundal subtila */
   body::before {
-    content: "";
-    position: fixed; inset: 0;
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background-image:
-      linear-gradient(rgba(34,211,238,.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(34,211,238,.04) 1px, transparent 1px);
-    background-size: 44px 44px;
-    pointer-events: none;
+      linear-gradient(rgba(34,211,238,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,.045) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(circle at 50% 45%, #000 60%, transparent 100%);
+  }
+  /* linii de scanare subtile */
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .35;
+    background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.18) 3px 4px);
   }
 
-  #app { display: flex; flex-direction: column; height: 100%; height: 100dvh; max-width: 760px; margin: 0 auto; }
+  .hud { position: fixed; inset: 0; z-index: 1; }
 
-  /* ── HEADER ── */
-  header {
-    display: flex; align-items: center; gap: 14px;
-    padding: max(12px, env(safe-area-inset-top)) 16px 12px;
-    border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, rgba(2,6,23,.95), rgba(2,6,23,.75));
-    backdrop-filter: blur(8px);
-    z-index: 20;
+  /* ───────── REACTOR central (fundal) ───────── */
+  .reactor-stage {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+    width: min(46vw, 60vh); aspect-ratio: 1; pointer-events: none;
+    display: grid; place-items: center;
   }
-  .reactor {
-    width: 44px; height: 44px; border-radius: 50%; flex: none;
-    background: radial-gradient(circle at 50% 50%,
-      #e0faff 0%, var(--cyan) 22%, rgba(34,211,238,.25) 48%, transparent 70%);
-    box-shadow: 0 0 18px 2px rgba(34,211,238,.55), inset 0 0 8px rgba(255,255,255,.6);
-    position: relative;
-    animation: pulse 2.6s ease-in-out infinite;
+  .ring { position: absolute; border-radius: 50%; inset: 0; }
+  .ring.core {
+    width: 26%; height: 26%; position: relative; inset: auto;
+    background: radial-gradient(circle at 50% 45%, #ffffff 0%, var(--cyan-bright) 26%, var(--cyan) 46%, rgba(34,211,238,.15) 70%, transparent 78%);
+    box-shadow: 0 0 60px 12px rgba(34,211,238,.55), inset 0 0 30px rgba(255,255,255,.55);
+    animation: breathe 3.4s ease-in-out infinite;
   }
-  .reactor::after {
-    content: ""; position: absolute; inset: -7px; border-radius: 50%;
-    border: 1px solid var(--cyan-dim);
-    border-top-color: transparent; border-bottom-color: transparent;
-    animation: spin 6s linear infinite;
+  .core::after {
+    content: ""; position: absolute; inset: 18%; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent, rgba(255,255,255,.85), transparent 40%);
+    mix-blend-mode: screen; animation: spin 4s linear infinite;
   }
-  @keyframes pulse { 0%,100% { box-shadow: 0 0 14px 1px rgba(34,211,238,.45), inset 0 0 8px rgba(255,255,255,.6);} 50% { box-shadow: 0 0 26px 5px rgba(34,211,238,.75), inset 0 0 10px rgba(255,255,255,.8);} }
+  .ring.r1 { width: 44%; height: 44%; border: 2px solid var(--cyan-dim);
+    box-shadow: 0 0 24px rgba(34,211,238,.35), inset 0 0 24px rgba(34,211,238,.25); }
+  .ring.r2 { width: 62%; height: 62%; border: 1px dashed rgba(34,211,238,.5);
+    animation: spin 16s linear infinite; }
+  .ring.r3 { width: 80%; height: 80%;
+    border: 1px solid rgba(34,211,238,.18);
+    border-top-color: var(--cyan); border-bottom-color: var(--cyan);
+    animation: spin 9s linear infinite reverse; }
+  .ring.r4 { width: 100%; height: 100%;
+    border: 1px solid rgba(34,211,238,.1);
+    background:
+      repeating-conic-gradient(from 0deg, transparent 0 6deg, rgba(34,211,238,.22) 6deg 6.6deg);
+    -webkit-mask: radial-gradient(circle, transparent 47%, #000 48%, #000 50%, transparent 51%);
+            mask: radial-gradient(circle, transparent 47%, #000 48%, #000 50%, transparent 51%);
+    animation: spin 40s linear infinite;
+  }
+  .reactor-stage.alert .ring.core {
+    background: radial-gradient(circle at 50% 45%, #fff 0%, #fda4a4 26%, var(--danger) 48%, rgba(248,113,113,.15) 72%, transparent 80%);
+    box-shadow: 0 0 70px 16px rgba(248,113,113,.6), inset 0 0 30px rgba(255,255,255,.5);
+  }
+  .reactor-stage.alert .ring.r1 { border-color: rgba(248,113,113,.6); box-shadow: 0 0 26px rgba(248,113,113,.4); }
+  .reactor-stage.alert .ring.r3 { border-top-color: var(--danger); border-bottom-color: var(--danger); }
+
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { 0%,100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.06); filter: brightness(1.18); } }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 
-  .head-text { flex: 1; min-width: 0; }
-  h1 {
-    font-family: "Share Tech Mono", monospace;
-    font-size: 22px; letter-spacing: .35em; color: var(--cyan);
-    text-shadow: 0 0 12px rgba(34,211,238,.5);
+  /* ───────── Panouri colt ───────── */
+  .panel {
+    position: absolute; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; backdrop-filter: blur(7px);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.45);
   }
-  .status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
-  .dot.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 2.2s ease-in-out infinite; }
-  .dot.err { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
-  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
-
-  .btn-raport {
-    font-family: "Share Tech Mono", monospace;
-    background: rgba(251,191,36,.08); color: var(--gold);
-    border: 1px solid rgba(251,191,36,.45); border-radius: 8px;
-    padding: 10px 16px; font-size: 14px; letter-spacing: .12em;
-    cursor: pointer; min-height: 44px;
-    transition: background .2s, box-shadow .2s;
+  /* coltari decorativi */
+  .panel::before, .panel::after {
+    content: ""; position: absolute; width: 12px; height: 12px; border: 2px solid var(--cyan); opacity: .6;
   }
-  .btn-raport:hover, .btn-raport:focus-visible { background: rgba(251,191,36,.16); box-shadow: 0 0 14px rgba(251,191,36,.35); outline: none; }
-  .btn-raport:disabled { opacity: .45; cursor: default; box-shadow: none; }
+  .panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; border-top-left-radius: 12px; }
+  .panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; border-bottom-right-radius: 12px; }
+  .panel h2 {
+    font-family: "Share Tech Mono", monospace; font-weight: 400;
+    font-size: 11px; letter-spacing: .26em; color: var(--cyan);
+    text-transform: uppercase; margin-bottom: 9px; opacity: .85;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .panel h2::before { content: ""; width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); border-radius: 1px; }
 
-  /* ── CHAT ── */
+  .p-clock { top: 22px; left: 22px; width: 224px; }
+  .p-tasks { top: 200px; left: 22px; width: 224px; }
+  .p-sys   { top: 22px; right: 22px; width: 236px; }
+  .p-weather { top: 226px; right: 22px; width: 236px; }
+  .p-cmd  { bottom: 104px; right: 22px; width: 236px; }
+  .p-legend { bottom: 104px; left: 22px; width: 224px; }
+
+  /* CLOCK */
+  .clock-day { font-family: "Orbitron", sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--cyan-bright); text-shadow: 0 0 18px rgba(34,211,238,.55); }
+  .clock-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .clock-month { font-family: "Share Tech Mono"; letter-spacing: .2em; color: var(--muted); text-transform: uppercase; font-size: 13px; }
+  .clock-time { font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 26px; letter-spacing: .06em; color: var(--text); margin-top: 6px; }
+  .clock-wd { font-size: 12px; color: var(--muted); text-transform: capitalize; }
+
+  /* TASK bars */
+  .stat { display: flex; align-items: center; gap: 9px; margin: 7px 0; font-size: 13px; }
+  .stat .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .stat .bar { flex: 1; height: 5px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+  .stat .bar > i { display: block; height: 100%; border-radius: 3px; width: 0; transition: width .6s ease; }
+  .stat .n { font-family: "Orbitron"; font-weight: 700; min-width: 20px; text-align: right; }
+  .d-red { background: var(--danger); box-shadow: 0 0 7px var(--danger); }
+  .d-org { background: var(--orange); box-shadow: 0 0 7px var(--orange); }
+  .d-yel { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
+  .d-grn { background: var(--green); box-shadow: 0 0 7px var(--green); }
+
+  /* SYSTEM sources */
+  .src { display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px solid rgba(34,211,238,.08); }
+  .src:last-child { border-bottom: none; }
+  .src .lbl { color: var(--muted); letter-spacing: .04em; }
+  .src .state { display: flex; align-items: center; gap: 7px; font-family: "Share Tech Mono"; font-size: 11px; letter-spacing: .12em; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .led.on { background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 2.6s ease-in-out infinite; }
+  .led.off { background: #444; }
+
+  /* WEATHER gauge */
+  .wx { display: flex; align-items: center; gap: 14px; }
+  .wx-gauge { position: relative; width: 86px; height: 86px; flex: none; }
+  .wx-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .wx-temp { position: absolute; inset: 0; display: grid; place-items: center; font-family: "Orbitron"; font-weight: 700; font-size: 23px; color: var(--cyan-bright); }
+  .wx-meta { font-size: 12px; line-height: 1.7; color: var(--muted); }
+  .wx-meta b { color: var(--text); font-weight: 500; }
+
+  /* COMMANDS */
+  .cmd { display: flex; align-items: center; gap: 10px; padding: 8px 9px; margin: 4px 0; border: 1px solid transparent; border-radius: 8px; cursor: pointer; font-size: 13px; letter-spacing: .04em; transition: background .18s, border-color .18s, box-shadow .18s; }
+  .cmd:hover { background: rgba(34,211,238,.1); border-color: var(--cyan-dim); box-shadow: 0 0 12px rgba(34,211,238,.18); }
+  .cmd svg { width: 16px; height: 16px; color: var(--cyan); flex: none; }
+  .cmd .c-led { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); margin-left: auto; }
+
+  .p-legend .leg { font-size: 11px; line-height: 1.85; color: var(--muted); letter-spacing: .03em; }
+  .p-legend .leg b { color: var(--cyan); font-weight: 400; }
+
+  /* ───────── HEADER ───────── */
+  header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+    display: flex; align-items: center; gap: 14px; justify-content: center;
+    padding: 18px 16px 0; pointer-events: none;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; pointer-events: auto; }
+  .brand .mini {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 45%, #fff, var(--cyan) 45%, transparent 72%);
+    box-shadow: 0 0 14px rgba(34,211,238,.6); animation: breathe 3.4s ease-in-out infinite;
+  }
+  .brand h1 { font-family: "Orbitron", sans-serif; font-weight: 900; font-size: 26px; letter-spacing: .5em; color: var(--cyan-bright); text-shadow: 0 0 16px rgba(34,211,238,.5); padding-left: .5em; }
+
+  /* ───────── CHAT central ───────── */
   #chat {
-    flex: 1; overflow-y: auto; padding: 18px 16px 10px;
-    display: flex; flex-direction: column; gap: 12px;
-    scroll-behavior: smooth;
+    position: absolute; left: 50%; top: 76px; transform: translateX(-50%);
+    width: min(620px, 92vw); max-height: calc(100vh - 220px);
+    z-index: 4; overflow-y: auto; padding: 8px 6px 4px;
+    display: flex; flex-direction: column; gap: 11px;
+    scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
   }
+  #chat::-webkit-scrollbar { width: 6px; }
+  #chat::-webkit-scrollbar-thumb { background: var(--cyan-dim); border-radius: 3px; }
   .msg {
-    max-width: 88%; padding: 11px 14px; border-radius: 10px;
-    white-space: pre-wrap; word-wrap: break-word;
-    border: 1px solid var(--line);
-    animation: rise .25s ease-out;
+    max-width: 90%; padding: 11px 14px; border-radius: 11px;
+    white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;
+    border: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(6px);
+    animation: rise .26s ease-out; box-shadow: 0 6px 22px rgba(0,0,0,.4);
   }
-  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  .msg.user {
-    align-self: flex-end;
-    background: rgba(34,211,238,.10);
-    border-color: rgba(34,211,238,.35);
-  }
-  .msg.jarvis { align-self: flex-start; background: var(--panel); }
-  .msg.jarvis.report { border-color: rgba(251,191,36,.4); box-shadow: 0 0 16px rgba(251,191,36,.08); }
-  .msg.error { align-self: center; color: var(--danger); border-color: rgba(248,113,113,.4); font-size: 14px; }
-  .msg .tag {
-    display: block; font-family: "Share Tech Mono", monospace;
-    font-size: 11px; letter-spacing: .2em; margin-bottom: 5px;
-  }
+  @keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+  .msg.user { align-self: flex-end; background: rgba(34,211,238,.12); border-color: rgba(34,211,238,.4); }
+  .msg.jarvis.report { border-color: rgba(251,191,36,.45); box-shadow: 0 0 20px rgba(251,191,36,.08); }
+  .msg.error { align-self: center; color: var(--danger); border-color: rgba(248,113,113,.4); font-size: 13px; }
+  .msg .tag { display: block; font-family: "Share Tech Mono"; font-size: 10px; letter-spacing: .24em; margin-bottom: 5px; }
   .msg.jarvis .tag { color: var(--cyan); }
   .msg.jarvis.report .tag { color: var(--gold); }
   .msg.user .tag { color: var(--cyan-dim); text-align: right; }
 
-  .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
+  .typing { display: inline-flex; gap: 5px; padding: 3px 1px; }
   .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); animation: tp 1.2s infinite; }
-  .typing i:nth-child(2) { animation-delay: .2s; }
-  .typing i:nth-child(3) { animation-delay: .4s; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
   @keyframes tp { 0%,60%,100% { opacity: .25; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
 
-  /* ── INPUT ── */
-  #bar {
-    display: flex; gap: 10px; align-items: flex-end;
-    padding: 10px 16px max(12px, env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
-    background: linear-gradient(0deg, rgba(2,6,23,.97), rgba(2,6,23,.8));
+  .confirm-row { display: flex; gap: 10px; margin-top: 10px; }
+  .confirm-row button { font-family: "Share Tech Mono"; font-size: 13px; letter-spacing: .12em; padding: 8px 20px; border-radius: 8px; cursor: pointer; transition: background .2s, box-shadow .2s; }
+  .confirm-row .yes { background: rgba(52,211,153,.13); color: var(--green); border: 1px solid rgba(52,211,153,.5); }
+  .confirm-row .yes:hover { background: rgba(52,211,153,.24); box-shadow: 0 0 12px rgba(52,211,153,.35); }
+  .confirm-row .no { background: rgba(248,113,113,.1); color: var(--danger); border: 1px solid rgba(248,113,113,.45); }
+  .confirm-row .no:hover { background: rgba(248,113,113,.2); box-shadow: 0 0 12px rgba(248,113,113,.3); }
+
+  /* ───────── RAPORT (header buton) ───────── */
+  .btn-raport {
+    position: absolute; top: 20px; left: 50%; transform: translateX(180px);
+    pointer-events: auto; font-family: "Share Tech Mono"; z-index: 6;
+    background: rgba(251,191,36,.1); color: var(--gold);
+    border: 1px solid rgba(251,191,36,.5); border-radius: 9px;
+    padding: 9px 18px; font-size: 13px; letter-spacing: .18em; cursor: pointer;
+    transition: background .2s, box-shadow .2s;
   }
+  .btn-raport:hover { background: rgba(251,191,36,.2); box-shadow: 0 0 16px rgba(251,191,36,.4); }
+  .btn-raport:disabled { opacity: .4; cursor: default; box-shadow: none; }
+
+  /* ───────── INPUT bar ───────── */
+  #bar {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
+    display: flex; gap: 10px; align-items: flex-end; justify-content: center;
+    padding: 12px 16px max(14px, env(safe-area-inset-bottom));
+  }
+  #bar .wrap { display: flex; gap: 10px; align-items: flex-end; width: min(680px, 96vw); }
   #inp {
     flex: 1; resize: none; max-height: 120px;
     background: var(--panel); color: var(--text);
-    border: 1px solid var(--line); border-radius: 10px;
-    padding: 12px 14px; font: inherit; font-size: 16px;
+    border: 1px solid var(--line); border-radius: 11px;
+    padding: 13px 15px; font: inherit; font-size: 16px; backdrop-filter: blur(7px);
     transition: border-color .2s, box-shadow .2s;
   }
-  #inp:focus { outline: none; border-color: var(--cyan-dim); box-shadow: 0 0 12px rgba(34,211,238,.2); }
-  #send {
-    width: 48px; height: 48px; flex: none; border-radius: 10px;
-    background: rgba(34,211,238,.12); border: 1px solid rgba(34,211,238,.45);
-    color: var(--cyan); cursor: pointer; display: grid; place-items: center;
-    transition: background .2s, box-shadow .2s;
+  #inp:focus { outline: none; border-color: var(--cyan-dim); box-shadow: 0 0 14px rgba(34,211,238,.22); }
+  .btn-ico, #send {
+    width: 50px; height: 50px; flex: none; border-radius: 11px; cursor: pointer;
+    display: grid; place-items: center; transition: background .2s, box-shadow .2s, color .2s, border-color .2s;
   }
-  #send:hover, #send:focus-visible { background: rgba(34,211,238,.22); box-shadow: 0 0 14px rgba(34,211,238,.35); outline: none; }
-  #send:disabled { opacity: .45; cursor: default; box-shadow: none; }
-  .btn-ico {
-    width: 48px; height: 48px; flex: none; border-radius: 10px;
-    background: var(--panel); border: 1px solid var(--line);
-    color: var(--muted); cursor: pointer; display: grid; place-items: center;
-    transition: color .2s, border-color .2s, box-shadow .2s;
-  }
-  .btn-ico:hover, .btn-ico:focus-visible { color: var(--cyan); border-color: var(--cyan-dim); outline: none; }
-  .btn-ico.active { color: var(--cyan); border-color: var(--cyan-dim); box-shadow: 0 0 12px rgba(34,211,238,.35); }
+  .btn-ico { background: var(--panel); border: 1px solid var(--line); color: var(--muted); backdrop-filter: blur(7px); }
+  .btn-ico:hover { color: var(--cyan); border-color: var(--cyan-dim); }
+  .btn-ico.active { color: var(--cyan); border-color: var(--cyan-dim); box-shadow: 0 0 12px rgba(34,211,238,.32); }
   .btn-ico.listening { color: var(--danger); border-color: rgba(248,113,113,.6); box-shadow: 0 0 14px rgba(248,113,113,.4); animation: blink 1.2s ease-in-out infinite; }
+  #send { background: rgba(34,211,238,.14); border: 1px solid rgba(34,211,238,.5); color: var(--cyan); }
+  #send:hover { background: rgba(34,211,238,.24); box-shadow: 0 0 14px rgba(34,211,238,.35); }
+  #send:disabled, .btn-ico:disabled { opacity: .4; cursor: default; box-shadow: none; }
 
-  .confirm-row { display: flex; gap: 10px; margin-top: 10px; }
-  .confirm-row button {
-    font-family: "Share Tech Mono", monospace; font-size: 14px; letter-spacing: .1em;
-    padding: 9px 22px; border-radius: 8px; cursor: pointer; min-height: 40px;
-    transition: background .2s, box-shadow .2s;
-  }
-  .confirm-row .yes { background: rgba(34,197,94,.12); color: #4ade80; border: 1px solid rgba(34,197,94,.5); }
-  .confirm-row .yes:hover { background: rgba(34,197,94,.22); box-shadow: 0 0 12px rgba(34,197,94,.35); }
-  .confirm-row .no { background: rgba(248,113,113,.10); color: var(--danger); border: 1px solid rgba(248,113,113,.45); }
-  .confirm-row .no:hover { background: rgba(248,113,113,.2); box-shadow: 0 0 12px rgba(248,113,113,.3); }
-
-  /* ── PIN GATE ── */
-  #gate {
-    position: fixed; inset: 0; z-index: 50;
-    background: var(--bg);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
-    padding: 24px; text-align: center;
-  }
+  /* ───────── PIN gate ───────── */
+  #gate { position: fixed; inset: 0; z-index: 50; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 24px; text-align: center; }
   #gate.hidden { display: none; }
-  #gate .reactor { width: 84px; height: 84px; }
-  #gate h1 { font-size: 30px; }
+  #gate .g-reactor { width: 96px; height: 96px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 45%, #fff, var(--cyan) 42%, transparent 72%);
+    box-shadow: 0 0 50px 10px rgba(34,211,238,.55); animation: breathe 3.2s ease-in-out infinite; }
+  #gate h1 { font-family: "Orbitron"; font-weight: 900; font-size: 32px; letter-spacing: .42em; color: var(--cyan-bright); padding-left: .42em; }
   #gate p { color: var(--muted); font-size: 14px; max-width: 300px; }
-  #pin {
-    background: var(--panel); color: var(--cyan); border: 1px solid var(--line);
-    border-radius: 10px; padding: 14px; font: inherit; font-size: 22px;
-    text-align: center; letter-spacing: .4em; width: 230px;
-  }
+  #pin { background: var(--panel); color: var(--cyan); border: 1px solid var(--line); border-radius: 11px; padding: 14px; font: inherit; font-size: 22px; text-align: center; letter-spacing: .4em; width: 240px; }
   #pin:focus { outline: none; border-color: var(--cyan-dim); box-shadow: 0 0 14px rgba(34,211,238,.25); }
-  #gate button {
-    font-family: "Share Tech Mono", monospace;
-    background: rgba(34,211,238,.12); color: var(--cyan);
-    border: 1px solid rgba(34,211,238,.45); border-radius: 10px;
-    padding: 13px 36px; font-size: 16px; letter-spacing: .2em; cursor: pointer;
-    transition: background .2s, box-shadow .2s;
-  }
-  #gate button:hover, #gate button:focus-visible { background: rgba(34,211,238,.22); box-shadow: 0 0 16px rgba(34,211,238,.4); outline: none; }
+  #gate button { font-family: "Share Tech Mono"; background: rgba(34,211,238,.13); color: var(--cyan); border: 1px solid rgba(34,211,238,.5); border-radius: 11px; padding: 13px 40px; font-size: 16px; letter-spacing: .22em; cursor: pointer; transition: background .2s, box-shadow .2s; }
+  #gate button:hover { background: rgba(34,211,238,.24); box-shadow: 0 0 16px rgba(34,211,238,.4); }
   #gate .err { color: var(--danger); font-size: 14px; min-height: 20px; }
 
+  /* ───────── Responsive: pe ecrane mici ascundem panourile laterale ───────── */
+  @media (max-width: 1040px) {
+    .p-clock, .p-tasks, .p-sys, .p-weather, .p-cmd, .p-legend { display: none; }
+    .reactor-stage { top: 40%; width: 78vw; opacity: .5; }
+    #chat { top: 70px; width: 94vw; max-height: calc(100vh - 200px); }
+    .btn-raport { transform: none; left: auto; right: 16px; top: 16px; }
+    header { justify-content: flex-start; padding-left: 16px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -209,7 +295,7 @@
 <body>
 
 <div id="gate">
-  <div class="reactor" aria-hidden="true"></div>
+  <div class="g-reactor" aria-hidden="true"></div>
   <h1>JARVIS</h1>
   <p>Sistem privat. Introdu codul de acces.</p>
   <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Cod de acces" placeholder="••••••">
@@ -217,37 +303,102 @@
   <button id="gate-go">ACCES</button>
 </div>
 
-<div id="app">
-  <header>
-    <div class="reactor" aria-hidden="true"></div>
-    <div class="head-text">
-      <h1>JARVIS</h1>
-      <div class="status"><span class="dot" id="dot"></span><span id="status-txt">conectare…</span></div>
+<div class="hud">
+  <!-- Reactor central -->
+  <div class="reactor-stage" id="reactor" aria-hidden="true">
+    <div class="ring r4"></div>
+    <div class="ring r3"></div>
+    <div class="ring r2"></div>
+    <div class="ring r1"></div>
+    <div class="ring core"></div>
+  </div>
+
+  <!-- Panou: CEAS -->
+  <div class="panel p-clock">
+    <h2>Data &amp; ora</h2>
+    <div class="clock-row">
+      <span class="clock-day" id="ck-day">--</span>
+      <span class="clock-month" id="ck-month">---</span>
     </div>
-    <button class="btn-raport" id="btn-raport">RAPORT</button>
+    <div class="clock-time" id="ck-time">--:--:--</div>
+    <div class="clock-wd" id="ck-wd">—</div>
+  </div>
+
+  <!-- Panou: TASK-URI -->
+  <div class="panel p-tasks">
+    <h2>Operational</h2>
+    <div class="stat"><span class="dot d-red"></span><span class="bar"><i class="d-red" id="b-blocate"></i></span><span class="lbl" style="color:var(--muted);font-size:11px">blocate</span><span class="n" id="n-blocate">0</span></div>
+    <div class="stat"><span class="dot d-org"></span><span class="bar"><i class="d-org" id="b-intarziate"></i></span><span class="lbl" style="color:var(--muted);font-size:11px">întârziate</span><span class="n" id="n-intarziate">0</span></div>
+    <div class="stat"><span class="dot d-yel"></span><span class="bar"><i class="d-yel" id="b-azi"></i></span><span class="lbl" style="color:var(--muted);font-size:11px">azi</span><span class="n" id="n-azi">0</span></div>
+    <div class="stat"><span class="dot d-grn"></span><span class="bar"><i class="d-grn" id="b-ok"></i></span><span class="lbl" style="color:var(--muted);font-size:11px">în lucru</span><span class="n" id="n-ok">0</span></div>
+  </div>
+
+  <!-- Panou: SISTEM / surse -->
+  <div class="panel p-sys">
+    <h2>Sisteme</h2>
+    <div class="src"><span class="lbl">Vreme</span><span class="state"><span class="led" id="led-weather"></span><span id="st-weather">—</span></span></div>
+    <div class="src"><span class="lbl">Operational</span><span class="state"><span class="led" id="led-operational"></span><span id="st-operational">—</span></span></div>
+    <div class="src"><span class="lbl">Memorie</span><span class="state"><span class="led" id="led-memory"></span><span id="st-memory">—</span></span></div>
+    <div class="src"><span class="lbl">Calendar</span><span class="state"><span class="led" id="led-calendar"></span><span id="st-calendar">—</span></span></div>
+  </div>
+
+  <!-- Panou: VREME -->
+  <div class="panel p-weather">
+    <h2>Vreme · <span id="wx-city">Sibiu</span></h2>
+    <div class="wx">
+      <div class="wx-gauge">
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(34,211,238,.12)" stroke-width="6"/>
+          <circle id="wx-arc" cx="50" cy="50" r="44" fill="none" stroke="var(--cyan)" stroke-width="6"
+                  stroke-linecap="round" stroke-dasharray="276" stroke-dashoffset="276"
+                  style="filter:drop-shadow(0 0 5px var(--cyan));transition:stroke-dashoffset .8s ease"/>
+        </svg>
+        <div class="wx-temp" id="wx-temp">--°</div>
+      </div>
+      <div class="wx-meta" id="wx-meta">—</div>
+    </div>
+  </div>
+
+  <!-- Panou: COMENZI -->
+  <div class="panel p-cmd">
+    <h2>Comenzi rapide</h2>
+    <div class="cmd" data-send="/raport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>Raport de dimineață<span class="c-led"></span></div>
+    <div class="cmd" data-send="/decizii"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Decizii<span class="c-led"></span></div>
+    <div class="cmd" data-prompt="creează task: "><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Task nou<span class="c-led"></span></div>
+    <div class="cmd" data-prompt="notează decizia: "><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Notează decizie<span class="c-led"></span></div>
+  </div>
+
+  <!-- Panou: LEGENDA (registru) -->
+  <div class="panel p-legend">
+    <h2>JARVIS · stare</h2>
+    <div class="leg" id="legend">
+      <div><b>Memorie:</b> <span id="lg-mem">—</span> fapte</div>
+      <div><b>Decizii:</b> <span id="lg-dec">—</span> înregistrate</div>
+      <div><b>Reminders:</b> <span id="lg-rem">—</span> active</div>
+      <div><b>Model:</b> <span id="lg-model">sonnet-4-6</span></div>
+    </div>
+  </div>
+
+  <header>
+    <div class="brand"><span class="mini"></span><h1>JARVIS</h1></div>
   </header>
+  <button class="btn-raport" id="btn-raport">RAPORT</button>
 
   <main id="chat" aria-live="polite"></main>
 
   <div id="bar">
-    <button id="mic" class="btn-ico" aria-label="Vorbește cu Jarvis (ro-RO)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
-      </svg>
-    </button>
-    <textarea id="inp" rows="1" placeholder="Spune-i lui Jarvis…" aria-label="Mesaj"></textarea>
-    <button id="tts" class="btn-ico" aria-label="Activează vocea lui Jarvis">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-      </svg>
-    </button>
-    <button id="send" aria-label="Trimite mesajul">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>
-      </svg>
-    </button>
+    <div class="wrap">
+      <button id="mic" class="btn-ico" aria-label="Vorbește cu Jarvis (ro-RO)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </button>
+      <textarea id="inp" rows="1" placeholder="Spune-i lui Jarvis…" aria-label="Mesaj"></textarea>
+      <button id="tts" class="btn-ico" aria-label="Activează vocea lui Jarvis">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </button>
+      <button id="send" aria-label="Trimite mesajul">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -266,58 +417,34 @@ async function unlock() {
   if (!k) return;
   $("gate-err").textContent = "";
   const st = await tryKey(k).catch(() => null);
-  if (st) {
-    key = k;
-    localStorage.setItem("jarvis_key", k);
-    $("gate").classList.add("hidden");
-    boot(st);
-  } else {
-    $("gate-err").textContent = "Cod incorect.";
-    $("pin").value = "";
-    $("pin").focus();
-  }
+  if (st) { key = k; localStorage.setItem("jarvis_key", k); $("gate").classList.add("hidden"); boot(st); }
+  else { $("gate-err").textContent = "Cod incorect."; $("pin").value = ""; $("pin").focus(); }
 }
 $("gate-go").addEventListener("click", unlock);
 $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
 
-// ── UI helpers ──
+// ── helpers ──
 function addMsg(cls, tag, text) {
   const d = document.createElement("div");
   d.className = "msg " + cls;
-  if (tag) {
-    const t = document.createElement("span");
-    t.className = "tag"; t.textContent = tag;
-    d.appendChild(t);
-  }
+  if (tag) { const t = document.createElement("span"); t.className = "tag"; t.textContent = tag; d.appendChild(t); }
   d.appendChild(document.createTextNode(text));
-  chat.appendChild(d);
-  chat.scrollTop = chat.scrollHeight;
-  return d;
+  chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
 }
 function addTyping() {
-  const d = document.createElement("div");
-  d.className = "msg jarvis";
+  const d = document.createElement("div"); d.className = "msg jarvis";
   d.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
-  chat.appendChild(d);
-  chat.scrollTop = chat.scrollHeight;
-  return d;
+  chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
 }
-function setBusy(b) {
-  btnSend.disabled = b; btnRaport.disabled = b; inp.disabled = b;
-  if (!b) inp.focus();
-}
+function setBusy(b) { btnSend.disabled = b; btnRaport.disabled = b; inp.disabled = b; if (!b) inp.focus(); }
 
-async function api(path, body) {
+async function api(path, body, method) {
   const r = await fetch(path, {
-    method: "POST",
+    method: method || (body ? "POST" : "GET"),
     headers: { "content-type": "application/json", "x-jarvis-key": key },
-    body: JSON.stringify(body || {}),
+    body: body ? JSON.stringify(body) : undefined,
   });
-  if (r.status === 401) {
-    localStorage.removeItem("jarvis_key");
-    location.reload();
-    return null;
-  }
+  if (r.status === 401) { localStorage.removeItem("jarvis_key"); location.reload(); return null; }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || ("Eroare " + r.status));
   return data;
@@ -329,157 +456,137 @@ function showReply(data) {
   speak(data.reply);
   if (data.confirmId) addConfirmButtons(el, data.confirmId);
 }
-
 function addConfirmButtons(msgEl, confirmId) {
-  const row = document.createElement("div");
-  row.className = "confirm-row";
+  const row = document.createElement("div"); row.className = "confirm-row";
   const mk = (cls, label, yes) => {
-    const b = document.createElement("button");
-    b.className = cls; b.textContent = label;
+    const b = document.createElement("button"); b.className = cls; b.textContent = label;
     b.addEventListener("click", async () => {
-      row.remove();
-      setBusy(true);
-      const t = addTyping();
-      try {
-        const data = await api("/api/confirm", { confirmId, yes });
-        if (!data) return;
-        t.remove();
-        addMsg("jarvis", "JARVIS", data.reply);
-        speak(data.reply);
-      } catch (e) {
-        t.remove();
-        addMsg("error", "", e.message);
-      } finally {
-        setBusy(false);
-      }
+      row.remove(); setBusy(true); const t = addTyping();
+      try { const d = await api("/api/confirm", { confirmId, yes }); if (!d) return; t.remove(); addMsg("jarvis", "JARVIS", d.reply); speak(d.reply); refreshHud(); }
+      catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
     });
     return b;
   };
-  row.appendChild(mk("yes", "✓ DA", true));
-  row.appendChild(mk("no", "✕ NU", false));
-  msgEl.appendChild(row);
-  chat.scrollTop = chat.scrollHeight;
+  row.appendChild(mk("yes", "✓ DA", true)); row.appendChild(mk("no", "✕ NU", false));
+  msgEl.appendChild(row); chat.scrollTop = chat.scrollHeight;
 }
-
 async function send(forcedText) {
   const text = (forcedText ?? inp.value).trim();
   if (!text || btnSend.disabled) return;
   inp.value = ""; inp.style.height = "auto";
-  addMsg("user", "TU", text);
-  setBusy(true);
-  const t = addTyping();
-  try {
-    const data = await api("/api/chat", { text });
-    if (!data) return;
-    t.remove();
-    showReply(data);
-  } catch (e) {
-    t.remove();
-    addMsg("error", "", e.message);
-  } finally {
-    setBusy(false);
-  }
+  addMsg("user", "TU", text); setBusy(true); const t = addTyping();
+  try { const data = await api("/api/chat", { text }); if (!data) return; t.remove(); showReply(data); refreshHud(); }
+  catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
 }
-btnSend.addEventListener("click", send);
-inp.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-});
-inp.addEventListener("input", () => {
-  inp.style.height = "auto";
-  inp.style.height = Math.min(inp.scrollHeight, 120) + "px";
-});
+btnSend.addEventListener("click", () => send());
+inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+inp.addEventListener("input", () => { inp.style.height = "auto"; inp.style.height = Math.min(inp.scrollHeight, 120) + "px"; });
 
 // ── Raport ──
 btnRaport.addEventListener("click", async () => {
   if (btnRaport.disabled) return;
-  setBusy(true);
-  const t = addTyping();
-  try {
-    const data = await api("/api/raport");
-    if (!data) return;
-    t.remove();
-    addMsg("jarvis report", "RAPORT", data.report);
-    speak(data.report);
-  } catch (e) {
-    t.remove();
-    addMsg("error", "", e.message);
-  } finally {
-    setBusy(false);
-  }
+  setBusy(true); const t = addTyping();
+  try { const d = await api("/api/raport"); if (!d) return; t.remove(); addMsg("jarvis report", "RAPORT", d.report); speak(d.report); refreshHud(); }
+  catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
 });
 
-// ── Voce: recunoastere ro-RO (microfon) ──
+// ── Comenzi rapide ──
+document.querySelectorAll(".cmd").forEach((c) => c.addEventListener("click", () => {
+  if (c.dataset.send) send(c.dataset.send);
+  else if (c.dataset.prompt) { inp.value = c.dataset.prompt; inp.focus(); inp.dispatchEvent(new Event("input")); }
+}));
+
+// ── Voce: recunoastere ro-RO ──
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const btnMic = $("mic");
-let rec = null, listening = false;
+const btnMic = $("mic"); let rec = null, listening = false;
 if (SR) {
-  rec = new SR();
-  rec.lang = "ro-RO";
-  rec.interimResults = false;
-  rec.maxAlternatives = 1;
-  rec.onresult = (e) => {
-    const said = e.results[0][0].transcript.trim();
-    if (said) send(said);
-  };
+  rec = new SR(); rec.lang = "ro-RO"; rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onresult = (e) => { const said = e.results[0][0].transcript.trim(); if (said) send(said); };
   rec.onend = () => { listening = false; btnMic.classList.remove("listening"); };
   rec.onerror = () => { listening = false; btnMic.classList.remove("listening"); };
   btnMic.addEventListener("click", () => {
     if (listening) { rec.stop(); return; }
-    try {
-      rec.start();
-      listening = true;
-      btnMic.classList.add("listening");
-    } catch {}
+    try { rec.start(); listening = true; btnMic.classList.add("listening"); } catch {}
   });
-} else {
-  btnMic.style.display = "none";
-}
+} else { btnMic.style.display = "none"; }
 
-// ── Voce: sinteza ro-RO (Jarvis vorbeste) ──
+// ── Voce: sinteza ro-RO ──
 const btnTts = $("tts");
 let ttsOn = localStorage.getItem("jarvis_tts") === "1";
 if (ttsOn) btnTts.classList.add("active");
 btnTts.addEventListener("click", () => {
-  ttsOn = !ttsOn;
-  btnTts.classList.toggle("active", ttsOn);
+  ttsOn = !ttsOn; btnTts.classList.toggle("active", ttsOn);
   localStorage.setItem("jarvis_tts", ttsOn ? "1" : "0");
   if (!ttsOn) speechSynthesis.cancel();
 });
-function roVoice() {
-  return speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("ro")) || null;
-}
+function roVoice() { return speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("ro")) || null; }
 function speak(text) {
   if (!ttsOn || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
-  // Curatam emoji/marcaje ca sa nu le citeasca.
   const clean = text.replace(/[*_#`]|[\u{1F300}-\u{1FAFF}]|[🔴🟡🟠🟢✓✕✔✖⏰📌📋✏️✉️📄🧠]/gu, "").slice(0, 1200);
-  const u = new SpeechSynthesisUtterance(clean);
-  u.lang = "ro-RO";
-  const v = roVoice();
-  if (v) u.voice = v;
-  u.rate = 1.05;
+  const u = new SpeechSynthesisUtterance(clean); u.lang = "ro-RO";
+  const v = roVoice(); if (v) u.voice = v; u.rate = 1.05;
   speechSynthesis.speak(u);
 }
 if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
-// ── Boot ──
-function boot(st) {
-  $("dot").className = "dot on";
-  const srcs = [];
-  srcs.push("vreme " + st.city);
-  if (st.sources.operational) srcs.push("operational");
-  if (st.sources.calendar) srcs.push("calendar");
-  if (st.sources.memory) srcs.push("memorie");
-  $("status-txt").textContent = "online · " + srcs.join(" · ");
-  if (!chat.children.length) {
-    addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
+// ── CEAS live ──
+function tickClock() {
+  const now = new Date();
+  const ro = (opt) => now.toLocaleDateString("ro-RO", { ...opt, timeZone: "Europe/Bucharest" });
+  $("ck-day").textContent = ro({ day: "numeric" });
+  $("ck-month").textContent = ro({ month: "short" }).replace(".", "");
+  $("ck-wd").textContent = ro({ weekday: "long" });
+  $("ck-time").textContent = now.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Europe/Bucharest" });
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ── HUD data ──
+function setBar(id, val, max) { const el = $(id); if (el) el.style.width = Math.min(100, max ? (val / max) * 100 : 0) + "%"; }
+function setLed(name, on) {
+  const led = $("led-" + name), st = $("st-" + name);
+  if (led) led.className = "led " + (on ? "on" : "off");
+  if (st) st.textContent = on ? "ONLINE" : "OFF";
+}
+async function refreshHud() {
+  let d; try { d = await api("/api/hud"); } catch { return; }
+  if (!d) return;
+  // Surse
+  setLed("weather", d.sources.weather); setLed("operational", d.sources.operational);
+  setLed("memory", d.sources.memory); setLed("calendar", d.sources.calendar);
+  // Vreme
+  if (d.weather) {
+    $("wx-city").textContent = d.city || "Sibiu";
+    $("wx-temp").textContent = d.weather.now + "°";
+    $("wx-meta").innerHTML = `<b>${cap(d.weather.dayDesc)}</b><br>min ${d.weather.min}° / max ${d.weather.max}°<br>ploaie ${d.weather.rainChance}% · vânt ${d.weather.wind}km/h`;
+    const pct = Math.max(0, Math.min(1, (d.weather.now + 15) / 55)); // -15..40°C
+    $("wx-arc").style.strokeDashoffset = (276 * (1 - pct)).toFixed(0);
+    $("wx-arc").style.stroke = d.weather.rainChance >= 60 ? "var(--orange)" : "var(--cyan)";
+  } else { $("wx-temp").textContent = "—"; $("wx-meta").textContent = "neconfigurat"; }
+  // Task-uri
+  if (d.tasks) {
+    const mx = Math.max(1, d.tasks.total);
+    $("n-blocate").textContent = d.tasks.blocate; setBar("b-blocate", d.tasks.blocate, mx);
+    $("n-intarziate").textContent = d.tasks.intarziate; setBar("b-intarziate", d.tasks.intarziate, mx);
+    $("n-azi").textContent = d.tasks.azi; setBar("b-azi", d.tasks.azi, mx);
+    $("n-ok").textContent = d.tasks.ok; setBar("b-ok", d.tasks.ok, mx);
+    // Reactor alert daca exista blocate sau intarziate
+    $("reactor").classList.toggle("alert", (d.tasks.blocate + d.tasks.intarziate) > 0);
   }
-  inp.focus();
+  // Legenda
+  $("lg-mem").textContent = d.memories; $("lg-dec").textContent = d.decisions; $("lg-rem").textContent = d.reminders;
+}
+const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+
+// ── Boot ──
+function boot() {
+  if (!chat.children.length) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
+  inp.focus(); refreshHud(); setInterval(refreshHud, 60000);
 }
 (async () => {
   if (key) {
     const st = await tryKey(key).catch(() => null);
-    if (st) { $("gate").classList.add("hidden"); boot(st); return; }
+    if (st) { $("gate").classList.add("hidden"); boot(); return; }
     localStorage.removeItem("jarvis_key");
   }
   $("pin").focus();

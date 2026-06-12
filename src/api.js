@@ -1,6 +1,7 @@
 import express from "express";
 import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
 import { handleMessage, confirmAction } from "./brain.js";
+import { getHudData } from "./hud.js";
 
 /**
  * API-ul HUD-ului. Din Faza 2, chat-ul trece prin brain.js —
@@ -32,6 +33,15 @@ export function registerApi(app) {
       },
       city: config.weather.city,
     });
+  });
+
+  app.get("/api/hud", async (_req, res) => {
+    try {
+      res.json(await getHudData());
+    } catch (e) {
+      console.error("[api/hud]", e.message);
+      res.status(502).json({ error: "Nu am putut citi datele HUD." });
+    }
   });
 
   app.post("/api/chat", async (req, res) => {

@@ -2,6 +2,7 @@ import express from "express";
 import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
 import { handleMessage, confirmAction } from "./brain.js";
 import { getHudData } from "./hud.js";
+import { hasVoice, synthesize } from "./tts.js";
 
 /**
  * API-ul HUD-ului. Din Faza 2, chat-ul trece prin brain.js —
@@ -30,9 +31,26 @@ export function registerApi(app) {
         operational: hasOperational,
         calendar: hasCalendar,
         memory: hasDb,
+        voice: hasVoice,
       },
       city: config.weather.city,
     });
+  });
+
+  // FAZA V — sinteza vocala (mp3) pentru HUD.
+  app.post("/api/speak", async (req, res) => {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "text lipsa." });
+    if (!hasVoice) return res.status(503).json({ error: "voce neconfigurata." });
+    try {
+      const audio = await synthesize(text.slice(0, 2000));
+      res.set("content-type", "audio/mpeg");
+      res.set("cache-control", "no-store");
+      res.send(audio);
+    } catch (e) {
+      console.error("[api/speak]", e.message);
+      res.status(502).json({ error: "Sinteza vocala a esuat." });
+    }
   });
 
   app.get("/api/hud", async (_req, res) => {

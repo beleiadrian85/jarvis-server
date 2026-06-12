@@ -515,24 +515,26 @@ function stripForVoice(t) {
   return t.replace(/[*_#`>]|[\u{1F000}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[🔴🟡🟠🟢🆕🔄✅⏰📌📋✏️✉️📄🧠📥📧🗓️🐢🔐⚠️🕔]/gu, "")
           .replace(/\s+/g, " ").slice(0, 8000).trim();
 }
-let speaking = false, speakGen = 0;
-// Rostire pe fraze scurte — evita bug-ul Chrome care taie utterantele lungi
-// (esential pentru raportul de dimineata). Tokenul `gen` opreste curat o
-// rostire veche cand alta o intrerupe.
-function speak(text, onDone) {
+let speaking = false, speakGen = 0, audioEl = null, voiceReady = false;
+
+// Imparte textul in fraze de ~160 caractere (latenta mica + playback fluent).
+function chunkText(t) {
+  const out = []; let buf = "";
+  for (const s of (t.match(/[^.!?\n]+[.!?]?/g) || [t])) {
+    buf += s;
+    if (buf.length >= 160) { out.push(buf.trim()); buf = ""; }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out.length ? out : [t];
+}
+
+// Vocea browserului — fallback gratuit daca ElevenLabs nu e disponibil.
+function browserSpeak(text, gen, onDone) {
   if (!hasTTS) { onDone && onDone(); return; }
-  const gen = ++speakGen;
-  speaking = false; speechSynthesis.cancel();
-  const clean = stripForVoice(text);
-  if (!clean) { onDone && onDone(); return; }
-  const chunks = (clean.match(/[^.!?\n]+[.!?]?/g) || [clean])
-    .map((s) => s.trim()).filter(Boolean);
-  const v = pickVoice();
-  speaking = true;
-  let i = 0;
+  const chunks = chunkText(text); const v = pickVoice(); let i = 0;
   (function next() {
-    if (gen !== speakGen) return;            // o rostire noua a preluat
-    if (i >= chunks.length) { speaking = false; onDone && onDone(); return; }
+    if (gen !== speakGen) return;
+    if (i >= chunks.length) { onDone && onDone(); return; }
     const u = new SpeechSynthesisUtterance(chunks[i]);
     u.lang = "ro-RO"; if (v) u.voice = v; u.rate = 1.04; u.pitch = 1;
     u.onend = () => { if (gen === speakGen) { i++; next(); } };
@@ -540,7 +542,58 @@ function speak(text, onDone) {
     speechSynthesis.speak(u);
   })();
 }
-function shutUp() { speakGen++; speaking = false; if (hasTTS) speechSynthesis.cancel(); }
+
+async function fetchTTS(text) {
+  const r = await fetch("/api/speak", {
+    method: "POST", headers: { "content-type": "application/json", "x-jarvis-key": key },
+    body: JSON.stringify({ text }),
+  });
+  if (!r.ok) throw new Error("tts " + r.status);
+  return URL.createObjectURL(await r.blob());
+}
+function playUrl(url) {
+  return new Promise((resolve) => {
+    const a = new Audio(url); audioEl = a;
+    a.onended = resolve; a.onerror = resolve;
+    a.play().catch(() => resolve());
+  });
+}
+function stopAudio() {
+  if (audioEl) { try { audioEl.pause(); } catch {} audioEl.src = ""; audioEl = null; }
+  if (hasTTS) speechSynthesis.cancel();
+}
+
+// Vocea JARVIS (ElevenLabs): rostire pe fraze cu prefetch, fallback la browser.
+// Tokenul `gen` opreste curat o rostire veche cand alta o intrerupe (barge-in).
+async function speak(text, onDone) {
+  const gen = ++speakGen;
+  stopAudio();
+  const clean = stripForVoice(text);
+  if (!clean) { onDone && onDone(); return; }
+  speaking = true;
+  const done = () => { if (gen === speakGen) { speaking = false; onDone && onDone(); } };
+
+  if (!voiceReady) { browserSpeak(clean, gen, done); return; }
+
+  const parts = chunkText(clean);
+  try {
+    let nextP = fetchTTS(parts[0]);
+    for (let i = 0; i < parts.length; i++) {
+      let url;
+      try { url = await nextP; } catch { url = null; }
+      if (gen !== speakGen) { if (url) URL.revokeObjectURL(url); return; }
+      nextP = (i + 1 < parts.length) ? fetchTTS(parts[i + 1]).catch(() => null) : Promise.resolve(null);
+      if (!url) { browserSpeak(parts.slice(i).join(" "), gen, done); return; }
+      await playUrl(url);
+      URL.revokeObjectURL(url);
+      if (gen !== speakGen) return;
+    }
+    done();
+  } catch {
+    if (gen === speakGen) browserSpeak(clean, gen, done);
+  }
+}
+function shutUp() { speakGen++; speaking = false; stopAudio(); }
 
 // Buton difuzor: rosteste si raspunsurile la mesaje SCRISE.
 let ttsOn = localStorage.getItem("jarvis_tts") === "1";
@@ -716,14 +769,15 @@ async function refreshHud() {
 const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
 
 // ── Boot ──
-function boot() {
+function boot(st) {
+  voiceReady = !!(st && st.sources && st.sources.voice);
   if (!chat.children.length) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
   inp.focus(); refreshHud(); setInterval(refreshHud, 60000);
 }
 (async () => {
   if (key) {
     const st = await tryKey(key).catch(() => null);
-    if (st) { $("gate").classList.add("hidden"); boot(); return; }
+    if (st) { $("gate").classList.add("hidden"); boot(st); return; }
     localStorage.removeItem("jarvis_key");
   }
   $("pin").focus();

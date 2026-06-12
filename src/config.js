@@ -45,6 +45,11 @@ export const config = {
   notifyPollMinutes: Number(process.env.NOTIFY_POLL_MINUTES || 7),
   siteMonitorUrl: process.env.SITE_MONITOR_URL || "",
 
+  // FAZA V — voce streaming
+  deepgramKey: process.env.DEEPGRAM_API_KEY || "",
+  elevenKey: process.env.ELEVENLABS_API_KEY || "",
+  elevenVoiceId: process.env.ELEVENLABS_VOICE_ID || "",
+
   // Expeditori-cheie pentru clasificarea emailurilor (completabil din env).
   keySenders: (process.env.GMAIL_KEY_SENDERS ||
     "anaf.ro,bancatransilvania.ro,btrl.ro,brd.ro,bcr.ro,infosys,emco,colliers,notar,avocat")

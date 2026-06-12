@@ -42,3 +42,36 @@ export async function getTodayEvents() {
     return null;
   }
 }
+
+/** Evenimente care incep in urmatoarele `withinMin` minute (pt notificari). */
+export async function getUpcomingEvents(withinMin = 30) {
+  if (!hasCalendar) return null;
+  try {
+    const now = new Date();
+    const end = new Date(now.getTime() + withinMin * 60_000);
+    const params = new URLSearchParams({
+      timeMin: now.toISOString(),
+      timeMax: end.toISOString(),
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: "10",
+    });
+    const d = await gapi(
+      `https://www.googleapis.com/calendar/v3/calendars/` +
+        `${encodeURIComponent(config.google.calendarId)}/events?${params}`
+    );
+    return (d.items || [])
+      .filter((ev) => ev.start?.dateTime)
+      .map((ev) => ({
+        id: ev.id,
+        title: ev.summary || "(fara titlu)",
+        startISO: ev.start.dateTime,
+        time: new Date(ev.start.dateTime).toLocaleTimeString("ro-RO", {
+          hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest",
+        }),
+      }));
+  } catch (e) {
+    console.error("[calendar.upcoming]", e.message);
+    return null;
+  }
+}

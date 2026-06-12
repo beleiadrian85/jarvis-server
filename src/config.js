@@ -41,6 +41,10 @@ export const config = {
   voyageKey: process.env.VOYAGE_API_KEY || "",
   backupDir: process.env.BACKUP_DIR || "/data/backups",
 
+  // FAZA 3
+  notifyPollMinutes: Number(process.env.NOTIFY_POLL_MINUTES || 7),
+  siteMonitorUrl: process.env.SITE_MONITOR_URL || "",
+
   // Expeditori-cheie pentru clasificarea emailurilor (completabil din env).
   keySenders: (process.env.GMAIL_KEY_SENDERS ||
     "anaf.ro,bancatransilvania.ro,btrl.ro,brd.ro,bcr.ro,infosys,emco,colliers,notar,avocat")

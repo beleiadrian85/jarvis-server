@@ -6,7 +6,9 @@ import { initDb } from "./db.js";
 import { bot } from "./telegram.js";
 import { registerApi } from "./api.js";
 import { startBackupSchedule } from "./backup.js";
-// import { startScheduler } from "./scheduler.js"; // ← FAZA 3
+import { startScheduler } from "./scheduler.js";
+import { startNotifier } from "./notifier.js";
+import { startMonitor } from "./monitor.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -15,7 +17,7 @@ const app = express();
 app.get("/health", (_req, res) => {
   res.json({
     status: "JARVIS online",
-    phase: 2,
+    phase: 3,
     sources: {
       weather: true,
       operational: hasOperational,
@@ -45,7 +47,11 @@ bot.launch().then(() => {
 console.log(`[sources] operational=${hasOperational} calendar=${hasCalendar} memorie=${hasDb}`);
 
 if (hasDb) startBackupSchedule();
-// startScheduler(); // ← decomenteaza in Faza 3
+
+// FAZA 3 — automatizare si monitorizare
+startScheduler();
+startNotifier();
+startMonitor();
 
 // Oprire curata.
 process.once("SIGINT", () => bot.stop("SIGINT"));

@@ -63,6 +63,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- FAZA 3: stare interna (snapshot task-uri pt DIFF) + dedup notificari.
+CREATE TABLE IF NOT EXISTS jarvis_state (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notified (
+  key TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_conv_created ON conversations(id);
 CREATE INDEX IF NOT EXISTS idx_memories_cat ON memories(category) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status);

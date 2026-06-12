@@ -14,7 +14,7 @@ bot.start((ctx) => {
   if (!isOwner(ctx)) return deny(ctx);
   ctx.reply(
     [
-      "JARVIS online. Faza 2 activa: memorie persistenta + Google + task-uri.",
+      "JARVIS online. Faza 3 activa: automatizare + monitorizare.",
       "",
       "• 'Bună dimineața Jarvis' sau /raport — raportul complet",
       "• 'creează task: ...' — task in Operational (cu confirmare)",
@@ -23,6 +23,9 @@ bot.start((ctx) => {
       "• 'caută în drive ...' / 'draft răspuns la ...' — Google",
       "• rezolvat #id / amână #id [zile] / ignoră #id — remindere",
       "• orice altceva — vorbim normal (cu memorie)",
+      "",
+      "Automat: raport complet la 09:00, verificare task-uri la 17:00,",
+      "notificari imediate (task nou/intarziat, email important, termene).",
     ].join("\n")
   );
 });

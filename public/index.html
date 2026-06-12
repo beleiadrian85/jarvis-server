@@ -513,22 +513,34 @@ function pickVoice() {
 }
 function stripForVoice(t) {
   return t.replace(/[*_#`>]|[\u{1F000}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[🔴🟡🟠🟢🆕🔄✅⏰📌📋✏️✉️📄🧠📥📧🗓️🐢🔐⚠️🕔]/gu, "")
-          .replace(/\s+/g, " ").slice(0, 1400).trim();
+          .replace(/\s+/g, " ").slice(0, 8000).trim();
 }
-let speaking = false;
+let speaking = false, speakGen = 0;
+// Rostire pe fraze scurte — evita bug-ul Chrome care taie utterantele lungi
+// (esential pentru raportul de dimineata). Tokenul `gen` opreste curat o
+// rostire veche cand alta o intrerupe.
 function speak(text, onDone) {
   if (!hasTTS) { onDone && onDone(); return; }
-  speechSynthesis.cancel();
+  const gen = ++speakGen;
+  speaking = false; speechSynthesis.cancel();
   const clean = stripForVoice(text);
   if (!clean) { onDone && onDone(); return; }
-  const u = new SpeechSynthesisUtterance(clean);
-  u.lang = "ro-RO"; const v = pickVoice(); if (v) u.voice = v;
-  u.rate = 1.04; u.pitch = 1;
+  const chunks = (clean.match(/[^.!?\n]+[.!?]?/g) || [clean])
+    .map((s) => s.trim()).filter(Boolean);
+  const v = pickVoice();
   speaking = true;
-  u.onend = () => { speaking = false; onDone && onDone(); };
-  u.onerror = () => { speaking = false; onDone && onDone(); };
-  speechSynthesis.speak(u);
+  let i = 0;
+  (function next() {
+    if (gen !== speakGen) return;            // o rostire noua a preluat
+    if (i >= chunks.length) { speaking = false; onDone && onDone(); return; }
+    const u = new SpeechSynthesisUtterance(chunks[i]);
+    u.lang = "ro-RO"; if (v) u.voice = v; u.rate = 1.04; u.pitch = 1;
+    u.onend = () => { if (gen === speakGen) { i++; next(); } };
+    u.onerror = () => { if (gen === speakGen) { i++; next(); } };
+    speechSynthesis.speak(u);
+  })();
 }
+function shutUp() { speakGen++; speaking = false; if (hasTTS) speechSynthesis.cancel(); }
 
 // Buton difuzor: rosteste si raspunsurile la mesaje SCRISE.
 let ttsOn = localStorage.getItem("jarvis_tts") === "1";
@@ -539,38 +551,120 @@ btnTts.addEventListener("click", () => {
   if (!ttsOn && hasTTS) speechSynthesis.cancel();
 });
 
-// Recunoastere + MOD CONVERSATIE (hands-free).
-let rec = null, convMode = false, voiceTurn = false;
+// ── MOD CONVERSAȚIE HANDS-FREE (mașină de stări) ──
+// Stari: idle (oprit) · listening (ascult) · processing (lucrez) · speaking (vorbesc)
+let rec = null;
+const conv = { active: false, state: "idle", pendingConfirm: null };
+const STOP_WORDS = ["stop", "opreste", "oprește", "oprește-te", "opreste-te", "gata", "pauza", "pauză", "inchide", "închide", "termina", "termină"];
+
+function isStop(norm) {
+  return STOP_WORDS.some((w) => norm === w || norm === "jarvis " + w || norm.startsWith(w + " jarvis") || norm.startsWith("jarvis " + w));
+}
+function micUI() {
+  btnMic.classList.toggle("listening", conv.active);
+  btnMic.title = conv.active ? "Mod conversație ACTIV (apasă pt stop)" : "Pornește modul conversație";
+}
+
 if (SR) {
-  rec = new SR(); rec.lang = "ro-RO"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
-  rec.onresult = (e) => { const said = e.results[0][0].transcript.trim(); if (said) { voiceTurn = true; send(said); } };
-  rec.onend = () => { if (convMode && !speaking && !btnSend.disabled) setTimeout(listen, 300); };
-  rec.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") stopConv(); };
-  btnMic.addEventListener("click", () => convMode ? stopConv() : startConv());
+  rec = new SR();
+  rec.lang = "ro-RO"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
+  rec.onresult = onVoiceResult;
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      stopConv(); addMsg("error", "", "Microfon blocat. Permite accesul la microfon în browser.");
+    }
+    // no-speech / aborted / network → onend reia ascultarea
+  };
+  rec.onend = () => { if (conv.active && conv.state === "listening") setTimeout(beginListen, 200); };
+  btnMic.addEventListener("click", () => conv.active ? stopConv() : startConv());
 } else { btnMic.style.display = "none"; }
 
-function listen() {
-  if (!convMode || speaking || btnSend.disabled) return;
+function startConv() {
+  conv.active = true; conv.pendingConfirm = null; micUI();
+  // Salutul deblocheaza audio (gest de click) si confirma ca vocea merge.
+  conv.state = "speaking";
+  speak("Sistemele sunt online. Te ascult.", beginListen);
+}
+function stopConv(silent) {
+  conv.active = false; conv.state = "idle"; conv.pendingConfirm = null; micUI();
+  try { rec && rec.abort(); } catch {}
+  shutUp();
+  if (!silent) addMsg("jarvis", "JARVIS", "Mod conversație oprit.");
+}
+function beginListen() {
+  if (!conv.active) return;
+  conv.state = "listening";
   try { rec.start(); } catch {}
 }
-function startConv() {
-  convMode = true; voiceTurn = true; btnMic.classList.add("listening");
-  // Rostim o confirmare scurta — deblocheaza audio prin gestul de click si confirma ca vocea merge.
-  speak("Te ascult.", listen);
-}
-function stopConv() {
-  convMode = false; btnMic.classList.remove("listening");
-  try { rec.stop(); } catch {}
-  if (hasTTS) speechSynthesis.cancel();
+function sayAndListen(text) {
+  conv.state = "speaking";
+  speak(text, () => { if (conv.active) beginListen(); });
 }
 
-// Decide daca rostim raspunsul: in conversatie sau cu difuzorul pornit, mereu.
+function onVoiceResult(e) {
+  const said = (e.results[0][0].transcript || "").trim();
+  if (!said) return;
+  const norm = said.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+  // Confirmare prin voce (da/nu) pentru actiuni in asteptare.
+  if (conv.pendingConfirm) {
+    const id = conv.pendingConfirm; conv.pendingConfirm = null;
+    addMsg("user", "TU", said);
+    const yes = /\b(da|confirm|confirma|ok|bine|sigur)\b/.test(norm);
+    const no = /\b(nu|anuleaz|stop|las)\b/.test(norm);
+    if (!yes && !no) { sayAndListen("N-am înțeles. Spune da sau nu."); conv.pendingConfirm = id; return; }
+    voiceConfirm(id, yes);
+    return;
+  }
+
+  if (isStop(norm)) { addMsg("user", "TU", said); stopConv(true); sayAndListen("Am oprit. Spune-mi când reluăm."); conv.active = false; conv.state = "idle"; micUI(); return; }
+
+  voiceCommand(said);
+}
+
+async function voiceCommand(said) {
+  conv.state = "processing";
+  try { rec.abort(); } catch {}
+  addMsg("user", "TU", said);
+  const t = addTyping();
+  try {
+    const data = await api("/api/chat", { text: said });
+    t.remove();
+    if (!data) { if (conv.active) beginListen(); return; }
+    const el = addMsg("jarvis", "JARVIS", data.reply);
+    refreshHud();
+    if (data.confirmId) {
+      addConfirmButtons(el, data.confirmId);
+      conv.pendingConfirm = data.confirmId;
+      sayAndListen(data.reply + " Confirmi? Spune da sau nu.");
+    } else {
+      sayAndListen(data.reply);
+    }
+  } catch (err) {
+    t.remove(); addMsg("error", "", err.message);
+    sayAndListen("A apărut o eroare. Încearcă din nou.");
+  }
+}
+
+async function voiceConfirm(confirmId, yes) {
+  conv.state = "processing";
+  const t = addTyping();
+  try {
+    const d = await api("/api/confirm", { confirmId, yes });
+    t.remove();
+    if (!d) { if (conv.active) beginListen(); return; }
+    addMsg("jarvis", "JARVIS", d.reply); refreshHud();
+    sayAndListen(d.reply);
+  } catch (err) {
+    t.remove(); addMsg("error", "", err.message);
+    sayAndListen("Nu am putut finaliza.");
+  }
+}
+
+// Raspuns rostit pentru calea SCRISA (mesaje tastate / butoane), doar cu difuzorul pornit.
 function sayReply(text) {
-  const should = ttsOn || voiceTurn || convMode;
-  voiceTurn = false;
-  if (!should) return;
-  try { rec && rec.stop(); } catch {}
-  speak(text, () => { if (convMode) setTimeout(listen, 300); });
+  if (conv.active) return; // in conversatie, vocea e gestionata de masina de stari
+  if (ttsOn) speak(text);
 }
 
 // ── CEAS live ──

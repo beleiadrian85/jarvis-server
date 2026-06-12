@@ -583,13 +583,14 @@ async function speak(text, onDone) {
       try { url = await nextP; } catch { url = null; }
       if (gen !== speakGen) { if (url) URL.revokeObjectURL(url); return; }
       nextP = (i + 1 < parts.length) ? fetchTTS(parts[i + 1]).catch(() => null) : Promise.resolve(null);
-      if (!url) { browserSpeak(parts.slice(i).join(" "), gen, done); return; }
+      if (!url) { voiceReady = false; browserSpeak(parts.slice(i).join(" "), gen, done); return; }
       await playUrl(url);
       URL.revokeObjectURL(url);
       if (gen !== speakGen) return;
     }
     done();
   } catch {
+    voiceReady = false; // serverul de voce nu raspunde — ramanem pe vocea browserului
     if (gen === speakGen) browserSpeak(clean, gen, done);
   }
 }

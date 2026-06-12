@@ -33,7 +33,18 @@ export const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     refreshToken: process.env.GOOGLE_REFRESH_TOKEN || "",
     calendarId: process.env.GOOGLE_CALENDAR_ID || "primary",
+    driveFolder: process.env.GOOGLE_DRIVE_FOLDER || "JARVIS",
   },
+
+  // FAZA 2
+  databaseUrl: process.env.DATABASE_URL || "",
+  voyageKey: process.env.VOYAGE_API_KEY || "",
+  backupDir: process.env.BACKUP_DIR || "/data/backups",
+
+  // Expeditori-cheie pentru clasificarea emailurilor (completabil din env).
+  keySenders: (process.env.GMAIL_KEY_SENDERS ||
+    "anaf.ro,bancatransilvania.ro,btrl.ro,brd.ro,bcr.ro,infosys,emco,colliers,notar,avocat")
+    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
 
   port: process.env.PORT || 3000,
 };
@@ -44,4 +55,6 @@ export const hasCalendar = !!(
   config.google.refreshToken
 );
 
+export const hasGoogle = hasCalendar; // acelasi OAuth, trei scope-uri
 export const hasOperational = !!config.operationalMcpUrl;
+export const hasDb = !!config.databaseUrl;

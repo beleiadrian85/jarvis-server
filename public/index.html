@@ -153,6 +153,26 @@
   }
   #send:hover, #send:focus-visible { background: rgba(34,211,238,.22); box-shadow: 0 0 14px rgba(34,211,238,.35); outline: none; }
   #send:disabled { opacity: .45; cursor: default; box-shadow: none; }
+  .btn-ico {
+    width: 48px; height: 48px; flex: none; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--line);
+    color: var(--muted); cursor: pointer; display: grid; place-items: center;
+    transition: color .2s, border-color .2s, box-shadow .2s;
+  }
+  .btn-ico:hover, .btn-ico:focus-visible { color: var(--cyan); border-color: var(--cyan-dim); outline: none; }
+  .btn-ico.active { color: var(--cyan); border-color: var(--cyan-dim); box-shadow: 0 0 12px rgba(34,211,238,.35); }
+  .btn-ico.listening { color: var(--danger); border-color: rgba(248,113,113,.6); box-shadow: 0 0 14px rgba(248,113,113,.4); animation: blink 1.2s ease-in-out infinite; }
+
+  .confirm-row { display: flex; gap: 10px; margin-top: 10px; }
+  .confirm-row button {
+    font-family: "Share Tech Mono", monospace; font-size: 14px; letter-spacing: .1em;
+    padding: 9px 22px; border-radius: 8px; cursor: pointer; min-height: 40px;
+    transition: background .2s, box-shadow .2s;
+  }
+  .confirm-row .yes { background: rgba(34,197,94,.12); color: #4ade80; border: 1px solid rgba(34,197,94,.5); }
+  .confirm-row .yes:hover { background: rgba(34,197,94,.22); box-shadow: 0 0 12px rgba(34,197,94,.35); }
+  .confirm-row .no { background: rgba(248,113,113,.10); color: var(--danger); border: 1px solid rgba(248,113,113,.45); }
+  .confirm-row .no:hover { background: rgba(248,113,113,.2); box-shadow: 0 0 12px rgba(248,113,113,.3); }
 
   /* ── PIN GATE ── */
   #gate {
@@ -210,7 +230,19 @@
   <main id="chat" aria-live="polite"></main>
 
   <div id="bar">
+    <button id="mic" class="btn-ico" aria-label="Vorbește cu Jarvis (ro-RO)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+      </svg>
+    </button>
     <textarea id="inp" rows="1" placeholder="Spune-i lui Jarvis…" aria-label="Mesaj"></textarea>
+    <button id="tts" class="btn-ico" aria-label="Activează vocea lui Jarvis">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      </svg>
+    </button>
     <button id="send" aria-label="Trimite mesajul">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>
@@ -222,7 +254,6 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const chat = $("chat"), inp = $("inp"), btnSend = $("send"), btnRaport = $("btn-raport");
-let history = [];   // {role, content} — pastrat doar in sesiunea curenta
 let key = localStorage.getItem("jarvis_key") || "";
 
 // ── PIN gate ──
@@ -293,24 +324,58 @@ async function api(path, body) {
 }
 
 // ── Chat ──
-async function send() {
-  const text = inp.value.trim();
+function showReply(data) {
+  const el = addMsg("jarvis", "JARVIS", data.reply);
+  speak(data.reply);
+  if (data.confirmId) addConfirmButtons(el, data.confirmId);
+}
+
+function addConfirmButtons(msgEl, confirmId) {
+  const row = document.createElement("div");
+  row.className = "confirm-row";
+  const mk = (cls, label, yes) => {
+    const b = document.createElement("button");
+    b.className = cls; b.textContent = label;
+    b.addEventListener("click", async () => {
+      row.remove();
+      setBusy(true);
+      const t = addTyping();
+      try {
+        const data = await api("/api/confirm", { confirmId, yes });
+        if (!data) return;
+        t.remove();
+        addMsg("jarvis", "JARVIS", data.reply);
+        speak(data.reply);
+      } catch (e) {
+        t.remove();
+        addMsg("error", "", e.message);
+      } finally {
+        setBusy(false);
+      }
+    });
+    return b;
+  };
+  row.appendChild(mk("yes", "✓ DA", true));
+  row.appendChild(mk("no", "✕ NU", false));
+  msgEl.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function send(forcedText) {
+  const text = (forcedText ?? inp.value).trim();
   if (!text || btnSend.disabled) return;
   inp.value = ""; inp.style.height = "auto";
   addMsg("user", "TU", text);
-  history.push({ role: "user", content: text });
   setBusy(true);
   const t = addTyping();
   try {
-    const data = await api("/api/chat", { messages: history });
+    const data = await api("/api/chat", { text });
     if (!data) return;
     t.remove();
-    addMsg("jarvis", "JARVIS", data.reply);
-    history.push({ role: "assistant", content: data.reply });
+    showReply(data);
   } catch (e) {
     t.remove();
     addMsg("error", "", e.message);
-    history.pop();
   } finally {
     setBusy(false);
   }
@@ -334,6 +399,7 @@ btnRaport.addEventListener("click", async () => {
     if (!data) return;
     t.remove();
     addMsg("jarvis report", "RAPORT", data.report);
+    speak(data.report);
   } catch (e) {
     t.remove();
     addMsg("error", "", e.message);
@@ -342,6 +408,60 @@ btnRaport.addEventListener("click", async () => {
   }
 });
 
+// ── Voce: recunoastere ro-RO (microfon) ──
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const btnMic = $("mic");
+let rec = null, listening = false;
+if (SR) {
+  rec = new SR();
+  rec.lang = "ro-RO";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.onresult = (e) => {
+    const said = e.results[0][0].transcript.trim();
+    if (said) send(said);
+  };
+  rec.onend = () => { listening = false; btnMic.classList.remove("listening"); };
+  rec.onerror = () => { listening = false; btnMic.classList.remove("listening"); };
+  btnMic.addEventListener("click", () => {
+    if (listening) { rec.stop(); return; }
+    try {
+      rec.start();
+      listening = true;
+      btnMic.classList.add("listening");
+    } catch {}
+  });
+} else {
+  btnMic.style.display = "none";
+}
+
+// ── Voce: sinteza ro-RO (Jarvis vorbeste) ──
+const btnTts = $("tts");
+let ttsOn = localStorage.getItem("jarvis_tts") === "1";
+if (ttsOn) btnTts.classList.add("active");
+btnTts.addEventListener("click", () => {
+  ttsOn = !ttsOn;
+  btnTts.classList.toggle("active", ttsOn);
+  localStorage.setItem("jarvis_tts", ttsOn ? "1" : "0");
+  if (!ttsOn) speechSynthesis.cancel();
+});
+function roVoice() {
+  return speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("ro")) || null;
+}
+function speak(text) {
+  if (!ttsOn || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  // Curatam emoji/marcaje ca sa nu le citeasca.
+  const clean = text.replace(/[*_#`]|[\u{1F300}-\u{1FAFF}]|[🔴🟡🟠🟢✓✕✔✖⏰📌📋✏️✉️📄🧠]/gu, "").slice(0, 1200);
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = "ro-RO";
+  const v = roVoice();
+  if (v) u.voice = v;
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+if ("speechSynthesis" in window) speechSynthesis.getVoices();
+
 // ── Boot ──
 function boot(st) {
   $("dot").className = "dot on";
@@ -349,6 +469,7 @@ function boot(st) {
   srcs.push("vreme " + st.city);
   if (st.sources.operational) srcs.push("operational");
   if (st.sources.calendar) srcs.push("calendar");
+  if (st.sources.memory) srcs.push("memorie");
   $("status-txt").textContent = "online · " + srcs.join(" · ");
   if (!chat.children.length) {
     addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");

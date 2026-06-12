@@ -1,26 +1,10 @@
 import { config, hasCalendar } from "../config.js";
+import { gapi } from "../google.js";
 
 /**
- * Calendar Google prin OAuth refresh token.
- * In Faza 1 e OPTIONAL: daca lipsesc credentialele, intoarce null
- * si raportul continua fara calendar.
+ * Calendar Google (readonly), prin OAuth-ul comun din google.js.
+ * Daca lipsesc credentialele, intoarce null si raportul continua.
  */
-
-async function getAccessToken() {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: config.google.clientId,
-      client_secret: config.google.clientSecret,
-      refresh_token: config.google.refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) throw new Error(`Google token ${res.status}`);
-  const d = await res.json();
-  return d.access_token;
-}
 
 /**
  * Evenimentele de azi (de acum pana la miezul noptii).
@@ -29,7 +13,6 @@ async function getAccessToken() {
 export async function getTodayEvents() {
   if (!hasCalendar) return null;
   try {
-    const token = await getAccessToken();
     const now = new Date();
     const end = new Date();
     end.setHours(23, 59, 59, 999);
@@ -40,12 +23,10 @@ export async function getTodayEvents() {
       orderBy: "startTime",
       maxResults: "15",
     });
-    const url =
+    const d = await gapi(
       `https://www.googleapis.com/calendar/v3/calendars/` +
-      `${encodeURIComponent(config.google.calendarId)}/events?${params}`;
-    const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error(`Calendar API ${res.status}`);
-    const d = await res.json();
+        `${encodeURIComponent(config.google.calendarId)}/events?${params}`
+    );
     return (d.items || []).map((ev) => {
       const start = ev.start?.dateTime || ev.start?.date;
       let time = "toata ziua";

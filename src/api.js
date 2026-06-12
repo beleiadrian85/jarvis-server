@@ -1,28 +1,11 @@
 import express from "express";
-import { config, hasCalendar, hasOperational } from "./config.js";
-import { callClaude } from "./claude.js";
-import { buildMorningReport } from "./morning.js";
+import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
+import { handleMessage, confirmAction } from "./brain.js";
 
-const SYSTEM_CHAT =
-  "Esti JARVIS, asistentul personal al lui Adi. Romana, direct, scurt, pragmatic. " +
-  "Daca nu stii, spui clar. Fara politeturi inutile.";
-
-// Doar mesaje user/assistant cu continut text, maxim ultimele 20.
-function sanitizeMessages(input) {
-  if (!Array.isArray(input)) return null;
-  const clean = input
-    .filter(
-      (m) =>
-        m &&
-        (m.role === "user" || m.role === "assistant") &&
-        typeof m.content === "string" &&
-        m.content.trim()
-    )
-    .slice(-20)
-    .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
-  if (!clean.length || clean[clean.length - 1].role !== "user") return null;
-  return clean;
-}
+/**
+ * API-ul HUD-ului. Din Faza 2, chat-ul trece prin brain.js —
+ * istoric si memorie COMUNE cu Telegram (constitutie, sectiunea HUD).
+ */
 
 export function registerApi(app) {
   app.use(express.json({ limit: "100kb" }));
@@ -41,32 +24,53 @@ export function registerApi(app) {
   app.get("/api/status", (_req, res) => {
     res.json({
       ok: true,
-      sources: { weather: true, operational: hasOperational, calendar: hasCalendar },
+      sources: {
+        weather: true,
+        operational: hasOperational,
+        calendar: hasCalendar,
+        memory: hasDb,
+      },
       city: config.weather.city,
     });
   });
 
   app.post("/api/chat", async (req, res) => {
-    const messages = sanitizeMessages(req.body?.messages);
-    if (!messages) {
-      return res.status(400).json({ error: "messages invalid." });
-    }
+    const text = String(req.body?.text ?? extractLastUser(req.body?.messages) ?? "").trim();
+    if (!text) return res.status(400).json({ error: "text lipsa." });
     try {
-      const reply = await callClaude({ system: SYSTEM_CHAT, messages, maxTokens: 800 });
-      res.json({ reply: reply || "…" });
+      const { reply, confirmId } = await handleMessage("hud", text);
+      res.json({ reply, confirmId: confirmId || null });
     } catch (e) {
       console.error("[api/chat]", e.message);
       res.status(502).json({ error: "Eroare la nucleu." });
     }
   });
 
-  app.post("/api/raport", async (_req, res) => {
+  app.post("/api/confirm", async (req, res) => {
+    const { confirmId, yes } = req.body || {};
+    if (!confirmId) return res.status(400).json({ error: "confirmId lipsa." });
     try {
-      const report = await buildMorningReport();
-      res.json({ report });
+      res.json({ reply: await confirmAction(confirmId, !!yes) });
+    } catch (e) {
+      console.error("[api/confirm]", e.message);
+      res.status(502).json({ error: "Eroare la confirmare." });
+    }
+  });
+
+  app.post("/api/raport", async (req, res) => {
+    try {
+      const { reply } = await handleMessage("hud", "/raport");
+      res.json({ report: reply });
     } catch (e) {
       console.error("[api/raport]", e.message);
       res.status(502).json({ error: "Nu am putut genera raportul." });
     }
   });
+}
+
+// Compatibilitate cu HUD-ul vechi care trimitea {messages:[...]}.
+function extractLastUser(messages) {
+  if (!Array.isArray(messages)) return null;
+  const last = [...messages].reverse().find((m) => m?.role === "user");
+  return last?.content || null;
 }

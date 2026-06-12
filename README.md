@@ -93,3 +93,28 @@ src/
 
 Memorie persistentă (Postgres + pgvector) + reminder email important.
 Atunci botul începe să „țină minte" și chat-ul devine contextual.
+
+## FAZA 2 — Google (un singur OAuth, trei scope-uri)
+
+1. https://console.cloud.google.com → proiect nou „JARVIS" → APIs & Services.
+2. Activeaza API-urile: **Google Calendar API**, **Gmail API**, **Google Drive API** (Library → Enable).
+3. OAuth consent screen: User type **External**, adauga-te ca **test user** (emailul tau).
+4. Credentials → Create credentials → **OAuth client ID** → Application type **Web application** → la „Authorized redirect URIs" adauga `http://localhost:8765`. Noteaza CLIENT_ID si CLIENT_SECRET.
+5. Local, in folderul proiectului:
+   ```
+   node scripts/google-auth.js CLIENT_ID CLIENT_SECRET
+   ```
+   Deschizi linkul afisat, aprobi, iar scriptul iti da **GOOGLE_REFRESH_TOKEN**.
+6. In Railway → Variables seteaza: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`.
+7. Creeaza in Drive un folder numit **JARVIS** (doar el e citit de bot).
+
+## FAZA 2 — Memorie semantica (optional, recomandat)
+
+Cont pe https://dash.voyageai.com (tier gratuit) → API key → seteaza `VOYAGE_API_KEY` in Railway.
+Fara cheie, memoria functioneaza cu cautare text simpla.
+
+## Heartbeat (monitor extern)
+
+Cont gratuit pe https://uptimerobot.com → monitor HTTP(s) pe
+`https://jarvis-server-production-a362.up.railway.app/health`, interval 5 min,
+alerta pe email daca nu raspunde.

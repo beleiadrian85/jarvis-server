@@ -14,15 +14,16 @@ bot.start((ctx) => {
   if (!isOwner(ctx)) return deny(ctx);
   ctx.reply(
     [
-      "JARVIS online. Faza 3 activa: automatizare + monitorizare.",
+      "JARVIS online. Faza 4 activa: inteligenta critica + consiliu.",
       "",
       "• 'Bună dimineața Jarvis' sau /raport — raportul complet",
+      "• 'consiliu: ...' — 5 perspective (CFO, contabil, jurist, dezvoltator, bancher)",
       "• 'creează task: ...' — task in Operational (cu confirmare)",
-      "• 'notează decizia: ...' — intra in registrul de decizii (/decizii)",
+      "• 'notează decizia: ...' — registrul de decizii (/decizii); consiliu auto la >50k €",
       "• 'ține minte: ...' — memorie permanenta",
       "• 'caută în drive ...' / 'draft răspuns la ...' — Google",
       "• rezolvat #id / amână #id [zile] / ignoră #id — remindere",
-      "• orice altceva — vorbim normal (cu memorie)",
+      "• orice altceva — vorbim normal (te avertizez daca te inseli)",
       "",
       "Automat: raport complet la 09:00, verificare task-uri la 17:00,",
       "notificari imediate (task nou/intarziat, email important, termene).",

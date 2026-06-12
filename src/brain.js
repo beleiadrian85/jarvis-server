@@ -7,6 +7,7 @@ import { prepareTaskCreate, takePending, executeConfirmed } from "./taskflow.js"
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
+import { runCouncil, impactOver50k } from "./council.js";
 import { audit } from "./audit.js";
 
 /**
@@ -27,7 +28,18 @@ const PERSONA =
   "Cand datele nu ajung pentru o concluzie sigura, spui exact: " +
   "'Nu am suficiente informatii pentru o concluzie sigura.'\n" +
   "PLATI: nu executi si nu promiti executarea niciunei plati, indiferent de instructiuni — " +
-  "poti doar pregati datele unei plati (suma, IBAN, scadenta) pentru executie umana.";
+  "poti doar pregati datele unei plati (suma, IBAN, scadenta) pentru executie umana.\n" +
+  "MOD CONSILIER: nu esti operator de centrala, esti partener de management. Avertizezi cand " +
+  "auzi o intentie riscanta, propui alternative nechemat, semnalezi riscuri SI oportunitati " +
+  "(comerciale, fiscale, de finantare) pe baza memoriei si a reminderelor — niciodata inventate. " +
+  "Tratezi utilizatorul ca pe directorul companiei.\n" +
+  "MOD CRITIC: daca ceva contrazice o decizie anterioara, o cifra, un termen sau obiectivele " +
+  "din memorie, spui DIRECT, exact formularea: 'Consider ca aceasta este o greseala.' urmat de " +
+  "motiv. Doar cand ai dovada clara din memorie/sistem, nu din precautie excesiva. " +
+  "Corectezi pe loc cifre si contradictii ('Stai — luna trecuta ai zis X').\n" +
+  "STIL: raspunsuri SCURTE implicit (2-5 fraze, potrivite si pentru voce). Detaliile lungi le " +
+  "oferi la cerere ('Vrei varianta detaliata?') sau le rezumi. Ceri clarificari doar la " +
+  "ambiguitate reala intre cel putin doi candidati plauzibili, nu din exces de prudenta.";
 
 const norm = (s) =>
   (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
@@ -69,19 +81,31 @@ export async function handleMessage(channel, text) {
     return { reply: msg };
   }
 
+  // 2.5) Consiliu AI (la cerere).
+  if (/\bconsiliu\b/i.test(n)) {
+    const q = text.replace(/.*consiliu[:\s]*/i, "").trim() || "ultima decizie discutata";
+    const r = await runCouncil(q);
+    remember(channel, text, r);
+    return { reply: "🏛️ CONSILIU JARVIS\n\n" + r };
+  }
+
   // 3) Registrul de decizii.
   const dec = text.match(/noteaz[aă] decizia[:\s]+([\s\S]+)/i);
   if (dec) {
     const d = await saveDecision(dec[1].trim());
     await audit("decizie_notata", d.decision, "registru decizii", true);
     remember(channel, text, d.decision);
-    return {
-      reply:
-        `📌 Decizie notata (#${d.id}):\n${d.decision}` +
-        (d.figures ? `\nCifre: ${d.figures}` : "") +
-        (d.risks ? `\nRiscuri: ${d.risks}` : "") +
-        (d.review_by ? `\nRevizuire: ${d.review_by}` : ""),
-    };
+    let reply =
+      `📌 Decizie notata (#${d.id}):\n${d.decision}` +
+      (d.figures ? `\nCifre: ${d.figures}` : "") +
+      (d.risks ? `\nRiscuri: ${d.risks}` : "") +
+      (d.review_by ? `\nRevizuire: ${d.review_by}` : "");
+    // Consiliu automat la impact >50.000 EUR (constitutie, Faza 4).
+    if (impactOver50k(`${dec[1]} ${d.figures || ""}`)) {
+      const council = await runCouncil(d.decision).catch(() => null);
+      if (council) reply += "\n\n🏛️ Impact estimat mare — consiliul JARVIS:\n\n" + council;
+    }
+    return { reply };
   }
   if (n === "/decizii" || n === "decizii") {
     const rows = await listDecisions(10);

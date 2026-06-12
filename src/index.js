@@ -17,7 +17,7 @@ const app = express();
 app.get("/health", (_req, res) => {
   res.json({
     status: "JARVIS online",
-    phase: 3,
+    phase: 4,
     sources: {
       weather: true,
       operational: hasOperational,

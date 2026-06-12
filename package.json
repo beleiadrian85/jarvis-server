@@ -1,13 +1,20 @@
 {
-  "name": "jarvis-server",
-  "version": "1.0.0",
-  "main": "server.js",
+  "name": "jarvis-backend",
+  "version": "0.1.0",
+  "description": "JARVIS - creierul always-on. Faza 1: raport de dimineata (vreme + Operational) prin Telegram.",
+  "type": "module",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-fetch": "^2.7.0"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "telegraf": "^4.16.3"
   }
 }

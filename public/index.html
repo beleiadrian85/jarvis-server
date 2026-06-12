@@ -554,11 +554,17 @@ const hasTTS = "speechSynthesis" in window;
 let voices = [];
 function loadVoices() { voices = (hasTTS && speechSynthesis.getVoices()) || []; }
 if (hasTTS) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+// Preferam o voce MASCULINA romaneasca (Andrei/Emil pe Windows). Web Speech
+// nu expune genul, deci mergem pe nume cunoscute; daca gasim doar voce
+// feminina (ex. "Google română", Ioana, Alina), coboram pitch-ul.
 function pickVoice() {
   if (!voices.length) loadVoices();
-  return voices.find((v) => /ro[-_]?ro/i.test(v.lang))
-      || voices.find((v) => v.lang?.toLowerCase().startsWith("ro"))
-      || voices.find((v) => /microsoft|google/i.test(v.name)) || null;
+  const ro = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("ro"));
+  const male = ro.find((v) => /andrei|emil|male|masculin/i.test(v.name));
+  if (male) return { v: male, male: true };
+  if (ro.length) return { v: ro[0], male: false };
+  const any = voices.find((v) => /microsoft|google/i.test(v.name)) || null;
+  return any ? { v: any, male: false } : null;
 }
 function stripForVoice(t) {
   return t.replace(/[*_#`>]|[\u{1F000}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[🔴🟡🟠🟢🆕🔄✅⏰📌📋✏️✉️📄🧠📥📧🗓️🐢🔐⚠️🕔]/gu, "")
@@ -580,12 +586,14 @@ function chunkText(t) {
 // Vocea browserului — fallback gratuit daca ElevenLabs nu e disponibil.
 function browserSpeak(text, gen, onDone) {
   if (!hasTTS) { onDone && onDone(); return; }
-  const chunks = chunkText(text); const v = pickVoice(); let i = 0;
+  const chunks = chunkText(text); const pv = pickVoice(); let i = 0;
   (function next() {
     if (gen !== speakGen) return;
     if (i >= chunks.length) { onDone && onDone(); return; }
     const u = new SpeechSynthesisUtterance(chunks[i]);
-    u.lang = "ro-RO"; if (v) u.voice = v; u.rate = 1.04; u.pitch = 1;
+    u.lang = "ro-RO";
+    if (pv) { u.voice = pv.v; u.pitch = pv.male ? 1 : 0.72; } else { u.pitch = 0.85; }
+    u.rate = 1.02;
     u.onend = () => { if (gen === speakGen) { i++; next(); } };
     u.onerror = () => { if (gen === speakGen) { i++; next(); } };
     speechSynthesis.speak(u);

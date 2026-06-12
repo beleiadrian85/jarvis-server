@@ -1,4 +1,5 @@
-import { callClaude } from "./claude.js";
+import { callClaude, callClaudeWithMCP } from "./claude.js";
+import { config, hasOperational } from "./config.js";
 import { pool, query } from "./db.js";
 import { appendMessage, getContext, maybeSummarize } from "./history.js";
 import { recall, saveMemory, saveDecision, listDecisions, extractFacts } from "./memory.js";
@@ -219,7 +220,26 @@ async function generalChat(channel, text) {
     { role: "user", content: text },
   ];
 
-  let reply = await callClaude({ system, messages, maxTokens: 900 });
+  let reply;
+  // Subiect Operational → Claude primeste tool-urile (acces de supervizor):
+  // list_tasks, get_task, list_alerts, add_observation, create_task, update_task.
+  if (hasOperational && isOperationalTopic(text)) {
+    system +=
+      "\n\nTOOLS OPERATIONAL — reguli de autoritate (constitutie):\n" +
+      "- Citire (list_tasks, get_task, list_alerts) si observatii (add_observation): executa direct.\n" +
+      "- create_task: prezinta intai structura propusa si executa DOAR daca utilizatorul confirma " +
+      "in conversatie; daca tocmai a confirmat ('da'), executa.\n" +
+      "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmarea " +
+      "explicita a utilizatorului in conversatia curenta. Intreaba intai, scurt.";
+    reply = await callClaudeWithMCP({
+      system,
+      messages,
+      mcpServers: [{ name: "operational", url: config.operationalMcpUrl }],
+      maxTokens: 1400,
+    });
+  } else {
+    reply = await callClaude({ system, messages, maxTokens: 900 });
+  }
   reply = reply || "…";
 
   // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.
@@ -253,6 +273,12 @@ function remember(channel, userText, assistantText) {
     }
     await maybeSummarize();
   })().catch((e) => console.error("[remember]", e.message));
+}
+
+// Subiect care cere tool-urile Operational (acces supervizor in chat).
+function isOperationalTopic(text) {
+  const n = norm(text);
+  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa)/.test(n);
 }
 
 function guessCategory(text) {

@@ -453,7 +453,7 @@ async function api(path, body, method) {
 // ── Chat ──
 function showReply(data) {
   const el = addMsg("jarvis", "JARVIS", data.reply);
-  speak(data.reply);
+  sayReply(data.reply);
   if (data.confirmId) addConfirmButtons(el, data.confirmId);
 }
 function addConfirmButtons(msgEl, confirmId) {
@@ -462,7 +462,7 @@ function addConfirmButtons(msgEl, confirmId) {
     const b = document.createElement("button"); b.className = cls; b.textContent = label;
     b.addEventListener("click", async () => {
       row.remove(); setBusy(true); const t = addTyping();
-      try { const d = await api("/api/confirm", { confirmId, yes }); if (!d) return; t.remove(); addMsg("jarvis", "JARVIS", d.reply); speak(d.reply); refreshHud(); }
+      try { const d = await api("/api/confirm", { confirmId, yes }); if (!d) return; t.remove(); addMsg("jarvis", "JARVIS", d.reply); sayReply(d.reply); refreshHud(); }
       catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
     });
     return b;
@@ -486,7 +486,7 @@ inp.addEventListener("input", () => { inp.style.height = "auto"; inp.style.heigh
 btnRaport.addEventListener("click", async () => {
   if (btnRaport.disabled) return;
   setBusy(true); const t = addTyping();
-  try { const d = await api("/api/raport"); if (!d) return; t.remove(); addMsg("jarvis report", "RAPORT", d.report); speak(d.report); refreshHud(); }
+  try { const d = await api("/api/raport"); if (!d) return; t.remove(); addMsg("jarvis report", "RAPORT", d.report); sayReply(d.report); refreshHud(); }
   catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
 });
 
@@ -496,39 +496,82 @@ document.querySelectorAll(".cmd").forEach((c) => c.addEventListener("click", () 
   else if (c.dataset.prompt) { inp.value = c.dataset.prompt; inp.focus(); inp.dispatchEvent(new Event("input")); }
 }));
 
-// ── Voce: recunoastere ro-RO ──
+// ── VOCE ──
+const btnMic = $("mic"), btnTts = $("tts");
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const btnMic = $("mic"); let rec = null, listening = false;
-if (SR) {
-  rec = new SR(); rec.lang = "ro-RO"; rec.interimResults = false; rec.maxAlternatives = 1;
-  rec.onresult = (e) => { const said = e.results[0][0].transcript.trim(); if (said) send(said); };
-  rec.onend = () => { listening = false; btnMic.classList.remove("listening"); };
-  rec.onerror = () => { listening = false; btnMic.classList.remove("listening"); };
-  btnMic.addEventListener("click", () => {
-    if (listening) { rec.stop(); return; }
-    try { rec.start(); listening = true; btnMic.classList.add("listening"); } catch {}
-  });
-} else { btnMic.style.display = "none"; }
+const hasTTS = "speechSynthesis" in window;
 
-// ── Voce: sinteza ro-RO ──
-const btnTts = $("tts");
+// Sinteza (Jarvis vorbeste) — incarcam vocile robust (sunt async).
+let voices = [];
+function loadVoices() { voices = (hasTTS && speechSynthesis.getVoices()) || []; }
+if (hasTTS) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function pickVoice() {
+  if (!voices.length) loadVoices();
+  return voices.find((v) => /ro[-_]?ro/i.test(v.lang))
+      || voices.find((v) => v.lang?.toLowerCase().startsWith("ro"))
+      || voices.find((v) => /microsoft|google/i.test(v.name)) || null;
+}
+function stripForVoice(t) {
+  return t.replace(/[*_#`>]|[\u{1F000}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[🔴🟡🟠🟢🆕🔄✅⏰📌📋✏️✉️📄🧠📥📧🗓️🐢🔐⚠️🕔]/gu, "")
+          .replace(/\s+/g, " ").slice(0, 1400).trim();
+}
+let speaking = false;
+function speak(text, onDone) {
+  if (!hasTTS) { onDone && onDone(); return; }
+  speechSynthesis.cancel();
+  const clean = stripForVoice(text);
+  if (!clean) { onDone && onDone(); return; }
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = "ro-RO"; const v = pickVoice(); if (v) u.voice = v;
+  u.rate = 1.04; u.pitch = 1;
+  speaking = true;
+  u.onend = () => { speaking = false; onDone && onDone(); };
+  u.onerror = () => { speaking = false; onDone && onDone(); };
+  speechSynthesis.speak(u);
+}
+
+// Buton difuzor: rosteste si raspunsurile la mesaje SCRISE.
 let ttsOn = localStorage.getItem("jarvis_tts") === "1";
 if (ttsOn) btnTts.classList.add("active");
 btnTts.addEventListener("click", () => {
   ttsOn = !ttsOn; btnTts.classList.toggle("active", ttsOn);
   localStorage.setItem("jarvis_tts", ttsOn ? "1" : "0");
-  if (!ttsOn) speechSynthesis.cancel();
+  if (!ttsOn && hasTTS) speechSynthesis.cancel();
 });
-function roVoice() { return speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("ro")) || null; }
-function speak(text) {
-  if (!ttsOn || !("speechSynthesis" in window)) return;
-  speechSynthesis.cancel();
-  const clean = text.replace(/[*_#`]|[\u{1F300}-\u{1FAFF}]|[🔴🟡🟠🟢✓✕✔✖⏰📌📋✏️✉️📄🧠]/gu, "").slice(0, 1200);
-  const u = new SpeechSynthesisUtterance(clean); u.lang = "ro-RO";
-  const v = roVoice(); if (v) u.voice = v; u.rate = 1.05;
-  speechSynthesis.speak(u);
+
+// Recunoastere + MOD CONVERSATIE (hands-free).
+let rec = null, convMode = false, voiceTurn = false;
+if (SR) {
+  rec = new SR(); rec.lang = "ro-RO"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
+  rec.onresult = (e) => { const said = e.results[0][0].transcript.trim(); if (said) { voiceTurn = true; send(said); } };
+  rec.onend = () => { if (convMode && !speaking && !btnSend.disabled) setTimeout(listen, 300); };
+  rec.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") stopConv(); };
+  btnMic.addEventListener("click", () => convMode ? stopConv() : startConv());
+} else { btnMic.style.display = "none"; }
+
+function listen() {
+  if (!convMode || speaking || btnSend.disabled) return;
+  try { rec.start(); } catch {}
 }
-if ("speechSynthesis" in window) speechSynthesis.getVoices();
+function startConv() {
+  convMode = true; voiceTurn = true; btnMic.classList.add("listening");
+  // Rostim o confirmare scurta — deblocheaza audio prin gestul de click si confirma ca vocea merge.
+  speak("Te ascult.", listen);
+}
+function stopConv() {
+  convMode = false; btnMic.classList.remove("listening");
+  try { rec.stop(); } catch {}
+  if (hasTTS) speechSynthesis.cancel();
+}
+
+// Decide daca rostim raspunsul: in conversatie sau cu difuzorul pornit, mereu.
+function sayReply(text) {
+  const should = ttsOn || voiceTurn || convMode;
+  voiceTurn = false;
+  if (!should) return;
+  try { rec && rec.stop(); } catch {}
+  speak(text, () => { if (convMode) setTimeout(listen, 300); });
+}
 
 // ── CEAS live ──
 function tickClock() {

@@ -220,10 +220,15 @@ async function generalChat(channel, text) {
     { role: "user", content: text },
   ];
 
-  let reply;
-  // Subiect Operational → Claude primeste tool-urile (acces de supervizor):
-  // list_tasks, get_task, list_alerts, add_observation, create_task, update_task.
-  if (hasOperational && isOperationalTopic(text)) {
+  // Claude are mereu cautare web (o foloseste doar cand chiar e nevoie de
+  // info curenta/externa) si, pe subiecte Operational, tool-urile de supervizor.
+  const useOperational = hasOperational && isOperationalTopic(text);
+  system +=
+    "\n\nINTERNET: ai acces la cautare web. Foloseste-o cand intrebarea cere " +
+    "informatii curente sau externe (preturi, cursuri, vreme, stiri, firme, " +
+    "reglementari, oricare nu e in memorie). Nu cauta pentru lucruri pe care le " +
+    "stii deja. Raspuns scurt, cu sursa esentiala daca e relevant.";
+  if (useOperational) {
     system +=
       "\n\nTOOLS OPERATIONAL — reguli de autoritate (constitutie):\n" +
       "- Citire (list_tasks, get_task, list_alerts) si observatii (add_observation): executa direct.\n" +
@@ -231,15 +236,14 @@ async function generalChat(channel, text) {
       "in conversatie; daca tocmai a confirmat ('da'), executa.\n" +
       "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmarea " +
       "explicita a utilizatorului in conversatia curenta. Intreaba intai, scurt.";
-    reply = await callClaudeWithMCP({
-      system,
-      messages,
-      mcpServers: [{ name: "operational", url: config.operationalMcpUrl }],
-      maxTokens: 1400,
-    });
-  } else {
-    reply = await callClaude({ system, messages, maxTokens: 900 });
   }
+  let reply = await callClaudeWithMCP({
+    system,
+    messages,
+    webSearch: true,
+    mcpServers: useOperational ? [{ name: "operational", url: config.operationalMcpUrl }] : [],
+    maxTokens: 1400,
+  });
   reply = reply || "…";
 
   // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.

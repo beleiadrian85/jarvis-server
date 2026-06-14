@@ -703,49 +703,45 @@ let rec = null;
 const conv = { active: false, state: "idle", pendingConfirm: null };
 const STOP_WORDS = ["stop", "opreste", "oprește", "oprește-te", "opreste-te", "gata", "pauza", "pauză", "inchide", "închide", "termina", "termină"];
 
-// ── STT Deepgram (hibrid): browserul detecteaza finalul vorbirii, audio-ul
-// merge la Deepgram pentru transcriere mai buna pe romana. Fallback: browser.
-let sttReady = false, mediaStream = null, recorder = null, recChunks = [], recMime = "";
-async function ensureMic() {
-  if (mediaStream) return true;
+// ── BARGE-IN: cat timp Jarvis vorbeste (recunoasterea e oprita), monitorizez
+// microfonul cu anulare de ecou; daca utilizatorul incepe sa vorbeasca, opresc
+// vocea si trec la ascultare. Nu ruleaza in paralel cu recunoasterea.
+let bargeStream = null, bargeCtx = null, bargeRAF = null;
+const BARGE_RMS = 0.055;   // pragul de volum al vocii (peste ecoul rezidual)
+const BARGE_FRAMES = 5;    // cadre consecutive „tare" → e vorbire reala
+async function startBargeMonitor(onBarge) {
+  stopBargeMonitor();
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    bargeStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
     });
-    return true;
-  } catch { return false; }
-}
-function startRec() {
-  if (!mediaStream || !window.MediaRecorder) return;
-  try { if (recorder && recorder.state !== "inactive") { recorder.onstop = null; recorder.stop(); } } catch {}
+  } catch { return; }
   try {
-    recMime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
-            : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
-    recorder = recMime ? new MediaRecorder(mediaStream, { mimeType: recMime }) : new MediaRecorder(mediaStream);
-    recChunks = [];
-    recorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
-    recorder.start();
-  } catch { recorder = null; }
+    bargeCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (bargeCtx.state === "suspended") bargeCtx.resume().catch(() => {});
+    const src = bargeCtx.createMediaStreamSource(bargeStream);
+    const an = bargeCtx.createAnalyser(); an.fftSize = 512;
+    src.connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    let loud = 0, frame = 0;
+    const tick = () => {
+      if (!bargeCtx) return;
+      frame++;
+      an.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+      const rms = Math.sqrt(sum / buf.length);
+      if (frame > 20 && rms > BARGE_RMS) loud++; else loud = Math.max(0, loud - 1); // ~350ms gratie
+      if (loud >= BARGE_FRAMES) { stopBargeMonitor(); onBarge(); return; }
+      bargeRAF = requestAnimationFrame(tick);
+    };
+    bargeRAF = requestAnimationFrame(tick);
+  } catch { stopBargeMonitor(); }
 }
-function stopRecBlob() {
-  return new Promise((resolve) => {
-    if (!recorder || recorder.state === "inactive") return resolve(null);
-    recorder.onstop = () => resolve(recChunks.length ? new Blob(recChunks, { type: recMime || "audio/webm" }) : null);
-    try { recorder.stop(); } catch { resolve(null); }
-  });
-}
-async function deepgramText(blob) {
-  if (!blob || !sttReady) return null;
-  try {
-    const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.readAsDataURL(blob); });
-    const d = await api("/api/transcribe", { mediaType: blob.type || "audio/webm", data: b64 });
-    return (d && d.text || "").trim() || null;
-  } catch { return null; }
-}
-function releaseMic() {
-  try { if (recorder && recorder.state !== "inactive") { recorder.onstop = null; recorder.stop(); } } catch {}
-  try { mediaStream && mediaStream.getTracks().forEach((t) => t.stop()); } catch {}
-  mediaStream = null; recorder = null; recChunks = [];
+function stopBargeMonitor() {
+  if (bargeRAF) cancelAnimationFrame(bargeRAF); bargeRAF = null;
+  try { bargeCtx && bargeCtx.close(); } catch {} bargeCtx = null;
+  try { bargeStream && bargeStream.getTracks().forEach((t) => t.stop()); } catch {} bargeStream = null;
 }
 
 function isStop(norm) {
@@ -776,8 +772,7 @@ function startSession() {
   $("vboot").classList.add("hidden");
   if (!SR) { addMsg("jarvis", "JARVIS", "Recunoașterea vocală nu e disponibilă în acest browser. Scrie-mi."); return; }
   conv.active = true; conv.pendingConfirm = null; micUI();
-  conv.state = "speaking"; setReactor("speaking");
-  speak(GREETING, beginListen);
+  sayAndListen(GREETING);
 }
 
 if (SR) {
@@ -797,8 +792,7 @@ if (SR) {
 function startConv() {
   conv.active = true; conv.pendingConfirm = null; micUI();
   // Salutul deblocheaza audio (gest de click) si confirma ca vocea merge.
-  conv.state = "speaking"; setReactor("speaking");
-  speak("Te ascult.", beginListen);
+  sayAndListen("Te ascult.");
 }
 function stopConv(silent) {
   conv.active = false; conv.state = "idle"; conv.pendingConfirm = null; micUI();
@@ -812,9 +806,16 @@ function beginListen() {
   conv.state = "listening"; setReactor("listening");
   try { rec.start(); } catch {}
 }
+// Intrerupere: utilizatorul a inceput sa vorbeasca peste Jarvis.
+function onBargeIn() {
+  shutUp(); // opreste vocea imediat
+  setTimeout(() => { if (conv.active) beginListen(); }, 150); // elibereaza micul, apoi asculta
+}
+// Vorbire in conversatie, cu detectie de intrerupere (barge-in).
 function sayAndListen(text) {
   conv.state = "speaking"; setReactor("speaking");
-  speak(text, () => { if (conv.active) beginListen(); });
+  if (conv.active) startBargeMonitor(onBargeIn);
+  speak(text, () => { stopBargeMonitor(); setTimeout(() => { if (conv.active) beginListen(); }, 120); });
 }
 
 function onVoiceResult(e) {
@@ -968,7 +969,6 @@ async function syncHistory() {
 }
 async function boot(st) {
   voiceReady = !!(st && st.sources && st.sources.voice);
-  sttReady = !!(st && st.sources && st.sources.stt);
   if (!chat.children.length) {
     const had = await loadHistory();
     if (!had) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");

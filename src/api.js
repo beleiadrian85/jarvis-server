@@ -27,8 +27,8 @@ function catFor(text) {
  */
 
 export function registerApi(app) {
-  // Parser cu limita mare DOAR pentru upload (poze/PDF), inainte de cel global.
-  app.use("/api/upload", express.json({ limit: "16mb" }));
+  // Parser cu limita mare pentru upload (poze/PDF) si audio (transcriere).
+  app.use(["/api/upload", "/api/transcribe"], express.json({ limit: "16mb" }));
   app.use(express.json({ limit: "100kb" }));
 
   // Setup unic OAuth Google (Gmail/Calendar/Drive). Gateat cu PIN-ul (?k=).
@@ -79,9 +79,34 @@ export function registerApi(app) {
         calendar: hasCalendar,
         memory: hasDb,
         voice: hasVoice,
+        stt: !!config.deepgramKey,
       },
       city: config.weather.city,
     });
+  });
+
+  // Transcriere audio (Deepgram, ro) — upgrade peste recunoasterea din browser.
+  app.post("/api/transcribe", async (req, res) => {
+    const { data, mediaType } = req.body || {};
+    if (!data) return res.status(400).json({ error: "audio lipsa." });
+    if (!config.deepgramKey) return res.status(503).json({ error: "deepgram neconfigurat." });
+    try {
+      const r = await fetch(
+        "https://api.deepgram.com/v1/listen?model=nova-2&language=ro&smart_format=true&punctuate=true",
+        {
+          method: "POST",
+          headers: { Authorization: "Token " + config.deepgramKey, "content-type": mediaType || "audio/webm" },
+          body: Buffer.from(data, "base64"),
+        }
+      );
+      const d = await r.json();
+      if (!r.ok) throw new Error(`deepgram ${r.status}: ${JSON.stringify(d).slice(0, 160)}`);
+      const text = d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+      res.json({ text });
+    } catch (e) {
+      console.error("[api/transcribe]", e.message);
+      res.status(502).json({ error: "Transcrierea a esuat." });
+    }
   });
 
   // FAZA V — sinteza vocala (mp3) pentru HUD.

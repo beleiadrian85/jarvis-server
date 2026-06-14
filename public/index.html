@@ -703,6 +703,51 @@ let rec = null;
 const conv = { active: false, state: "idle", pendingConfirm: null };
 const STOP_WORDS = ["stop", "opreste", "oprește", "oprește-te", "opreste-te", "gata", "pauza", "pauză", "inchide", "închide", "termina", "termină"];
 
+// ── STT Deepgram (hibrid): browserul detecteaza finalul vorbirii, audio-ul
+// merge la Deepgram pentru transcriere mai buna pe romana. Fallback: browser.
+let sttReady = false, mediaStream = null, recorder = null, recChunks = [], recMime = "";
+async function ensureMic() {
+  if (mediaStream) return true;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    return true;
+  } catch { return false; }
+}
+function startRec() {
+  if (!mediaStream || !window.MediaRecorder) return;
+  try { if (recorder && recorder.state !== "inactive") { recorder.onstop = null; recorder.stop(); } } catch {}
+  try {
+    recMime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+            : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+    recorder = recMime ? new MediaRecorder(mediaStream, { mimeType: recMime }) : new MediaRecorder(mediaStream);
+    recChunks = [];
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+    recorder.start();
+  } catch { recorder = null; }
+}
+function stopRecBlob() {
+  return new Promise((resolve) => {
+    if (!recorder || recorder.state === "inactive") return resolve(null);
+    recorder.onstop = () => resolve(recChunks.length ? new Blob(recChunks, { type: recMime || "audio/webm" }) : null);
+    try { recorder.stop(); } catch { resolve(null); }
+  });
+}
+async function deepgramText(blob) {
+  if (!blob || !sttReady) return null;
+  try {
+    const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.readAsDataURL(blob); });
+    const d = await api("/api/transcribe", { mediaType: blob.type || "audio/webm", data: b64 });
+    return (d && d.text || "").trim() || null;
+  } catch { return null; }
+}
+function releaseMic() {
+  try { if (recorder && recorder.state !== "inactive") { recorder.onstop = null; recorder.stop(); } } catch {}
+  try { mediaStream && mediaStream.getTracks().forEach((t) => t.stop()); } catch {}
+  mediaStream = null; recorder = null; recChunks = [];
+}
+
 function isStop(norm) {
   return STOP_WORDS.some((w) => norm === w || norm === "jarvis " + w || norm.startsWith(w + " jarvis") || norm.startsWith("jarvis " + w));
 }
@@ -731,6 +776,7 @@ function startSession() {
   $("vboot").classList.add("hidden");
   if (!SR) { addMsg("jarvis", "JARVIS", "Recunoașterea vocală nu e disponibilă în acest browser. Scrie-mi."); return; }
   conv.active = true; conv.pendingConfirm = null; micUI();
+  ensureMic(); // pornim microfonul devreme (Deepgram), in timp ce ruleaza salutul
   conv.state = "speaking"; setReactor("speaking");
   speak(GREETING, beginListen);
 }
@@ -751,6 +797,7 @@ if (SR) {
 
 function startConv() {
   conv.active = true; conv.pendingConfirm = null; micUI();
+  ensureMic();
   // Salutul deblocheaza audio (gest de click) si confirma ca vocea merge.
   conv.state = "speaking"; setReactor("speaking");
   speak("Te ascult.", beginListen);
@@ -759,12 +806,14 @@ function stopConv(silent) {
   conv.active = false; conv.state = "idle"; conv.pendingConfirm = null; micUI();
   setReactor("idle");
   try { rec && rec.abort(); } catch {}
+  releaseMic();
   shutUp();
   if (!silent) addMsg("jarvis", "JARVIS", "Mod conversație oprit.");
 }
 function beginListen() {
   if (!conv.active) return;
   conv.state = "listening"; setReactor("listening");
+  startRec();
   try { rec.start(); } catch {}
 }
 function sayAndListen(text) {
@@ -772,9 +821,14 @@ function sayAndListen(text) {
   speak(text, () => { if (conv.active) beginListen(); });
 }
 
-function onVoiceResult(e) {
-  const said = (e.results[0][0].transcript || "").trim();
-  if (!said) return;
+async function onVoiceResult(e) {
+  if (conv.state !== "listening") return;     // ignoram rezultate razlete
+  conv.state = "processing";                  // oprim reluarea automata (rec.onend)
+  const sr = (e.results[0][0].transcript || "").trim();
+  // Audio-ul capturat → Deepgram (mai bun pe romana); daca pica, folosim browserul.
+  let said = sr;
+  try { const dg = await deepgramText(await stopRecBlob()); if (dg) said = dg; } catch {}
+  if (!said) { if (conv.active) beginListen(); return; }
   const norm = said.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   // Confirmare prin voce (da/nu) pentru actiuni in asteptare.
@@ -922,6 +976,7 @@ async function syncHistory() {
 }
 async function boot(st) {
   voiceReady = !!(st && st.sources && st.sources.voice);
+  sttReady = !!(st && st.sources && st.sources.stt);
   if (!chat.children.length) {
     const had = await loadHistory();
     if (!had) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");

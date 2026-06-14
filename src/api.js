@@ -91,8 +91,11 @@ export function registerApi(app) {
     if (!data) return res.status(400).json({ error: "audio lipsa." });
     if (!config.deepgramKey) return res.status(503).json({ error: "deepgram neconfigurat." });
     try {
+      // Termeni proprii impulsionati ca Deepgram sa-i recunoasca (nume, proiecte).
+      const kw = (config.sttKeywords || "Nelu:3,Dana:3,Mihaela:2,Adrian:2,firida:3,Hipodromului:3,Marșa:3,EMCO:3,Colliers:2,Infosys:2,Bell Residence:3,Sibiu:2,Jarvis:3,task:2,santier:2")
+        .split(",").map((k) => "keywords=" + encodeURIComponent(k.trim())).join("&");
       const r = await fetch(
-        "https://api.deepgram.com/v1/listen?model=nova-2&language=ro&smart_format=true&punctuate=true",
+        "https://api.deepgram.com/v1/listen?model=nova-2&language=ro&smart_format=true&punctuate=true&" + kw,
         {
           method: "POST",
           headers: { Authorization: "Token " + config.deepgramKey, "content-type": mediaType || "audio/webm" },

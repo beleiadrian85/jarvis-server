@@ -49,6 +49,7 @@ export const config = {
   deepgramKey: process.env.DEEPGRAM_API_KEY || "",
   elevenKey: process.env.ELEVENLABS_API_KEY || "",
   elevenVoiceId: process.env.ELEVENLABS_VOICE_ID || "",
+  sttKeywords: process.env.STT_KEYWORDS || "",
 
   // Expeditori-cheie pentru clasificarea emailurilor (completabil din env).
   keySenders: (process.env.GMAIL_KEY_SENDERS ||

@@ -1,6 +1,6 @@
 // Network-first: aplicatia merge mereu pe varianta proaspata,
 // cache-ul intra doar cand serverul nu raspunde (offline shell).
-const CACHE = "jarvis-v10";
+const CACHE = "jarvis-v11";
 
 self.addEventListener("install", (e) => self.skipWaiting());
 self.addEventListener("activate", (e) => {

@@ -473,12 +473,24 @@ $("gate-go").addEventListener("click", unlock);
 $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
 
 // ── helpers ──
+// Sincronizare multi-device: watermark pe id + dedup pe continut, ca mesajul
+// scris local sa nu fie re-afisat cand revine de la server.
+let lastSeenId = 0;
+const renderedKeys = [];
+function markRendered(role, text) {
+  renderedKeys.push(role + "|" + text);
+  if (renderedKeys.length > 120) renderedKeys.shift();
+}
 function addMsg(cls, tag, text) {
   const d = document.createElement("div");
   d.className = "msg " + cls;
   if (tag) { const t = document.createElement("span"); t.className = "tag"; t.textContent = tag; d.appendChild(t); }
   d.appendChild(document.createTextNode(text));
-  chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
+  chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+  if (cls.includes("user") || cls.includes("jarvis")) {
+    markRendered(cls.includes("user") ? "user" : "assistant", text);
+  }
+  return d;
 }
 function addTyping() {
   const d = document.createElement("div"); d.className = "msg jarvis";
@@ -861,12 +873,29 @@ async function loadHistory() {
     if (d && d.messages && d.messages.length) {
       for (const m of d.messages) {
         addMsg(m.role === "user" ? "user" : "jarvis", m.role === "user" ? "TU" : "JARVIS", m.content);
+        if (m.id > lastSeenId) lastSeenId = m.id;
       }
       chat.scrollTop = chat.scrollHeight;
       return true;
     }
   } catch {}
   return false;
+}
+
+// Sync: aduce mesajele aparute pe celalalt dispozitiv (telefon ↔ laptop).
+let syncing = false;
+async function syncHistory() {
+  if (syncing || !key) return;
+  syncing = true;
+  try {
+    const d = await api("/api/history?since=" + lastSeenId);
+    for (const m of (d?.messages || [])) {
+      if (m.id > lastSeenId) lastSeenId = m.id;
+      const role = m.role === "user" ? "user" : "assistant";
+      if (renderedKeys.includes(role + "|" + m.content)) continue; // ecou local, deja afisat
+      addMsg(m.role === "user" ? "user" : "jarvis", m.role === "user" ? "TU" : "JARVIS", m.content);
+    }
+  } catch {} finally { syncing = false; }
 }
 async function boot(st) {
   voiceReady = !!(st && st.sources && st.sources.voice);
@@ -875,6 +904,9 @@ async function boot(st) {
     if (!had) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
   }
   refreshHud(); setInterval(refreshHud, 60000);
+  // Sincronizare multi-device: la 5 min + instant cand revin pe tab/aplicatie.
+  setInterval(syncHistory, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) syncHistory(); });
   // Ecran de boot vocal — o singura data pe sesiune (deblocheaza audio prin tap).
   if (!sessionStarted) $("vboot").classList.remove("hidden");
   else inp.focus();

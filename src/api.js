@@ -84,9 +84,10 @@ export function registerApi(app) {
   });
 
   // Istoricul conversatiei — HUD-ul il incarca la deschidere (continuitate).
-  app.get("/api/history", async (_req, res) => {
+  app.get("/api/history", async (req, res) => {
     try {
-      res.json({ messages: await getRecent(24) });
+      const since = Number(req.query.since) || 0;
+      res.json({ messages: await getRecent(24, since) });
     } catch (e) {
       console.error("[api/history]", e.message);
       res.json({ messages: [] });

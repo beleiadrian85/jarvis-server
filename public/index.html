@@ -776,7 +776,6 @@ function startSession() {
   $("vboot").classList.add("hidden");
   if (!SR) { addMsg("jarvis", "JARVIS", "Recunoașterea vocală nu e disponibilă în acest browser. Scrie-mi."); return; }
   conv.active = true; conv.pendingConfirm = null; micUI();
-  ensureMic(); // pornim microfonul devreme (Deepgram), in timp ce ruleaza salutul
   conv.state = "speaking"; setReactor("speaking");
   speak(GREETING, beginListen);
 }
@@ -797,7 +796,6 @@ if (SR) {
 
 function startConv() {
   conv.active = true; conv.pendingConfirm = null; micUI();
-  ensureMic();
   // Salutul deblocheaza audio (gest de click) si confirma ca vocea merge.
   conv.state = "speaking"; setReactor("speaking");
   speak("Te ascult.", beginListen);
@@ -806,14 +804,12 @@ function stopConv(silent) {
   conv.active = false; conv.state = "idle"; conv.pendingConfirm = null; micUI();
   setReactor("idle");
   try { rec && rec.abort(); } catch {}
-  releaseMic();
   shutUp();
   if (!silent) addMsg("jarvis", "JARVIS", "Mod conversație oprit.");
 }
 function beginListen() {
   if (!conv.active) return;
   conv.state = "listening"; setReactor("listening");
-  startRec();
   try { rec.start(); } catch {}
 }
 function sayAndListen(text) {
@@ -821,14 +817,9 @@ function sayAndListen(text) {
   speak(text, () => { if (conv.active) beginListen(); });
 }
 
-async function onVoiceResult(e) {
-  if (conv.state !== "listening") return;     // ignoram rezultate razlete
-  conv.state = "processing";                  // oprim reluarea automata (rec.onend)
-  const sr = (e.results[0][0].transcript || "").trim();
-  // Audio-ul capturat → Deepgram (mai bun pe romana); daca pica, folosim browserul.
-  let said = sr;
-  try { const dg = await deepgramText(await stopRecBlob()); if (dg) said = dg; } catch {}
-  if (!said) { if (conv.active) beginListen(); return; }
+function onVoiceResult(e) {
+  const said = (e.results[0][0].transcript || "").trim();
+  if (!said) return;
   const norm = said.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   // Confirmare prin voce (da/nu) pentru actiuni in asteptare.

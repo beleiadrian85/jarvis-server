@@ -27,6 +27,44 @@ export async function googleToken() {
   return cached.token;
 }
 
+// Setup unic OAuth: genereaza linkul de consimtamant si schimba codul pe tokeni.
+const SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/drive.readonly",
+];
+
+export function buildAuthUrl(redirectUri) {
+  const p = new URLSearchParams({
+    client_id: config.google.clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    access_type: "offline",
+    prompt: "consent",
+    include_granted_scopes: "true",
+    scope: SCOPES.join(" "),
+  });
+  return "https://accounts.google.com/o/oauth2/v2/auth?" + p.toString();
+}
+
+export async function exchangeCode(code, redirectUri) {
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.google.clientId,
+      client_secret: config.google.clientSecret,
+      code,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+  });
+  const d = await res.json();
+  if (!res.ok) throw new Error(`token ${res.status}: ${JSON.stringify(d)}`);
+  return d; // { access_token, refresh_token, ... }
+}
+
 export async function gapi(url, options = {}) {
   const token = await googleToken();
   const res = await fetch(url, {

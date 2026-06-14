@@ -3,6 +3,7 @@ import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
 import { handleMessage, confirmAction } from "./brain.js";
 import { getHudData } from "./hud.js";
 import { hasVoice, synthesize } from "./tts.js";
+import { buildAuthUrl, exchangeCode } from "./google.js";
 
 /**
  * API-ul HUD-ului. Din Faza 2, chat-ul trece prin brain.js —
@@ -11,6 +12,34 @@ import { hasVoice, synthesize } from "./tts.js";
 
 export function registerApi(app) {
   app.use(express.json({ limit: "100kb" }));
+
+  // Setup unic OAuth Google (Gmail/Calendar/Drive). Gateat cu PIN-ul (?k=).
+  app.get("/auth/google", (req, res) => {
+    if (req.query.k !== config.appSecret) return res.status(401).send("PIN gresit. Adauga ?k=PIN la link.");
+    if (!config.google.clientId || !config.google.clientSecret) {
+      return res.status(503).send("Lipsesc GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in Railway.");
+    }
+    const redirectUri = `https://${req.get("host")}/auth/google/callback`;
+    res.redirect(buildAuthUrl(redirectUri));
+  });
+
+  app.get("/auth/google/callback", async (req, res) => {
+    if (req.query.error) return res.status(400).send("Refuzat: " + req.query.error);
+    if (!req.query.code) return res.status(400).send("Lipseste codul.");
+    try {
+      const redirectUri = `https://${req.get("host")}/auth/google/callback`;
+      const tok = await exchangeCode(req.query.code, redirectUri);
+      if (tok.refresh_token) {
+        console.log("[google] === GOOGLE_REFRESH_TOKEN ===\n" + tok.refresh_token + "\n=== copiaza-l in Railway ===");
+        res.send("<h2 style='font-family:sans-serif'>✅ Google conectat.</h2><p>Poți închide fila. Jarvis preia restul.</p>");
+      } else {
+        res.send("<h2 style='font-family:sans-serif'>⚠️ Fără refresh token.</h2><p>Revocă accesul aplicației în contul Google și reia /auth/google.</p>");
+      }
+    } catch (e) {
+      console.error("[google.callback]", e.message);
+      res.status(500).send("Eroare la schimbul de token: " + e.message);
+    }
+  });
 
   // Toate rutele /api cer PIN-ul (header x-jarvis-key).
   app.use("/api", (req, res, next) => {

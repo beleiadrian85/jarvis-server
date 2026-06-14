@@ -17,6 +17,15 @@ export async function appendMessage(channel, role, content) {
   );
 }
 
+/** Ultimele mesaje pentru AFISARE in HUD la deschidere (firul vizibil). */
+export async function getRecent(limit = 24) {
+  if (!pool) return [];
+  const rows = await query(
+    `SELECT role, content FROM conversations ORDER BY id DESC LIMIT $1`, [limit]
+  );
+  return rows.reverse();
+}
+
 export async function getContext() {
   if (!pool) return { summary: "", recent: [] };
   const [state] = await query(`SELECT summary, last_summarized_id FROM conv_state WHERE id = 1`);

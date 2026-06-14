@@ -855,9 +855,25 @@ const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
 
 // ── Boot ──
 let sessionStarted = false;
-function boot(st) {
+async function loadHistory() {
+  try {
+    const d = await api("/api/history");
+    if (d && d.messages && d.messages.length) {
+      for (const m of d.messages) {
+        addMsg(m.role === "user" ? "user" : "jarvis", m.role === "user" ? "TU" : "JARVIS", m.content);
+      }
+      chat.scrollTop = chat.scrollHeight;
+      return true;
+    }
+  } catch {}
+  return false;
+}
+async function boot(st) {
   voiceReady = !!(st && st.sources && st.sources.voice);
-  if (!chat.children.length) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
+  if (!chat.children.length) {
+    const had = await loadHistory();
+    if (!had) addMsg("jarvis", "JARVIS", "Sistemele sunt online. Cu ce te ajut?");
+  }
   refreshHud(); setInterval(refreshHud, 60000);
   // Ecran de boot vocal — o singura data pe sesiune (deblocheaza audio prin tap).
   if (!sessionStarted) $("vboot").classList.remove("hidden");

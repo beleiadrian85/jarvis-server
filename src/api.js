@@ -4,6 +4,7 @@ import { handleMessage, confirmAction } from "./brain.js";
 import { getHudData } from "./hud.js";
 import { hasVoice, synthesize } from "./tts.js";
 import { buildAuthUrl, exchangeCode } from "./google.js";
+import { getRecent } from "./history.js";
 
 /**
  * API-ul HUD-ului. Din Faza 2, chat-ul trece prin brain.js —
@@ -79,6 +80,16 @@ export function registerApi(app) {
     } catch (e) {
       console.error("[api/speak]", e.message);
       res.status(502).json({ error: "Sinteza vocala a esuat." });
+    }
+  });
+
+  // Istoricul conversatiei — HUD-ul il incarca la deschidere (continuitate).
+  app.get("/api/history", async (_req, res) => {
+    try {
+      res.json({ messages: await getRecent(24) });
+    } catch (e) {
+      console.error("[api/history]", e.message);
+      res.json({ messages: [] });
     }
   });
 

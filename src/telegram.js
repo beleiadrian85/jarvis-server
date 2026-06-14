@@ -1,6 +1,6 @@
 import { Telegraf, Markup } from "telegraf";
 import { config } from "./config.js";
-import { handleMessage, confirmAction } from "./brain.js";
+import { handleMessage, confirmAction, splitVoice } from "./brain.js";
 import { audit } from "./audit.js";
 
 export const bot = new Telegraf(config.telegramToken);
@@ -54,14 +54,16 @@ bot.action(/^cf:(yes|no):(.+)$/, async (ctx) => {
   const [, verdict, id] = ctx.match;
   const result = await confirmAction(id, verdict === "yes");
   await ctx.editMessageReplyMarkup(undefined).catch(() => {});
-  await ctx.reply(result);
+  await ctx.reply(splitVoice(result).text);
 });
 
 async function handle(ctx, text) {
   if (!isOwner(ctx)) return deny(ctx);
   try {
     await ctx.sendChatAction("typing");
-    const { reply, confirmId } = await handleMessage("telegram", text);
+    const res = await handleMessage("telegram", text);
+    const reply = splitVoice(res.reply).text;
+    const confirmId = res.confirmId;
     if (confirmId) {
       await ctx.reply(
         reply.replace(/\n\nRaspunde: da \/ nu$/, ""),
@@ -91,7 +93,7 @@ function deny(ctx) {
  */
 export async function pushToOwner(text) {
   try {
-    await bot.telegram.sendMessage(config.ownerChatId, text);
+    await bot.telegram.sendMessage(config.ownerChatId, splitVoice(text).text);
   } catch (e) {
     console.error("[push]", e.message);
   }

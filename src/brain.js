@@ -40,7 +40,22 @@ const PERSONA =
   "Corectezi pe loc cifre si contradictii ('Stai — luna trecuta ai zis X').\n" +
   "STIL: raspunsuri SCURTE implicit (2-5 fraze, potrivite si pentru voce). Detaliile lungi le " +
   "oferi la cerere ('Vrei varianta detaliata?') sau le rezumi. Ceri clarificari doar la " +
-  "ambiguitate reala intre cel putin doi candidati plauzibili, nu din exces de prudenta.";
+  "ambiguitate reala intre cel putin doi candidati plauzibili, nu din exces de prudenta.\n" +
+  "REZUMAT VOCAL: cand raspunsul e lung sau structurat (raport, lista, mai multe puncte), " +
+  "adauga la FINAL, pe linie separata, exact: '[VOCE] ' urmat de un rezumat de 1-2 fraze de " +
+  "rostit cu voce — esentialul plus orice necesita atentia lui Adi (blocaje, intarzieri, urgente). " +
+  "Restul ramane scris, pentru citit. La raspunsuri scurte NU adauga [VOCE].";
+
+/**
+ * Separa rezumatul vocal '[VOCE] ...' de textul complet.
+ * → { text: ce se afiseaza, voice: ce se rosteste (null daca lipseste) }.
+ */
+export function splitVoice(reply) {
+  const s = String(reply || "");
+  const m = s.match(/\n*\[VOCE\]\s*:?\s*([\s\S]+)$/i);
+  if (!m) return { text: s.trim(), voice: null };
+  return { text: s.slice(0, m.index).trim(), voice: m[1].trim() };
+}
 
 const norm = (s) =>
   (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();

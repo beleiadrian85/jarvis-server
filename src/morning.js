@@ -121,7 +121,10 @@ export async function buildMorningReport() {
       "- MAXIM 5. Nu inventezi ca sa umpli. Selectezi din task-uri, emailuri, calendar, termene critice.\n" +
       "- Format: 'N. [CRITERIU] Actiune concreta — de ce azi'. CRITERIU ∈ CASH-FLOW/VANZARI/FINANTARE/EXECUTIE/JURIDIC.\n" +
       "- Element cu impact neevaluabil → la final cu '(impact neclar)'. Nu ghici.\n\n" +
-      "Sectiunile 'neconfigurat' le mentionezi intr-un cuvant. Fara introduceri. Compact, citibil in 30 secunde.",
+      "Sectiunile 'neconfigurat' le mentionezi intr-un cuvant. Fara introduceri. Compact, citibil in 30 secunde.\n\n" +
+      "La FINAL, pe linie separata, adauga exact: '[VOCE] ' urmat de un rezumat de 1-2 fraze de " +
+      "rostit cu voce — esentialul zilei plus orice necesita atentia (blocaje, intarzieri, prioritatea 1). " +
+      "Raportul scris ramane complet; [VOCE] e doar pentru ascultat rapid.",
     messages: [{
       role: "user",
       content: `Data de azi: ${dateStr}.\n\nDate brute:\n\n${raw}\n\nScrie raportul de dimineata.`,

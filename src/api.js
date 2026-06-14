@@ -2,7 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
-import { handleMessage, confirmAction } from "./brain.js";
+import { handleMessage, confirmAction, splitVoice } from "./brain.js";
 import { getHudData } from "./hud.js";
 import { hasVoice, synthesize } from "./tts.js";
 import { buildAuthUrl, exchangeCode } from "./google.js";
@@ -186,7 +186,8 @@ export function registerApi(app) {
     if (!text) return res.status(400).json({ error: "text lipsa." });
     try {
       const { reply, confirmId } = await handleMessage("hud", text);
-      res.json({ reply, confirmId: confirmId || null });
+      const { text: shown, voice } = splitVoice(reply);
+      res.json({ reply: shown, voice, confirmId: confirmId || null });
     } catch (e) {
       console.error("[api/chat]", e.message);
       res.status(502).json({ error: "Eroare la nucleu." });
@@ -197,7 +198,8 @@ export function registerApi(app) {
     const { confirmId, yes } = req.body || {};
     if (!confirmId) return res.status(400).json({ error: "confirmId lipsa." });
     try {
-      res.json({ reply: await confirmAction(confirmId, !!yes) });
+      const { text: shown, voice } = splitVoice(await confirmAction(confirmId, !!yes));
+      res.json({ reply: shown, voice });
     } catch (e) {
       console.error("[api/confirm]", e.message);
       res.status(502).json({ error: "Eroare la confirmare." });
@@ -207,7 +209,8 @@ export function registerApi(app) {
   app.post("/api/raport", async (req, res) => {
     try {
       const { reply } = await handleMessage("hud", "/raport");
-      res.json({ report: reply });
+      const { text: shown, voice } = splitVoice(reply);
+      res.json({ report: shown, voice });
     } catch (e) {
       console.error("[api/raport]", e.message);
       res.status(502).json({ error: "Nu am putut genera raportul." });

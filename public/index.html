@@ -518,7 +518,7 @@ async function api(path, body, method) {
 // ── Chat ──
 function showReply(data) {
   const el = addMsg("jarvis", "JARVIS", data.reply);
-  sayReply(data.reply);
+  sayReply(data.voice || data.reply);   // rosteste rezumatul scurt daca exista
   if (data.confirmId) addConfirmButtons(el, data.confirmId);
 }
 function addConfirmButtons(msgEl, confirmId) {
@@ -527,7 +527,7 @@ function addConfirmButtons(msgEl, confirmId) {
     const b = document.createElement("button"); b.className = cls; b.textContent = label;
     b.addEventListener("click", async () => {
       row.remove(); setBusy(true); const t = addTyping();
-      try { const d = await api("/api/confirm", { confirmId, yes }); if (!d) return; t.remove(); addMsg("jarvis", "JARVIS", d.reply); sayReply(d.reply); refreshHud(); }
+      try { const d = await api("/api/confirm", { confirmId, yes }); if (!d) return; t.remove(); addMsg("jarvis", "JARVIS", d.reply); sayReply(d.voice || d.reply); refreshHud(); }
       catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
     });
     return b;
@@ -551,7 +551,7 @@ inp.addEventListener("input", () => { inp.style.height = "auto"; inp.style.heigh
 btnRaport.addEventListener("click", async () => {
   if (btnRaport.disabled) return;
   setBusy(true); const t = addTyping();
-  try { const d = await api("/api/raport"); if (!d) return; t.remove(); addMsg("jarvis report", "RAPORT", d.report); sayReply(d.report); refreshHud(); }
+  try { const d = await api("/api/raport"); if (!d) return; t.remove(); addMsg("jarvis report", "RAPORT", d.report); sayReply(d.voice || d.report); refreshHud(); }
   catch (e) { t.remove(); addMsg("error", "", e.message); } finally { setBusy(false); }
 });
 
@@ -850,12 +850,13 @@ async function voiceCommand(said) {
     if (!data) { if (conv.active) beginListen(); return; }
     const el = addMsg("jarvis", "JARVIS", data.reply);
     refreshHud();
+    const spoken = data.voice || data.reply;   // rosteste rezumatul scurt daca exista
     if (data.confirmId) {
       addConfirmButtons(el, data.confirmId);
       conv.pendingConfirm = data.confirmId;
-      sayAndListen(data.reply + " Confirmi? Spune da sau nu.");
+      sayAndListen(spoken + " Confirmi? Spune da sau nu.");
     } else {
-      sayAndListen(data.reply);
+      sayAndListen(spoken);
     }
   } catch (err) {
     t.remove(); addMsg("error", "", err.message);
@@ -872,7 +873,7 @@ async function voiceConfirm(confirmId, yes) {
     t.remove();
     if (!d) { if (conv.active) beginListen(); return; }
     addMsg("jarvis", "JARVIS", d.reply); refreshHud();
-    sayAndListen(d.reply);
+    sayAndListen(d.voice || d.reply);
   } catch (err) {
     t.remove(); addMsg("error", "", err.message);
     sayAndListen("Nu am putut finaliza.");

@@ -19,6 +19,9 @@ import { audit } from "./audit.js";
  * confirmId = exista o actiune in asteptare; UI-ul afiseaza Da/Nu.
  */
 
+// Model rapid pentru conversatie (rapoartele/consiliul raman pe config.model).
+const CHAT_MODEL = process.env.CHAT_MODEL || "claude-haiku-4-5-20251001";
+
 // Ierarhia decizionala din constitutie — injectata in toate apelurile de chat.
 const PERSONA =
   "Esti JARVIS, asistentul operational al lui Adi (Adrian Belei), dezvoltator imobiliar " +
@@ -235,30 +238,39 @@ async function generalChat(channel, text) {
     { role: "user", content: text },
   ];
 
-  // Claude are mereu cautare web (o foloseste doar cand chiar e nevoie de
-  // info curenta/externa) si, pe subiecte Operational, tool-urile de supervizor.
+  // VITEZA: chat pe model rapid (Haiku); tool-urile (MCP/web) intra DOAR cand
+  // sunt necesare, ca raspunsurile simple sa fie instant.
   const useOperational = hasOperational && isOperationalTopic(text);
-  system +=
-    "\n\nINTERNET: ai acces la cautare web. Foloseste-o cand intrebarea cere " +
-    "informatii curente sau externe (preturi, cursuri, vreme, stiri, firme, " +
-    "reglementari, oricare nu e in memorie). Nu cauta pentru lucruri pe care le " +
-    "stii deja. Raspuns scurt, cu sursa esentiala daca e relevant.";
-  if (useOperational) {
-    system +=
-      "\n\nTOOLS OPERATIONAL — reguli de autoritate (constitutie):\n" +
-      "- Citire (list_tasks, get_task, list_alerts) si observatii (add_observation): executa direct.\n" +
-      "- create_task: prezinta intai structura propusa si executa DOAR daca utilizatorul confirma " +
-      "in conversatie; daca tocmai a confirmat ('da'), executa.\n" +
-      "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmarea " +
-      "explicita a utilizatorului in conversatia curenta. Intreaba intai, scurt.";
+  const useWeb = needsWeb(text);
+
+  let reply;
+  if (useOperational || useWeb) {
+    if (useWeb) {
+      system +=
+        "\n\nINTERNET: ai cautare web. Foloseste-o cand intrebarea cere info curenta/externa " +
+        "(preturi, cursuri, vreme, stiri, firme, reglementari). Raspuns scurt, cu sursa daca e relevant.";
+    }
+    if (useOperational) {
+      system +=
+        "\n\nTOOLS OPERATIONAL — reguli de autoritate (constitutie):\n" +
+        "- Citire (list_tasks, get_task, list_alerts) si observatii (add_observation): executa direct.\n" +
+        "- create_task: prezinta intai structura propusa si executa DOAR daca utilizatorul confirma " +
+        "in conversatie; daca tocmai a confirmat ('da'), executa.\n" +
+        "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmarea " +
+        "explicita a utilizatorului in conversatia curenta. Intreaba intai, scurt.";
+    }
+    reply = await callClaudeWithMCP({
+      model: CHAT_MODEL,
+      system,
+      messages,
+      webSearch: useWeb,
+      mcpServers: useOperational ? [{ name: "operational", url: config.operationalMcpUrl }] : [],
+      maxTokens: 1400,
+    });
+  } else {
+    // Cale rapida: fara tool-uri.
+    reply = await callClaude({ model: CHAT_MODEL, system, messages, maxTokens: 800 });
   }
-  let reply = await callClaudeWithMCP({
-    system,
-    messages,
-    webSearch: true,
-    mcpServers: useOperational ? [{ name: "operational", url: config.operationalMcpUrl }] : [],
-    maxTokens: 1400,
-  });
   reply = reply || "…";
 
   // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.
@@ -298,6 +310,12 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa)/.test(n);
+}
+
+// Cand chiar e nevoie de internet (altfel chat rapid fara tool-uri).
+function needsWeb(text) {
+  const n = norm(text);
+  return /(cauta|caut[aă]|pe net|pe internet|google|cat costa|c[aâ]t cost|pret|preturi|curs|euro|dolar|vreme|vremea|meteo|stiri|noutati|adresa|telefon|program(ul)? de|deschis|cota|bursa|legea|reglementar|impozit|tva azi|astazi|acum pe piata)/.test(n);
 }
 
 function guessCategory(text) {

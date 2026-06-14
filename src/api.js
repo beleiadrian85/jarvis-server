@@ -1,10 +1,25 @@
 import express from "express";
+import fs from "node:fs";
+import path from "node:path";
 import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
 import { handleMessage, confirmAction } from "./brain.js";
 import { getHudData } from "./hud.js";
 import { hasVoice, synthesize } from "./tts.js";
 import { buildAuthUrl, exchangeCode } from "./google.js";
-import { getRecent } from "./history.js";
+import { getRecent, appendMessage } from "./history.js";
+import { describeFile } from "./vision.js";
+import { saveMemory } from "./memory.js";
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads";
+const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
+
+function catFor(text) {
+  const n = (text || "").toLowerCase();
+  if (/(factur|chitan|bon|plat|tva|cont|iban|sum[aă]|lei|eur)/.test(n)) return "Financiar";
+  if (/(contract|act|notar|antecontract|clauz)/.test(n)) return "Contracte";
+  if (/(plan|santier|șantier|proiect|bloc|apartament|releveu)/.test(n)) return "Proiecte";
+  return "Documente";
+}
 
 /**
  * API-ul HUD-ului. Din Faza 2, chat-ul trece prin brain.js —
@@ -12,6 +27,8 @@ import { getRecent } from "./history.js";
  */
 
 export function registerApi(app) {
+  // Parser cu limita mare DOAR pentru upload (poze/PDF), inainte de cel global.
+  app.use("/api/upload", express.json({ limit: "16mb" }));
   app.use(express.json({ limit: "100kb" }));
 
   // Setup unic OAuth Google (Gmail/Calendar/Drive). Gateat cu PIN-ul (?k=).
@@ -91,6 +108,39 @@ export function registerApi(app) {
     } catch (e) {
       console.error("[api/history]", e.message);
       res.json({ messages: [] });
+    }
+  });
+
+  // Atasament (poza din camera / fisier) → Claude vision → memorie + istoric.
+  app.post("/api/upload", async (req, res) => {
+    const { filename, mediaType, data } = req.body || {};
+    if (!data || !mediaType || !ALLOWED.includes(mediaType)) {
+      return res.status(400).json({ error: "Fisier lipsa sau tip nepermis (poze sau PDF)." });
+    }
+    const name = String(filename || "atasament").replace(/[^\w.\- ]+/g, "_").slice(0, 80);
+    try {
+      // 1) Salvez fisierul pe volum.
+      let savedPath = null;
+      try {
+        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+        const id = Date.now().toString(36) + Math.round(performance.now()).toString(36);
+        const ext = (mediaType.split("/")[1] || "bin").replace("jpeg", "jpg");
+        savedPath = path.join(UPLOAD_DIR, `${id}_${name}`.replace(/\s+/g, "_") + (name.includes(".") ? "" : "." + ext));
+        fs.writeFileSync(savedPath, Buffer.from(data, "base64"));
+      } catch (e) {
+        console.error("[upload.save]", e.message); // fara volum, continuam doar cu descrierea
+      }
+      // 2) Claude vede fisierul.
+      const description = await describeFile({ mediaType, data, filename: name });
+      // 3) Memorie + istoric (apare in fir si se sincronizeaza pe celelalte device-uri).
+      const fact = `Document atasat „${name}”: ${description}`;
+      await saveMemory(catFor(name + " " + description), fact, savedPath ? `upload:${savedPath}` : "upload");
+      await appendMessage("hud", "user", `📎 ${name}`);
+      await appendMessage("hud", "assistant", description);
+      res.json({ description });
+    } catch (e) {
+      console.error("[api/upload]", e.message);
+      res.status(502).json({ error: "Nu am putut procesa fisierul." });
     }
   });
 

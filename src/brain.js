@@ -1,10 +1,10 @@
 import { callClaude, callClaudeWithMCP } from "./claude.js";
-import { config, hasOperational } from "./config.js";
+import { config, hasOperational, hasGoogle } from "./config.js";
 import { pool, query } from "./db.js";
 import { appendMessage, getContext, maybeSummarize } from "./history.js";
 import { recall, saveMemory, saveDecision, listDecisions, extractFacts } from "./memory.js";
 import { activeReminders, settleReminder, formatReminders, addReminder } from "./reminders.js";
-import { prepareTaskCreate, takePending, executeConfirmed } from "./taskflow.js";
+import { prepareTaskCreate, prepareCalendarEvent, takePending, executeConfirmed } from "./taskflow.js";
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
@@ -150,6 +150,20 @@ export async function handleMessage(channel, text) {
     const { id, preview } = await prepareTaskCreate(text);
     pendingByChannel.set(channel, id);
     return { reply: preview + "\n\nRaspunde: da / nu", confirmId: id };
+  }
+
+  // 5.5) Calendar / alarma (cu confirmare). Necesita Google conectat.
+  if (isCalendarTopic(text)) {
+    if (!hasGoogle) {
+      return { reply: "Calendarul nu e conectat încă. Conectează Google (link-ul de setup) și pot crea evenimente și alarme care apar pe telefon." };
+    }
+    try {
+      const { id, preview } = await prepareCalendarEvent(text);
+      pendingByChannel.set(channel, id);
+      return { reply: preview + "\n\nRaspunde: da / nu", confirmId: id };
+    } catch (e) {
+      return { reply: e.message };
+    }
   }
 
   // 6) Cautare in Drive.
@@ -310,6 +324,12 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa)/.test(n);
+}
+
+// Intentie de calendar / alarma (eveniment de programat).
+function isCalendarTopic(text) {
+  const n = norm(text);
+  return /(\bin calendar\b|adauga in calendar|pune in calendar|programeaz|fa-?mi (o |un )?(intalnire|eveniment|alarma)|pune-?mi (o |un )?(intalnire|eveniment|alarma)|\bo intalnire\b|\bun eveniment\b|\balarm[aă]\b|treze[sș]te-?ma|rezerv[aă]-?mi|blocheaz[aă]-?mi (in calendar|ora))/.test(n);
 }
 
 // Cand chiar e nevoie de internet (altfel chat rapid fara tool-uri).

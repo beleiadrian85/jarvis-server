@@ -31,7 +31,7 @@ export async function googleToken() {
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
-  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.events", // citire + SCRIERE evenimente
   "https://www.googleapis.com/auth/drive.readonly",
 ];
 

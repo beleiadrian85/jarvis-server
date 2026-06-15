@@ -43,6 +43,23 @@ export async function getTodayEvents() {
   }
 }
 
+/** Creeaza un eveniment in calendar (cu notificare). startISO/endISO cu timezone RO. */
+export async function createEvent({ title, startISO, endISO, description, reminderMinutes }) {
+  if (!hasCalendar) throw new Error("Calendar neconfigurat.");
+  const body = {
+    summary: title,
+    description: description || "Creat de JARVIS",
+    start: { dateTime: startISO, timeZone: "Europe/Bucharest" },
+    end: { dateTime: endISO, timeZone: "Europe/Bucharest" },
+    reminders: { useDefault: false, overrides: [{ method: "popup", minutes: Math.max(0, reminderMinutes ?? 10) }] },
+  };
+  const d = await gapi(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(config.google.calendarId)}/events`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+  );
+  return { id: d.id, link: d.htmlLink };
+}
+
 /** Evenimente care incep in urmatoarele `withinMin` minute (pt notificari). */
 export async function getUpcomingEvents(withinMin = 30) {
   if (!hasCalendar) return null;

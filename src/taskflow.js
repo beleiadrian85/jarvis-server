@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { callClaude } from "./claude.js";
 import { createTask, updateTask } from "./mcp.js";
+import { createEvent } from "./sources/calendar.js";
 import { audit } from "./audit.js";
 
 /**
@@ -58,6 +59,52 @@ export async function prepareTaskCreate(rawText) {
   return { id, preview };
 }
 
+/** "Pune-mi o intalnire / alarma / eveniment ..." → structura + confirmare. */
+export async function prepareCalendarEvent(rawText) {
+  const now = new Date();
+  const nowStr = now.toLocaleString("sv-SE", { timeZone: "Europe/Bucharest" }); // YYYY-MM-DD HH:mm:ss
+  let ev;
+  try {
+    const json = await callClaude({
+      system:
+        `Acum e ${nowStr} (ora Romaniei). Extrage un eveniment de calendar din cerere. ` +
+        'Raspunzi DOAR cu JSON valid: {"title":"scurt","startISO":"YYYY-MM-DDTHH:MM:SS","durationMin":number,' +
+        '"isAlarm":true|false,"valid":true|false,"error":"daca valid=false, de ce"}. ' +
+        "Reguli: startISO e ora locala (fara offset). Termene relative (maine, peste o ora, luni la 9) le " +
+        "calculezi fata de acum. Daca e o alarma/trezire, isAlarm=true si durationMin=0 (eveniment punctual). " +
+        "Eveniment normal: durationMin implicit 60. Daca nu poti deduce data/ora, valid=false.",
+      messages: [{ role: "user", content: rawText }],
+      maxTokens: 400,
+    });
+    ev = JSON.parse(json.replace(/^```json?\s*|\s*```$/g, ""));
+  } catch {
+    throw new Error("Nu am inteles ora/data. Spune-mi mai clar (ex: 'maine la 15 intalnire cu avocatul').");
+  }
+  if (!ev.valid) throw new Error(ev.error || "Nu am putut deduce data si ora.");
+
+  const start = new Date(ev.startISO);
+  const dur = ev.isAlarm ? 0 : (ev.durationMin || 60);
+  const endISO = new Date(start.getTime() + Math.max(0, dur) * 60000).toISOString().slice(0, 19);
+  const payload = {
+    title: ev.title || (ev.isAlarm ? "Alarmă" : "Eveniment"),
+    startISO: ev.startISO,
+    endISO,
+    reminderMinutes: ev.isAlarm ? 0 : 10,
+    isAlarm: !!ev.isAlarm,
+  };
+  const when = start.toLocaleString("ro-RO", {
+    weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+    timeZone: "Europe/Bucharest",
+  });
+  const preview =
+    `${ev.isAlarm ? "⏰ ALARMĂ" : "🗓️ EVENIMENT"} — confirmi?\n\n` +
+    `• ${payload.title}\n• Când: ${when}` +
+    (ev.isAlarm ? "\n• Notificare la ora exactă" : `\n• Durată: ${dur} min · notificare cu 10 min înainte`) +
+    `\n\n(Se creează în Google Calendar și apare pe telefon.)`;
+  const id = stash("calendar", payload, preview);
+  return { id, preview };
+}
+
 /** Modificare task (Nivel 3) — pregateste si cere confirmare. */
 export function prepareTaskUpdate(args, humanSummary) {
   const preview = `✏️ MODIFICARE TASK (Nivel 3) — confirmi?\n\n${humanSummary}`;
@@ -85,6 +132,12 @@ export async function executeConfirmed(p) {
     const result = await updateTask(p.payload);
     await audit("task_modificat", JSON.stringify(p.payload).slice(0, 300), "MCP Operational update_task", true);
     return result;
+  }
+  if (p.type === "calendar") {
+    const e = p.payload;
+    const r = await createEvent(e);
+    await audit("calendar_eveniment", `${e.title} @ ${e.startISO}`, "Google Calendar createEvent", true);
+    return `${e.isAlarm ? "⏰ Alarmă setată" : "🗓️ Eveniment creat"}: „${e.title}”.\nApare în Google Calendar pe telefon.`;
   }
   throw new Error("Tip de actiune necunoscut.");
 }

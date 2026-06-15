@@ -125,6 +125,66 @@ export async function createDraft({ to, subject, body, threadId = null }) {
   return d.id;
 }
 
+/** Cauta fire dupa query Gmail (search_threads). Intoarce lista cu id+snippet+from+subject. */
+export async function searchThreads(query, pageSize = 25) {
+  if (!hasGoogle) return null;
+  const list = await gapi(
+    "https://gmail.googleapis.com/gmail/v1/users/me/threads?" +
+      new URLSearchParams({ q: query, maxResults: String(Math.min(40, Math.max(5, pageSize))) })
+  );
+  const out = [];
+  for (const t of (list.threads || []).slice(0, pageSize)) {
+    const th = await gapi(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`
+    );
+    const last = (th.messages || [])[th.messages.length - 1] || {};
+    out.push({
+      threadId: t.id,
+      from: header(last, "from"),
+      subject: header(last, "subject") || "(fara subiect)",
+      date: header(last, "date"),
+      snippet: th.messages?.[0]?.snippet || "",
+    });
+  }
+  return out;
+}
+
+/** Continutul COMPLET al unui fir (get_thread FULL_CONTENT) — corp, telefoane, atasamente. */
+export async function readThread(threadId) {
+  if (!hasGoogle) return null;
+  const th = await gapi(
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`
+  );
+  return (th.messages || []).map((m) => ({
+    from: header(m, "from"),
+    to: header(m, "to"),
+    subject: header(m, "subject"),
+    date: header(m, "date"),
+    body: extractBody(m.payload).slice(0, 6000),
+    attachments: collectAttachments(m.payload),
+  }));
+}
+
+// Extrage text/plain din payload (recursiv); fallback la snippet-ul mesajului.
+function extractBody(payload) {
+  if (!payload) return "";
+  const decode = (d) => { try { return Buffer.from(d, "base64url").toString("utf8"); } catch { return ""; } };
+  if (payload.mimeType === "text/plain" && payload.body?.data) return decode(payload.body.data);
+  if (payload.parts) {
+    const plain = payload.parts.find((p) => p.mimeType === "text/plain" && p.body?.data);
+    if (plain) return decode(plain.body.data);
+    for (const p of payload.parts) { const sub = extractBody(p); if (sub) return sub; }
+  }
+  if (payload.body?.data) return decode(payload.body.data).replace(/<[^>]+>/g, " ");
+  return "";
+}
+function collectAttachments(payload, acc = []) {
+  if (!payload) return acc;
+  if (payload.filename) acc.push(payload.filename);
+  (payload.parts || []).forEach((p) => collectAttachments(p, acc));
+  return acc.filter(Boolean);
+}
+
 /** Ultimul email care se potriveste unei cautari — pentru "draft raspuns la ...". */
 export async function findEmail(searchText) {
   if (!hasGoogle) return null;

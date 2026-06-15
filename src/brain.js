@@ -6,7 +6,7 @@ import { recall, saveMemory, saveDecision, listDecisions, extractFacts } from ".
 import { activeReminders, settleReminder, formatReminders, addReminder } from "./reminders.js";
 import { prepareTaskCreate, prepareCalendarEvent, takePending, executeConfirmed } from "./taskflow.js";
 import { searchDrive } from "./sources/drive.js";
-import { findEmail, createDraft } from "./sources/gmail.js";
+import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { audit } from "./audit.js";
@@ -164,6 +164,14 @@ export async function handleMessage(channel, text) {
     } catch (e) {
       return { reply: e.message };
     }
+  }
+
+  // 5.7) Email: cautare + citire + sinteza (read-only; trimiterea NU se face).
+  if (isEmailTopic(text)) {
+    if (!hasGoogle) {
+      return { reply: "Emailul nu e conectat încă. Conectează Google (link-ul de setup) și pot căuta, citi și pregăti drafturi (nu trimit nimic fără tine)." };
+    }
+    return { reply: await handleEmailQuery(channel, text) };
   }
 
   // 6) Cautare in Drive.
@@ -324,6 +332,59 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa)/.test(n);
+}
+
+// Intentie despre email (cautare/citire in Gmail).
+function isEmailTopic(text) {
+  const n = norm(text);
+  if (/draft/.test(n)) return false; // draftul are flux propriu
+  return /(\bemail\b|\bemailuri\b|\bmail\b|\bmailul\b|gmail|in inbox|in casuta|mesaj de la|scrisoare de la|ce mi-a scris|am primit (vreun |un )?(mail|email)|verifica (mailul|emailul|inbox|casuta))/.test(n);
+}
+
+// Cautare + citire + sinteza pe Gmail (read-only). Reguli din handoff-ul lui Adi.
+async function handleEmailQuery(channel, text) {
+  let q;
+  try {
+    q = (await callClaude({
+      model: CHAT_MODEL,
+      system:
+        "Transforma cererea in DOAR un query de cautare Gmail valid (o singura linie, fara explicatii). " +
+        "Operatori Gmail: from:, subject:, newer_than:, has:attachment, \"fraza exacta\". " +
+        "Pentru nume/locuri romanesti adauga variante OR cu si fara diacritice (ex: Marsa OR Mârșa). " +
+        "Cauta firme atat dupa denumire cat si dupa domeniul de email. Implicit newer_than:60d.",
+      messages: [{ role: "user", content: text }],
+      maxTokens: 120,
+    })).trim().replace(/^`+|`+$/g, "").split("\n")[0];
+  } catch { q = "in:inbox newer_than:30d"; }
+
+  const threads = await searchThreads(q, 25).catch(() => null);
+  if (threads === null) return "Nu am putut căuta în Gmail.";
+  if (!threads.length) return `Niciun email găsit pentru: ${q}`;
+
+  const detailed = [];
+  for (const t of threads.slice(0, 3)) {
+    const msgs = await readThread(t.threadId).catch(() => null);
+    if (msgs) detailed.push({ subject: t.subject, from: t.from, date: t.date, msgs });
+  }
+  const ctx = detailed
+    .map((d) =>
+      `FIR: ${d.subject} — ${d.from} (${d.date})\n` +
+      d.msgs.map((m) => `[${m.from} → ${m.to}] ${m.body}${m.attachments.length ? `\n(atasamente: ${m.attachments.join(", ")})` : ""}`).join("\n---\n")
+    )
+    .join("\n\n=====\n\n");
+
+  const answer = await callClaude({
+    model: CHAT_MODEL,
+    system:
+      PERSONA +
+      "\nRaspunzi STRICT pe baza emailurilor de mai jos. Extragi exact ce intreaba Adi " +
+      "(date, sume, telefoane — care apar doar in continutul complet, scadente). " +
+      "Daca raspunsul nu e in emailuri, spui clar. Scurt.",
+    messages: [{ role: "user", content: `Intrebarea: ${text}\n\nEMAILURI (query: ${q}):\n${ctx.slice(0, 12000)}` }],
+    maxTokens: 700,
+  });
+  remember(channel, text, answer);
+  return answer;
 }
 
 // Intentie de calendar / alarma (eveniment de programat).

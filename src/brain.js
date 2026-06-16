@@ -274,12 +274,16 @@ async function generalChat(channel, text) {
     }
     if (useOperational) {
       system +=
-        "\n\nTOOLS OPERATIONAL — reguli de autoritate (constitutie):\n" +
-        "- Citire (list_tasks, get_task, list_alerts) si observatii (add_observation): executa direct.\n" +
-        "- create_task: prezinta intai structura propusa si executa DOAR daca utilizatorul confirma " +
-        "in conversatie; daca tocmai a confirmat ('da'), executa.\n" +
-        "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmarea " +
-        "explicita a utilizatorului in conversatia curenta. Intreaba intai, scurt.";
+        "\n\nTOOLS OPERATIONAL (acces complet) — reguli de autoritate (constitutie):\n" +
+        "- CITIRE, executa direct: list_tasks, get_task, list_alerts, list_journals, project_costs, " +
+        "list_material_orders, building_expenses, production_summary, list_payment_obligations, cash_report.\n" +
+        "- add_observation, import_price_references: Nivel 2, executa direct.\n" +
+        "- create_task, create_task_from_obligation: prezinta structura si executa DOAR la confirmare " +
+        "('da'); daca tocmai a confirmat, executa.\n" +
+        "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmare explicita. Intreaba intai, scurt.\n" +
+        "- PLATI (Nivel 4): list_payment_obligations si cash_report sunt DOAR informative. Poti PREGATI " +
+        "datele unei plati (suma, scadenta, furnizor, IBAN) si le prezinti, dar NU executi si NU promiti " +
+        "executarea — plata o face Adi in aplicatia bancii. create_task_from_obligation creeaza doar un memento, nu o plata.";
     }
     reply = await callClaudeWithMCP({
       model: CHAT_MODEL,
@@ -328,10 +332,10 @@ function remember(channel, userText, assistantText) {
   })().catch((e) => console.error("[remember]", e.message));
 }
 
-// Subiect care cere tool-urile Operational (acces supervizor in chat).
+// Subiect care cere tool-urile Operational (acces COMPLET de supervizor in chat).
 function isOperationalTopic(text) {
   const n = norm(text);
-  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa)/.test(n);
+  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva)/.test(n);
 }
 
 // Intentie despre email (cautare/citire in Gmail).

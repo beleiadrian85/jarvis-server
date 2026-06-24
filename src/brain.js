@@ -9,6 +9,7 @@ import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
 import { runCouncil, impactOver50k } from "./council.js";
+import { buildBriefing } from "./supervisor/briefing.js";
 import { audit } from "./audit.js";
 
 /**
@@ -83,6 +84,13 @@ export async function handleMessage(channel, text) {
       return { reply: "Anulat." };
     }
     // alt mesaj → renunta tacit la pending si proceseaza normal
+  }
+
+  // 0.5) Supervisor briefing (F1) — la cerere.
+  if (/^\/?(supervizor|briefing|brief|ce probleme)\b/.test(n) || n === "ce e cu operational") {
+    const b = await buildBriefing();
+    remember(channel, text, b);
+    return { reply: b };
   }
 
   // 1) Raport de dimineata.

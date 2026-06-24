@@ -45,6 +45,9 @@ export const config = {
   notifyPollMinutes: Number(process.env.NOTIFY_POLL_MINUTES || 7),
   siteMonitorUrl: process.env.SITE_MONITOR_URL || "",
 
+  // SUPERVISOR AGENT (F1): conexiune read-only la baza Operational
+  operationalDbUrl: process.env.OPERATIONAL_DATABASE_URL || "",
+
   // FAZA V — voce streaming
   deepgramKey: process.env.DEEPGRAM_API_KEY || "",
   elevenKey: process.env.ELEVENLABS_API_KEY || "",

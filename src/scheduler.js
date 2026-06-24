@@ -5,6 +5,8 @@ import { listTasks } from "./mcp.js";
 import { hasOperational } from "./config.js";
 import { parseTaskLines, groupReport, isOverdue } from "./taskparse.js";
 import { getState, setState, pruneNotified } from "./state.js";
+import { buildBriefing } from "./supervisor/briefing.js";
+import { hasOpsDb } from "./supervisor/opsdb.js";
 import { audit } from "./audit.js";
 
 /**
@@ -38,6 +40,19 @@ export function startScheduler() {
   cron.schedule("30 3 * * *", () => pruneNotified(14).catch(() => {}), {
     timezone: "Europe/Bucharest",
   });
+
+  // SUPERVISOR AGENT F1 — briefing zilnic 07:30 (doar citire + recomandari).
+  if (hasOpsDb) {
+    cron.schedule("30 7 * * *", async () => {
+      try {
+        const b = await buildBriefing();
+        await pushToOwner(b);
+      } catch (e) {
+        console.error("[supervisor]", e.message);
+      }
+    }, { timezone: "Europe/Bucharest" });
+    console.log("[supervisor] briefing zilnic 07:30 activ (F1, read-only)");
+  }
 
   console.log("[scheduler] activ: 09:00 raport complet, 17:00 DIFF task-uri (Europe/Bucharest)");
 }

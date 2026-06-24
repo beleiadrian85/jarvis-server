@@ -281,6 +281,8 @@ async function generalChat(channel, text) {
         "- create_task, create_task_from_obligation: prezinta structura si executa DOAR la confirmare " +
         "('da'); daca tocmai a confirmat, executa.\n" +
         "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmare explicita. Intreaba intai, scurt.\n" +
+        "- delete_task = Nivel 3 (distructiv, dar soft-delete recuperabil 30 zile): cere confirmare explicita inainte. " +
+        "restore_task recupereaza un task sters.\n" +
         "- PLATI (Nivel 4): list_payment_obligations si cash_report sunt DOAR informative. Poti PREGATI " +
         "datele unei plati (suma, scadenta, furnizor, IBAN) si le prezinti, dar NU executi si NU promiti " +
         "executarea — plata o face Adi in aplicatia bancii. create_task_from_obligation creeaza doar un memento, nu o plata.";

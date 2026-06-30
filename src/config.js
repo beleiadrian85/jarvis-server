@@ -54,6 +54,15 @@ export const config = {
   elevenVoiceId: process.env.ELEVENLABS_VOICE_ID || "",
   sttKeywords: process.env.STT_KEYWORDS || "",
 
+  // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
+  // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
+  vault: {
+    path: process.env.VAULT_PATH || "",
+    repo: process.env.VAULT_REPO || "",          // ex: "beleiadrian85/firma-vault"
+    branch: process.env.VAULT_BRANCH || "main",
+    token: process.env.VAULT_GH_TOKEN || "",     // PAT cu scope repo (read)
+  },
+
   // Expeditori-cheie pentru clasificarea emailurilor (completabil din env).
   keySenders: (process.env.GMAIL_KEY_SENDERS ||
     "anaf.ro,bancatransilvania.ro,btrl.ro,brd.ro,bcr.ro,infosys,emco,colliers,notar,avocat")
@@ -70,4 +79,5 @@ export const hasCalendar = !!(
 
 export const hasGoogle = hasCalendar; // acelasi OAuth, trei scope-uri
 export const hasOperational = !!config.operationalMcpUrl;
+export const hasVault = !!(config.vault.path || (config.vault.repo && config.vault.token));
 export const hasDb = !!config.databaseUrl;

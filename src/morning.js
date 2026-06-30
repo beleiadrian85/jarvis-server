@@ -2,8 +2,9 @@ import { getWeather } from "./sources/weather.js";
 import { getTodayEvents } from "./sources/calendar.js";
 import { getImportantEmails, getUnansweredSent } from "./sources/gmail.js";
 import { listTasks } from "./mcp.js";
+import { getVaultDigest } from "./sources/vault.js";
 import { activeReminders, formatReminders } from "./reminders.js";
-import { hasOperational } from "./config.js";
+import { hasOperational, hasVault } from "./config.js";
 import { callClaude } from "./claude.js";
 
 /**
@@ -27,13 +28,17 @@ function groupTasks(rawLines) {
 }
 
 export async function buildMorningReport() {
-  const [weather, events, emails, unanswered, tasksRaw, reminders] = await Promise.all([
+  const [weather, events, emails, unanswered, tasksRaw, vault, reminders] = await Promise.all([
     getWeather(),
     getTodayEvents(),
     getImportantEmails(),
     getUnansweredSent(),
     hasOperational ? listTasks({ status: "deschise" }).catch((e) => {
       console.error("[morning.tasks]", e.message);
+      return null;
+    }) : Promise.resolve(null),
+    hasVault ? getVaultDigest().catch((e) => {
+      console.error("[morning.vault]", e.message);
       return null;
     }) : Promise.resolve(null),
     activeReminders(8),
@@ -84,6 +89,9 @@ export async function buildMorningReport() {
     parts.push("STATUS OPERATIONAL:\n" + sec.join("\n"));
   }
 
+  // Vault Obsidian (firma-vault) — actiuni deschise din note
+  if (vault) parts.push(vault);
+
   // Termene critice din reminders
   if (reminders.length) {
     parts.push("TERMENE CRITICE / NEREZOLVATE (registrul reminders):\n" + formatReminders(reminders));
@@ -118,7 +126,7 @@ export async function buildMorningReport() {
       "- Ordonezi dupa ierarhia stricta de impact: (1) cash-flow, (2) vanzari, (3) finantari, " +
       "(4) executie, (5) juridic. Impact pe criteriu superior bate criteriile inferioare. " +
       "Termenele apropiate urca prioritatea in cadrul aceluiasi criteriu.\n" +
-      "- MAXIM 5. Nu inventezi ca sa umpli. Selectezi din task-uri, emailuri, calendar, termene critice.\n" +
+      "- MAXIM 5. Nu inventezi ca sa umpli. Selectezi din task-uri, emailuri, calendar, termene critice, actiuni din vault.\n" +
       "- Format: 'N. [CRITERIU] Actiune concreta — de ce azi'. CRITERIU ∈ CASH-FLOW/VANZARI/FINANTARE/EXECUTIE/JURIDIC.\n" +
       "- Element cu impact neevaluabil → la final cu '(impact neclar)'. Nu ghici.\n\n" +
       "Sectiunile 'neconfigurat' le mentionezi intr-un cuvant. Fara introduceri. Compact, citibil in 30 secunde.\n\n" +

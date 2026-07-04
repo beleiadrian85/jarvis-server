@@ -25,16 +25,22 @@ export function runDetectors(snapshot) {
   for (const t of snapshot.tasks) {
     const base = { taskId: t.id, title: t.title, assignee: t.assigneeName };
     const rn = norm(t.report);
+    const crit = t.criteria ? ` Criteriu de acceptare: „${t.criteria}”.` : "";
 
     // D1 — Raport gol
     if (t.status === "rezolvat" && (JUNK.has(rn) || rn.length < 15)) {
       flags.push({ ...base, type: "D1_raport_gol", severity: "RIDICAT",
-        evidence: `raport: „${t.report || "(gol)"}”` });
+        evidence: `raport: „${t.report || "(gol)"}”.${crit}` });
     }
     // D2 — Munca neterminata raportata ca gata
     if (t.status === "rezolvat" && UNFINISHED.some((k) => rn.includes(norm(k)))) {
       flags.push({ ...base, type: "D2_neterminat", severity: "RIDICAT",
-        evidence: "raportul mentioneaza munca viitoare" });
+        evidence: `raportul mentioneaza munca viitoare.${crit}` });
+    }
+    // D12 — Livrat partial (status nou din Codul de Disciplina): nu poate fi inchis.
+    if (t.status === "rezolvat_partial") {
+      flags.push({ ...base, type: "D12_rezolvat_partial", severity: "RIDICAT",
+        evidence: `livrat partial — nu poate fi acceptat ca inchis.${crit}` });
     }
     // D3 — Termen depasit
     if (t.deadline && t.deadline < today && !["acceptat", "respins"].includes(t.status)) {

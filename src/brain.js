@@ -345,7 +345,7 @@ function remember(channel, userText, assistantText) {
 // Subiect care cere tool-urile Operational (acces COMPLET de supervizor in chat).
 function isOperationalTopic(text) {
   const n = norm(text);
-  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva)/.test(n);
+  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva)/.test(n);
 }
 
 // Intentie despre email (cautare/citire in Gmail).

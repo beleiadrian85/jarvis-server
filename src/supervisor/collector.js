@@ -11,7 +11,7 @@ export async function collectState() {
     opsQuery(`SELECT id, name FROM users`),
     opsQuery(
       `SELECT id, title, status, resolution, deadline, assignee, created_by, project,
-              created_at, updated_at
+              acceptance_criteria, created_at, updated_at
        FROM tasks
        WHERE deleted_at IS NULL AND kind != 'personal'`
     ),
@@ -35,6 +35,7 @@ export async function collectState() {
       title: t.title,
       status: t.status,
       report,
+      criteria: (t.acceptance_criteria || "").trim(),
       deadline: t.deadline,
       assignee: t.assignee,
       assigneeName: names[t.assignee] || t.assignee,

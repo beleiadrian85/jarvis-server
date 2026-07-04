@@ -284,7 +284,8 @@ async function generalChat(channel, text) {
       system +=
         "\n\nTOOLS OPERATIONAL (acces complet) — reguli de autoritate (constitutie):\n" +
         "- CITIRE, executa direct: list_tasks, get_task, list_alerts, list_journals, project_costs, " +
-        "list_material_orders, building_expenses, production_summary, list_payment_obligations, cash_report.\n" +
+        "list_material_orders, building_expenses, production_summary, list_payment_obligations, cash_report, " +
+        "sales_summary, list_sales_units, partner_activity (raport spion — ce fac partenerii de vanzari).\n" +
         "- add_observation, import_price_references: Nivel 2, executa direct.\n" +
         "- create_task, create_task_from_obligation: prezinta structura si executa DOAR la confirmare " +
         "('da'); daca tocmai a confirmat, executa.\n" +
@@ -345,7 +346,7 @@ function remember(channel, userText, assistantText) {
 // Subiect care cere tool-urile Operational (acces COMPLET de supervizor in chat).
 function isOperationalTopic(text) {
   const n = norm(text);
-  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva)/.test(n);
+  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
 }
 
 // Intentie despre email (cautare/citire in Gmail).

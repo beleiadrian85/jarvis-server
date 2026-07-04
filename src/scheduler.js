@@ -6,6 +6,7 @@ import { hasOperational } from "./config.js";
 import { parseTaskLines, groupReport, isOverdue } from "./taskparse.js";
 import { getState, setState, pruneNotified } from "./state.js";
 import { buildBriefing } from "./supervisor/briefing.js";
+import { buildSalesReport } from "./supervisor/sales.js";
 import { hasOpsDb } from "./supervisor/opsdb.js";
 import { audit } from "./audit.js";
 
@@ -45,13 +46,13 @@ export function startScheduler() {
   if (hasOpsDb) {
     cron.schedule("30 7 * * *", async () => {
       try {
-        const b = await buildBriefing();
-        await pushToOwner(b);
-      } catch (e) {
-        console.error("[supervisor]", e.message);
-      }
+        await pushToOwner(await buildBriefing());
+      } catch (e) { console.error("[supervisor]", e.message); }
+      try {
+        await pushToOwner(await buildSalesReport());
+      } catch (e) { console.error("[sales]", e.message); }
     }, { timezone: "Europe/Bucharest" });
-    console.log("[supervisor] briefing zilnic 07:30 activ (F1, read-only)");
+    console.log("[supervisor] briefing + raport vânzări zilnic 07:30 activ (F1, read-only)");
   }
 
   console.log("[scheduler] activ: 09:00 raport complet, 17:00 DIFF task-uri (Europe/Bucharest)");

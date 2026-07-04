@@ -10,6 +10,7 @@ import { findEmail, createDraft, searchThreads, readThread } from "./sources/gma
 import { buildMorningReport } from "./morning.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
+import { buildSalesReport } from "./supervisor/sales.js";
 import { audit } from "./audit.js";
 
 /**
@@ -91,6 +92,13 @@ export async function handleMessage(channel, text) {
     const b = await buildBriefing();
     remember(channel, text, b);
     return { reply: b };
+  }
+
+  // 0.6) Raport Vanzari + Parteneri — la cerere.
+  if (/^\/?(raport\s+)?(vanzari|v[aâ]nz[aă]ri|parteneri|spion)\b/.test(n) || /cum (stau|merg) (vanzarile|v[aâ]nz[aă]rile|partenerii)/.test(n)) {
+    const r = await buildSalesReport();
+    remember(channel, text, r);
+    return { reply: r };
   }
 
   // 1) Raport de dimineata.

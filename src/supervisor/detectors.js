@@ -7,6 +7,10 @@
 const JUNK = new Set(["executat", "gata", "facut", "făcut", "rezolvat", "ok", "done", "-", "."]);
 const UNFINISHED = ["saptamana viitoare", "săptămâna viitoare", "urmeaza", "urmează", "o sa", "o să", "maine", "mâine", "ramane", "rămâne", "voi ", "trebuie sa", "trebuie să", "in curs", "în curs"];
 
+// Statusuri INCHISE (sincron cu Operational CLOSED_STATUSES). „respins" e DESCHIS
+// (revine la lucru), deci un task respins cu termen depasit e o problema reala.
+const CLOSED = new Set(["acceptat", "oprit"]);
+
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 
 function todayStr() {
@@ -42,8 +46,8 @@ export function runDetectors(snapshot) {
       flags.push({ ...base, type: "D12_rezolvat_partial", severity: "RIDICAT",
         evidence: `livrat partial — nu poate fi acceptat ca inchis.${crit}` });
     }
-    // D3 — Termen depasit
-    if (t.deadline && t.deadline < today && !["acceptat", "respins"].includes(t.status)) {
+    // D3 — Termen depasit (doar task-uri DESCHISE — nu acceptat/oprit)
+    if (t.deadline && t.deadline < today && !CLOSED.has(t.status)) {
       flags.push({ ...base, type: "D3_termen_depasit", severity: "RIDICAT",
         evidence: `termen ${t.deadline}, status ${t.status}` });
     }

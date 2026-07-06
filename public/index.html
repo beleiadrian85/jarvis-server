@@ -224,6 +224,13 @@
   .confirm-row .yes:hover { background: rgba(52,211,153,.24); box-shadow: 0 0 12px rgba(52,211,153,.35); }
   .confirm-row .no { background: rgba(248,113,113,.1); color: var(--danger); border: 1px solid rgba(248,113,113,.45); }
   .confirm-row .no:hover { background: rgba(248,113,113,.2); box-shadow: 0 0 12px rgba(248,113,113,.3); }
+  .open-link {
+    display: inline-block; margin-top: 10px; font-family: "Share Tech Mono";
+    font-size: 13px; letter-spacing: .12em; padding: 8px 20px; border-radius: 8px;
+    text-decoration: none; background: rgba(34,211,238,.13); color: var(--cyan);
+    border: 1px solid rgba(34,211,238,.5); transition: background .2s, box-shadow .2s;
+  }
+  .open-link:hover { background: rgba(34,211,238,.24); box-shadow: 0 0 12px rgba(34,211,238,.35); }
 
   /* ───────── RAPORT (header buton) ───────── */
   .btn-raport {
@@ -520,6 +527,16 @@ function showReply(data) {
   const el = addMsg("jarvis", "JARVIS", data.reply);
   sayReply(data.voice || data.reply);   // rosteste rezumatul scurt daca exista
   if (data.confirmId) addConfirmButtons(el, data.confirmId);
+  if (data.openUrl) openPage(el, data.openUrl);
+}
+// Deschide pagina ceruta intr-o fila noua; daca pop-up-ul e blocat,
+// ramane linkul din mesaj (gest direct de click, mereu permis).
+function openPage(msgEl, url) {
+  const a = document.createElement("a");
+  a.className = "open-link"; a.href = url; a.target = "_blank"; a.rel = "noopener";
+  a.textContent = "↗ DESCHIDE PAGINA";
+  msgEl.appendChild(a); chat.scrollTop = chat.scrollHeight;
+  window.open(url, "_blank", "noopener");
 }
 function addConfirmButtons(msgEl, confirmId) {
   const row = document.createElement("div"); row.className = "confirm-row";
@@ -850,6 +867,7 @@ async function voiceCommand(said) {
     t.remove();
     if (!data) { if (conv.active) beginListen(); return; }
     const el = addMsg("jarvis", "JARVIS", data.reply);
+    if (data.openUrl) openPage(el, data.openUrl);
     refreshHud();
     const spoken = data.voice || data.reply;   // rosteste rezumatul scurt daca exista
     if (data.confirmId) {

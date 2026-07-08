@@ -9,7 +9,7 @@ import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
 import { cashForecastReport } from "./engines/financialBrain.js";
-import { ceoHomeReport } from "./engines/ceoHome.js";
+import { ceoHomeReport, riskReport } from "./engines/ceoHome.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
@@ -123,6 +123,14 @@ export async function handleMessage(channel, text) {
   if (hasOperational && isCeoHomeTopic(text)) {
     const rep = await ceoHomeReport();
     await audit("ceo_home", "CEO Home generat", "operational:cash+sales+tasks");
+    remember(channel, text, rep);
+    return { reply: rep };
+  }
+
+  // 1.7) Risk Engine — riscuri prioritizate.
+  if (hasOperational && isRiskTopic(text)) {
+    const rep = await riskReport();
+    await audit("risk_engine", "riscuri evaluate", "operational:cash+tasks+sales");
     remember(channel, text, rep);
     return { reply: rep };
   }
@@ -373,6 +381,12 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
+}
+
+// Intentie riscuri → Risk Engine.
+function isRiskTopic(text) {
+  const n = norm(text);
+  return /(\briscuri\b|\brisc\b|ce riscuri|ce poate merge prost|risk engine|ce ma expune|unde sunt expus|pericol)/.test(n);
 }
 
 // Intentie CEO Home / starea firmei → agregator + Health Score.

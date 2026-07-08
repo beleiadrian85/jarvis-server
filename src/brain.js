@@ -9,6 +9,7 @@ import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
 import { cashForecastReport } from "./engines/financialBrain.js";
+import { ceoHomeReport } from "./engines/ceoHome.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
@@ -114,6 +115,14 @@ export async function handleMessage(channel, text) {
   if (hasOperational && isCashForecastTopic(text)) {
     const rep = await cashForecastReport();
     await audit("cash_forecast", "prognoza cash generata", "operational:list_payment_obligations");
+    remember(channel, text, rep);
+    return { reply: rep };
+  }
+
+  // 1.6) CEO Home — starea firmei intr-un ecran + Health Score.
+  if (hasOperational && isCeoHomeTopic(text)) {
+    const rep = await ceoHomeReport();
+    await audit("ceo_home", "CEO Home generat", "operational:cash+sales+tasks");
     remember(channel, text, rep);
     return { reply: rep };
   }
@@ -364,6 +373,12 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
+}
+
+// Intentie CEO Home / starea firmei → agregator + Health Score.
+function isCeoHomeTopic(text) {
+  const n = norm(text);
+  return /(\/?ceo\b|ceo home|ceo mode|starea firmei|cum st[aă] firma|cum st[aă]m|dashboard|acas[aă]|sumar firm|health score|scor.*firm|unde st[aă]m)/.test(n);
 }
 
 // Intentie de cash forecast / necesar de plati → Financial Brain determinist.

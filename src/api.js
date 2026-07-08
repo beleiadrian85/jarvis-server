@@ -3,6 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
 import { handleMessage, confirmAction, splitVoice } from "./brain.js";
+import { ceoHomeReport, riskReport } from "./engines/ceoHome.js";
+import { cashForecastReport } from "./engines/financialBrain.js";
+import { projectIntelReport } from "./engines/projectIntel.js";
 import { getHudData } from "./hud.js";
 import { hasVoice, synthesize } from "./tts.js";
 import { buildAuthUrl, exchangeCode } from "./google.js";
@@ -213,6 +216,27 @@ export function registerApi(app) {
       res.json({ report: shown, voice });
     } catch (e) {
       console.error("[api/raport]", e.message);
+      res.status(502).json({ error: "Nu am putut genera raportul." });
+    }
+  });
+
+  // Ferestre de rapoarte — motoarele apelate direct (fara istoric/memorie).
+  const REPORTS = {
+    ceo: ceoHomeReport,
+    cash: cashForecastReport,
+    risk: riskReport,
+    projects: projectIntelReport,
+  };
+  app.post("/api/report", async (req, res) => {
+    const kind = String(req.body?.kind || "").trim();
+    const fn = REPORTS[kind];
+    if (!fn) return res.status(400).json({ error: "raport necunoscut." });
+    if (!hasOperational) return res.status(503).json({ error: "Operational neconectat." });
+    try {
+      const { text: shown, voice } = splitVoice(await fn());
+      res.json({ report: shown, voice });
+    } catch (e) {
+      console.error("[api/report]", e.message);
       res.status(502).json({ error: "Nu am putut genera raportul." });
     }
   });

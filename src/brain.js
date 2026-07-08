@@ -11,6 +11,7 @@ import { buildMorningReport } from "./morning.js";
 import { cashForecastReport } from "./engines/financialBrain.js";
 import { ceoHomeReport, riskReport } from "./engines/ceoHome.js";
 import { projectIntelReport } from "./engines/projectIntel.js";
+import { entity360Report } from "./engines/entity360.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
@@ -142,6 +143,17 @@ export async function handleMessage(channel, text) {
     await audit("project_intel", "raport proiecte generat", "operational:project_costs+tasks+sales");
     remember(channel, text, rep);
     return { reply: rep };
+  }
+
+  // 1.9) Knowledge Graph lite — Entity 360 ("tot ce tine de X").
+  if (hasOperational) {
+    const ent = extractEntity(text);
+    if (ent) {
+      const rep = await entity360Report(ent);
+      await audit("entity360", `entitate: ${ent}`, "operational:tasks+plati+vanzari+costuri");
+      remember(channel, text, rep);
+      return { reply: rep };
+    }
   }
 
   // 2) Remindere: rezolvat / amana / ignora #id.
@@ -390,6 +402,14 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
+}
+
+// Extrage entitatea din "tot ce tine de X" / "tot despre X" (Entity 360).
+function extractEntity(text) {
+  const m = text.match(/(?:tot ce [tț]ine de|tot despre|arat[aă]-?mi tot despre|ce [sș]tii despre|informa[tț]ii despre|leg[aă]turi(?:le)?\s+(?:cu|despre)|dosarul(?:\s+lui)?)\s+(.+)$/i);
+  if (!m) return null;
+  const name = m[1].replace(/[?.!]+\s*$/, "").trim();
+  return name.length >= 2 ? name : null;
 }
 
 // Intentie Project Intelligence → raport pe proiecte.

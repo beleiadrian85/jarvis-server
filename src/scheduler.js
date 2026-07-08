@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { pushToOwner } from "./telegram.js";
 import { buildMorningReport } from "./morning.js";
+import { ceoHomeReport } from "./engines/ceoHome.js";
 import { listTasks } from "./mcp.js";
 import { hasOperational } from "./config.js";
 import { parseTaskLines, groupReport, isOverdue } from "./taskparse.js";
@@ -18,11 +19,17 @@ import { audit } from "./audit.js";
  */
 export function startScheduler() {
   cron.schedule("0 9 * * *", async () => {
+    // PROACTIVE MODE — CEO Home (Health Score + riscuri) intai: pagina de dimineata.
+    if (hasOperational) {
+      try {
+        await pushToOwner(await ceoHomeReport());
+      } catch (e) { console.error("[cron09-ceo]", e.message); }
+    }
     try {
       const report = await buildMorningReport();
       await pushToOwner(report);
       await snapshotTasks(); // sincronizam snapshot-ul ca DIFF-ul de la 17:00 sa fie corect
-      await audit("cron_raport_09", "raport complet trimis", "scheduler");
+      await audit("cron_raport_09", "CEO Home + raport complet trimise", "scheduler");
     } catch (e) {
       console.error("[cron09]", e.message);
     }

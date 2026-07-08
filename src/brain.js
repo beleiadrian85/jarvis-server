@@ -115,7 +115,7 @@ export async function handleMessage(channel, text) {
 
   // 1.5) Financial Brain — cash forecast / necesar de plati (determinist).
   if (hasOperational && isCashForecastTopic(text)) {
-    const rep = await cashForecastReport();
+    const rep = await cashForecastReport({ openingBalance: extractBalance(text) });
     await audit("cash_forecast", "prognoza cash generata", "operational:list_payment_obligations");
     remember(channel, text, rep);
     return { reply: rep };
@@ -123,7 +123,7 @@ export async function handleMessage(channel, text) {
 
   // 1.6) CEO Home — starea firmei intr-un ecran + Health Score.
   if (hasOperational && isCeoHomeTopic(text)) {
-    const rep = await ceoHomeReport();
+    const rep = await ceoHomeReport({ openingBalance: extractBalance(text) });
     await audit("ceo_home", "CEO Home generat", "operational:cash+sales+tasks");
     remember(channel, text, rep);
     return { reply: rep };
@@ -428,6 +428,26 @@ function isRiskTopic(text) {
 function isCeoHomeTopic(text) {
   const n = norm(text);
   return /(\/?ceo\b|ceo home|ceo mode|starea firmei|cum st[aă] firma|cum st[aă]m|dashboard|acas[aă]|sumar firm|health score|scor.*firm|unde st[aă]m)/.test(n);
+}
+
+// Extrage soldul curent din mesaj ("cu 200000 in cont", "sold 150.000",
+// "1,5 mil", "250 mii", "1.500.000").
+function extractBalance(text) {
+  const n = norm(text);
+  let m = n.match(/(?:sold|cont|banc[aă]|am|cu)\D{0,10}([\d][\d.,]*)\s*(mii|mil(?:ioane)?|k)?/);
+  if (!m) m = n.match(/([\d][\d.,]*)\s*(mii|mil(?:ioane)?|k)\b/);
+  if (!m) m = n.match(/([\d][\d.,]{3,})\s*(?:lei\s+)?(?:in|din)\s+(?:cont|banc)/);
+  if (!m) return null;
+  const raw = m[1];
+  const unit = m[2];
+  const mul = unit === "mii" || unit === "k" ? 1000 : unit && /mil/.test(unit) ? 1_000_000 : 1;
+  let num;
+  if (mul !== 1 && /^\d{1,3}([.,]\d{1,3})?$/.test(raw)) num = Number(raw.replace(",", ".")); // zecimal cu unitate
+  else num = Number(raw.replace(/\./g, "").replace(",", ".")); // puncte = mii
+  if (!isFinite(num)) return null;
+  num *= mul;
+  if (mul === 1 && num < 1000) return null; // fara unitate, cifre mici = nu e sold
+  return num > 0 ? num : null;
 }
 
 // Intentie de cash forecast / necesar de plati → Financial Brain determinist.

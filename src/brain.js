@@ -8,6 +8,7 @@ import { prepareTaskCreate, prepareCalendarEvent, takePending, executeConfirmed 
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
+import { cashForecastReport } from "./engines/financialBrain.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
@@ -107,6 +108,14 @@ export async function handleMessage(channel, text) {
     await audit("raport", "raport de dimineata generat", "vreme+calendar+gmail+operational+reminders");
     remember(channel, text, report);
     return { reply: report };
+  }
+
+  // 1.5) Financial Brain — cash forecast / necesar de plati (determinist).
+  if (hasOperational && isCashForecastTopic(text)) {
+    const rep = await cashForecastReport();
+    await audit("cash_forecast", "prognoza cash generata", "operational:list_payment_obligations");
+    remember(channel, text, rep);
+    return { reply: rep };
   }
 
   // 2) Remindere: rezolvat / amana / ignora #id.
@@ -355,6 +364,14 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
+}
+
+// Intentie de cash forecast / necesar de plati → Financial Brain determinist.
+function isCashForecastTopic(text) {
+  const n = norm(text);
+  if (/(forecast|cash ?flow|flux (de )?numerar|necesar (de )?(cash|bani|plat[aei])|situatie financiara|proiectie cash|scadentar|cat.*(am de plat|trebuie sa plat))/.test(n)) return true;
+  if (/prognoz/.test(n) && /(cash|plat[aei]|bani|financiar|lichiditat)/.test(n)) return true;
+  return false;
 }
 
 // Intentie despre email (cautare/citire in Gmail).

@@ -20,6 +20,7 @@ export function parseTaskLines(raw) {
       id: l.match(/\[id:([^\]]+)\]/)?.[1] || null,
       priority: l.match(/\]\s*\[(\w+)\]/)?.[1] || "",
       status: l.match(/status:\s*(\w+)/)?.[1] || "",
+      project: l.match(/—\s*([^—]+?)\s*—\s*status:/)?.[1]?.trim() || "",
       deadline: l.match(/termen:\s*([\d-]+)/)?.[1] || "",
       assignee: l.match(/responsabil:\s*([^—]+?)\s*—/)?.[1]?.trim() || "",
       title: l.match(/\]\s*\[\w+\]\s*(.+?)\s*—/)?.[1]?.trim() || l.trim(),

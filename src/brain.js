@@ -10,6 +10,7 @@ import { findEmail, createDraft, searchThreads, readThread } from "./sources/gma
 import { buildMorningReport } from "./morning.js";
 import { cashForecastReport } from "./engines/financialBrain.js";
 import { ceoHomeReport, riskReport } from "./engines/ceoHome.js";
+import { projectIntelReport } from "./engines/projectIntel.js";
 import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
@@ -131,6 +132,14 @@ export async function handleMessage(channel, text) {
   if (hasOperational && isRiskTopic(text)) {
     const rep = await riskReport();
     await audit("risk_engine", "riscuri evaluate", "operational:cash+tasks+sales");
+    remember(channel, text, rep);
+    return { reply: rep };
+  }
+
+  // 1.8) Project Intelligence — cost/task-uri/vanzari pe proiecte.
+  if (hasOperational && isProjectTopic(text)) {
+    const rep = await projectIntelReport();
+    await audit("project_intel", "raport proiecte generat", "operational:project_costs+tasks+sales");
     remember(channel, text, rep);
     return { reply: rep };
   }
@@ -381,6 +390,12 @@ function remember(channel, userText, assistantText) {
 function isOperationalTopic(text) {
   const n = norm(text);
   return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
+}
+
+// Intentie Project Intelligence → raport pe proiecte.
+function isProjectTopic(text) {
+  const n = norm(text);
+  return /(project intelligence|proiectele|toate proiectele|status(ul)? proiect|situati[ae] proiect|cum st(a|au) proiect|raport proiect|costuri pe proiect)/.test(n);
 }
 
 // Intentie riscuri → Risk Engine.

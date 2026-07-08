@@ -254,6 +254,15 @@ export async function handleMessage(channel, text) {
     return { reply: await makeDraft(drf[1].trim()) };
   }
 
+  // 7.5) Pagina web noua (Google). HUD-ul deschide fila pe device (openUrl);
+  // pe Telegram ramane link apasabil in text.
+  const web = parseOpenWebPage(text, channel);
+  if (web) {
+    await audit("pagina_web", web.url, "deschidere browser", true);
+    remember(channel, text, web.reply);
+    return { reply: web.reply, openUrl: web.url };
+  }
+
   // 8) Chat general cu memorie.
   return { reply: await generalChat(channel, text) };
 }
@@ -509,6 +518,31 @@ async function handleEmailQuery(channel, text) {
   });
   remember(channel, text, answer);
   return answer;
+}
+
+// Intentie "porneste/deschide o pagina (noua) de internet cu Google [si cauta X]".
+// Serverul nu are ecran — HUD-ul primeste openUrl si deschide fila la Adi pe device.
+function parseOpenWebPage(text, channel) {
+  const n = norm(text);
+  const verb = /(pornes(te|ti)|porniti|deschi(d|zi)|acces(eaza|ezi)|lans(eaza|ezi)|start(eaza|ezi))/.test(n);
+  const target = /(google|motorul de cautare|pagina (noua )?(de )?(internet|net|web)|fila noua|tab nou|browser)/.test(n);
+  if (!verb || !target) return null;
+
+  // Cautare ceruta explicit: "... si cauta <ceva>". ("cautare" din
+  // "motorul de cautare" nu se potriveste — \s+ cere verbul "cauta").
+  const q = text
+    .match(/\bcaut[aăe]\s+(?:pe\s+google\s+)?(?:dup[aă]\s+)?(.+?)\s*[.?!]*\s*$/i)?.[1]
+    ?.trim() || null;
+
+  const url = q
+    ? "https://www.google.com/search?q=" + encodeURIComponent(q)
+    : "https://www.google.com/";
+  const what = q ? `Google cu căutarea „${q}”` : "Google";
+  const reply =
+    channel === "hud"
+      ? `🌐 Deschid ${what} într-o filă nouă. Dacă browserul o blochează, folosește linkul de sub mesaj.`
+      : `🌐 Ți-am pregătit ${what} — deschide pagina de aici:\n${url}`;
+  return { url, reply };
 }
 
 // Intentie de calendar / alarma (eveniment de programat).

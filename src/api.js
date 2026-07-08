@@ -188,9 +188,9 @@ export function registerApi(app) {
     const text = String(req.body?.text ?? extractLastUser(req.body?.messages) ?? "").trim();
     if (!text) return res.status(400).json({ error: "text lipsa." });
     try {
-      const { reply, confirmId } = await handleMessage("hud", text);
+      const { reply, confirmId, openUrl } = await handleMessage("hud", text);
       const { text: shown, voice } = splitVoice(reply);
-      res.json({ reply: shown, voice, confirmId: confirmId || null });
+      res.json({ reply: shown, voice, confirmId: confirmId || null, openUrl: openUrl || null });
     } catch (e) {
       console.error("[api/chat]", e.message);
       res.status(502).json({ error: "Eroare la nucleu." });

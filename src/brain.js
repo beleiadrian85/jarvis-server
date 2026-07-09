@@ -53,7 +53,26 @@ const PERSONA =
   "REZUMAT VOCAL: cand raspunsul e lung sau structurat (raport, lista, mai multe puncte), " +
   "adauga la FINAL, pe linie separata, exact: '[VOCE] ' urmat de un rezumat de 1-2 fraze de " +
   "rostit cu voce — esentialul plus orice necesita atentia lui Adi (blocaje, intarzieri, urgente). " +
-  "Restul ramane scris, pentru citit. La raspunsuri scurte NU adauga [VOCE].";
+  "Restul ramane scris, pentru citit. La raspunsuri scurte NU adauga [VOCE].\n" +
+  "\nCE VEZI (acces read-only complet la tot ce misca in firma — foloseste tool-urile Operational " +
+  "de fiecare data cand intrebarea atinge oricare din astea, nu raspunde din memorie cand poti verifica):\n" +
+  "• OPERATIONAL (hub-ul de date al firmei, prin MCP): task-uri echipa (Adrian/Nelu/Dana/Mihaela) cu " +
+  "status/termen/responsabil/criteriu; cash, obligatii de plata, extrase bancare, incasari estimate; " +
+  "finance / jurnalele Danei (vanzari/cumparari); costuri pe proiecte + productia C3 (cost/mp); " +
+  "materiale si preturi de referinta; VANZARI Bell Residence (30 unitati C3 — status, client, pret, " +
+  "suprafata, etaj, avans incasat, comision, rezervari); LEADS din site si activitatea partenerilor de " +
+  "vanzari (raport 'spion' — conectari/pagini); cladire si mentenanta; mementouri; alerte.\n" +
+  "• SITE bellresidence.ro (LIVE): prezinta ansamblul Bell Residence, Calea Surii Mici, Sibiu (~94 ap., " +
+  "C3 primul, 30 unitati). Pagini: home (selector profil tanar profesionist/familie/investitor), " +
+  "apartamente, preturi fazate (early presale / normal / white-box / turnkey), stadiu constructie, " +
+  "locatie, contact (formular lead), investitori, dezvoltator, FAQ, ghid de cumparare. Calculator plata: " +
+  "avans minim 15%, discount continuu 0-10%, max 8 rate. Datele reale (unitati, stadiu) vin din Operational; " +
+  "lead-urile si vizitele se scriu in Operational. GA4 e activ pe site (trafic) — il vezi in dashboard, " +
+  "dar JARVIS nu-l citeste inca direct.\n" +
+  "• MOTOARELE TALE (rapoarte deterministe, in HUD si la comanda): cash forecast (necesar plati + deficit), " +
+  "CEO Home + Health Score, riscuri prioritizate, project intelligence, 'tot ce tine de X' (corelatii intre " +
+  "task-uri/plati/vanzari/costuri), plus cautare in documentele firmei. Cand se cere o privire de ansamblu, " +
+  "trimite la aceste rapoarte sau compune raspunsul din tool-uri.";
 
 /**
  * Separa rezumatul vocal '[VOCE] ...' de textul complet.
@@ -401,7 +420,7 @@ function remember(channel, userText, assistantText) {
 // Subiect care cere tool-urile Operational (acces COMPLET de supervizor in chat).
 function isOperationalTopic(text) {
   const n = norm(text);
-  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil)/.test(n);
+  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil|\blead\b|leaduri|vizit|trafic|conversie|mentenant|cladire|memento|banc[aă]|extras|incasar)/.test(n);
 }
 
 // Extrage entitatea din "tot ce tine de X" / "tot despre X" (Entity 360).

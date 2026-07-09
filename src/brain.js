@@ -8,6 +8,7 @@ import { prepareTaskCreate, prepareCalendarEvent, executeConfirmed } from "./tas
 import { getPendingForChannel, confirmActionById, cancelActionById } from "./approvalGate.js";
 import { classify } from "./decisionEngine.js";
 import { fastReply } from "./fastPathRouter.js";
+import { operationalFast } from "./operationalFastPath.js";
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
@@ -249,6 +250,14 @@ export async function handleMessage(channel, text) {
       return { reply: capabilityClarify(decision.reason.split(":")[1]) };
     }
     // strategy (inactiv) / operational_read / simple → chat Claude existent (identic).
+  }
+
+  // 8.7) Operational fast path (O2) — task-uri determinist, fara Claude+MCP server-side.
+  const opFast = await operationalFast(text);
+  if (opFast) {
+    console.log(`[timing] route=operationalFastPath total=${Date.now() - t0}ms`);
+    remember(channel, text, opFast);
+    return { reply: opFast };
   }
 
   // Chat general cu memorie.

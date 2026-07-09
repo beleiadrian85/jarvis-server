@@ -771,8 +771,8 @@ const STOP_WORDS = ["stop", "opreste", "oprește", "oprește-te", "opreste-te", 
 // microfonul cu anulare de ecou; daca utilizatorul incepe sa vorbeasca, opresc
 // vocea si trec la ascultare. Nu ruleaza in paralel cu recunoasterea.
 let bargeStream = null, bargeCtx = null, bargeRAF = null;
-const BARGE_RMS = 0.055;   // pragul de volum al vocii (peste ecoul rezidual)
-const BARGE_FRAMES = 5;    // cadre consecutive „tare" → e vorbire reala
+const BARGE_RMS = 0.04;    // pragul de volum al vocii (mai sensibil)
+const BARGE_FRAMES = 3;    // cadre consecutive „tare" → e vorbire reala
 async function startBargeMonitor(onBarge) {
   stopBargeMonitor();
   try {
@@ -795,7 +795,7 @@ async function startBargeMonitor(onBarge) {
       let sum = 0;
       for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
       const rms = Math.sqrt(sum / buf.length);
-      if (frame > 20 && rms > BARGE_RMS) loud++; else loud = Math.max(0, loud - 1); // ~350ms gratie
+      if (frame > 12 && rms > BARGE_RMS) loud++; else loud = Math.max(0, loud - 1); // ~200ms gratie
       if (loud >= BARGE_FRAMES) { stopBargeMonitor(); onBarge(); return; }
       bargeRAF = requestAnimationFrame(tick);
     };
@@ -839,19 +839,54 @@ function startSession() {
   sayAndListen(GREETING);
 }
 
+// Ascultare PROACTIVA: recunoastere continua + rezultate interimare. Nu te mai
+// taie dupa o fraza — asculta neintrerupt si decide sfarsitul de tura pe ~0,9s
+// de tacere. Se re-armeaza singur daca browserul inchide sesiunea.
+const SILENCE_MS = 900;
+let finalBuf = "", lastInterim = "", silenceTimer = null;
+
 if (SR) {
   rec = new SR();
-  rec.lang = "ro-RO"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
-  rec.onresult = onVoiceResult;
+  rec.lang = "ro-RO"; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
+  rec.onresult = (e) => {
+    if (!conv.active || conv.state !== "listening") return;
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalBuf += r[0].transcript + " ";
+      else interim += r[0].transcript;
+    }
+    lastInterim = interim;
+    if (finalBuf.trim() || interim.trim()) {
+      setReactor("listening");
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(endOfTurn, SILENCE_MS); // ai facut pauza → procesam
+    }
+  };
   rec.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       stopConv(); addMsg("error", "", "Microfon blocat. Permite accesul la microfon în browser.");
     }
-    // no-speech / aborted / network → onend reia ascultarea
+    // no-speech / aborted / network → onend re-armeaza ascultarea
   };
-  rec.onend = () => { if (conv.active && conv.state === "listening") setTimeout(beginListen, 200); };
+  rec.onend = () => {
+    // In continuu, onend apare la stop() sau cand browserul inchide sesiunea.
+    // Daca inca ascultam (n-am inceput procesarea), re-armam imediat — proactiv.
+    if (conv.active && conv.state === "listening") setTimeout(() => { if (conv.active && conv.state === "listening") beginListen(); }, 60);
+  };
   btnMic.addEventListener("click", () => conv.active ? stopConv() : startConv());
 } else { btnMic.style.display = "none"; }
+
+// Sfarsit de tura: dupa tacere, procesam fraza intreaga acumulata.
+function endOfTurn() {
+  clearTimeout(silenceTimer);
+  const said = (finalBuf.trim() || lastInterim.trim());
+  finalBuf = ""; lastInterim = "";
+  if (!said) return;                 // tacere fara text clar → ramanem in ascultare
+  conv.state = "processing";
+  try { rec.stop(); } catch {}
+  handleUtterance(said);
+}
 
 function startConv() {
   conv.active = true; conv.pendingConfirm = null; micUI();
@@ -861,6 +896,7 @@ function startConv() {
 function stopConv(silent) {
   conv.active = false; conv.state = "idle"; conv.pendingConfirm = null; micUI();
   setReactor("idle");
+  clearTimeout(silenceTimer);
   try { rec && rec.abort(); } catch {}
   shutUp();
   if (!silent) addMsg("jarvis", "JARVIS", "Mod conversație oprit.");
@@ -868,22 +904,22 @@ function stopConv(silent) {
 function beginListen() {
   if (!conv.active) return;
   conv.state = "listening"; setReactor("listening");
-  try { rec.start(); } catch {}
+  finalBuf = ""; lastInterim = ""; clearTimeout(silenceTimer);
+  try { rec.start(); } catch {}      // daca e deja pornit, ignoram eroarea
 }
 // Intrerupere: utilizatorul a inceput sa vorbeasca peste Jarvis.
 function onBargeIn() {
   shutUp(); // opreste vocea imediat
-  setTimeout(() => { if (conv.active) beginListen(); }, 150); // elibereaza micul, apoi asculta
+  setTimeout(() => { if (conv.active) beginListen(); }, 110); // elibereaza micul, apoi asculta
 }
 // Vorbire in conversatie, cu detectie de intrerupere (barge-in).
 function sayAndListen(text) {
   conv.state = "speaking"; setReactor("speaking");
   if (conv.active) startBargeMonitor(onBargeIn);
-  speak(text, () => { stopBargeMonitor(); setTimeout(() => { if (conv.active) beginListen(); }, 120); });
+  speak(text, () => { stopBargeMonitor(); setTimeout(() => { if (conv.active) beginListen(); }, 80); });
 }
 
-function onVoiceResult(e) {
-  const said = (e.results[0][0].transcript || "").trim();
+function handleUtterance(said) {
   if (!said) return;
   const norm = said.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 

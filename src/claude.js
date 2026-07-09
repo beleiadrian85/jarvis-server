@@ -7,6 +7,7 @@ const MCP_BETA = "mcp-client-2025-11-20";
  * Apel Claude simplu (fara tools).
  */
 export async function callClaude({ system, messages, maxTokens = 1024, model }) {
+  const t0 = Date.now();
   const res = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -26,6 +27,7 @@ export async function callClaude({ system, messages, maxTokens = 1024, model }) 
     throw new Error(`Claude API ${res.status}: ${t}`);
   }
   const data = await res.json();
+  console.log(`[timing] claude model=${(model || config.model).replace(/^claude-/, "")} ms=${Date.now() - t0}`);
   return extractText(data);
 }
 
@@ -37,6 +39,7 @@ export async function callClaude({ system, messages, maxTokens = 1024, model }) 
  * webSearch: true → Claude poate cauta pe net singur (max 4 cautari).
  */
 export async function callClaudeWithMCP({ system, messages, mcpServers = [], webSearch = false, maxTokens = 1500, model }) {
+  const t0 = Date.now();
   const tools = [
     ...mcpServers.map((s) => ({ type: "mcp_toolset", mcp_server_name: s.name })),
     ...(webSearch ? [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }] : []),
@@ -73,6 +76,7 @@ export async function callClaudeWithMCP({ system, messages, mcpServers = [], web
     throw new Error(`Claude tools API ${res.status}: ${t}`);
   }
   const data = await res.json();
+  console.log(`[timing] claude+tools mcp=${mcpServers.length > 0} web=${webSearch} ms=${Date.now() - t0}`);
   return extractText(data);
 }
 

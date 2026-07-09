@@ -7,6 +7,7 @@ import { activeReminders, settleReminder, formatReminders, addReminder } from ".
 import { prepareTaskCreate, prepareCalendarEvent, executeConfirmed } from "./taskflow.js";
 import { getPendingForChannel, confirmActionById, cancelActionById } from "./approvalGate.js";
 import { classify } from "./decisionEngine.js";
+import { fastReply } from "./fastPathRouter.js";
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
@@ -55,6 +56,7 @@ const WAKE = ["buna dimineata jarvis", "buna dimineata", "neata jarvis"];
 let userMsgCounter = 0;
 
 export async function handleMessage(channel, text) {
+  const t0 = Date.now(); // L6 — cronometru pentru fast-path
   const n = norm(text);
 
   // 0) Confirmare/anulare actiune in asteptare (text, pentru HUD si Telegram).
@@ -232,6 +234,13 @@ export async function handleMessage(channel, text) {
     return { reply: await makeDraft(drf[1].trim()) };
   }
 
+  // 7.9) FAST PATH (L1) — raspuns instant, fara Claude/MCP/recall/embedding.
+  const fast = fastReply(text);
+  if (fast !== null) {
+    console.log(`[timing] route=fastPath total=${Date.now() - t0}ms`);
+    return { reply: fast };
+  }
+
   // 8) Coada deciziei — brain intreaba decisionEngine (fast-path-ul de sus ramane intact).
   //    Gated de flag: cu DECISION_ENGINE=off (implicit) → comportament identic cu inainte.
   if (config.useDecisionEngine) {
@@ -292,10 +301,12 @@ async function makeDraft(request) {
 }
 
 async function generalChat(channel, text) {
+  const gt0 = Date.now();        // L6 — cronometre generalChat
+  const T = {}, th = Date.now();
   const [ctx, memories, reminders] = await Promise.all([
-    getContext(),
-    recall(text),
-    activeReminders(5),
+    getContext().then((r) => { T.history = Date.now() - th; return r; }),
+    recall(text).then((r) => { T.recall = Date.now() - th; return r; }),
+    activeReminders(5).then((r) => { T.reminders = Date.now() - th; return r; }),
   ]);
 
   let system = PERSONA;
@@ -316,6 +327,7 @@ async function generalChat(channel, text) {
   const useOperational = hasOperational && isOperationalTopic(text);
   const useWeb = needsWeb(text);
 
+  const tc = Date.now();
   let reply;
   if (useOperational || useWeb) {
     if (useWeb) {
@@ -352,6 +364,7 @@ async function generalChat(channel, text) {
     // Cale rapida: fara tool-uri.
     reply = await callClaude({ model: CHAT_MODEL, system, messages, maxTokens: 800 });
   }
+  T.claude = Date.now() - tc;
   reply = reply || "…";
 
   // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.
@@ -363,6 +376,8 @@ async function generalChat(channel, text) {
   }
 
   remember(channel, text, reply);
+  const lbl = useOperational ? "claude+mcp" : useWeb ? "claude+web" : "claude";
+  console.log(`[timing] route=generalChat recall=${T.recall}ms history=${T.history}ms reminders=${T.reminders}ms ${lbl}=${T.claude}ms total=${Date.now() - gt0}ms`);
   return reply;
 }
 

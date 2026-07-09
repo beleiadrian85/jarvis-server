@@ -63,6 +63,9 @@ export const config = {
   // D3 — rutare strategie (ChatGPT). Implicit OFF → ChatGPT ramane inactiv.
   strategyRouting: process.env.STRATEGY_ROUTING === "on",
 
+  // C3 — gate pentru conectarea decisionEngine. Implicit OFF → comportament identic.
+  useDecisionEngine: process.env.DECISION_ENGINE === "on",
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

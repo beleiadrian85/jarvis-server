@@ -3,6 +3,7 @@ import {
   isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, isStrategicTopic,
 } from "./intents.js";
 import { norm } from "./lib/text.js";
+import { getCapabilities } from "./capabilities.js";
 
 /**
  * D1 — decisionEngine: clasificator PUR si SINCRON al caii de rutare.
@@ -34,8 +35,9 @@ function decision(route, extra = {}) {
   };
 }
 
-export function classify(text, ctx = {}) {
+export function classify(text, ctx = {}, opts = {}) {
   const n = norm(text);
+  const caps = opts.capabilities || getCapabilities();
   const hasOp = !!ctx.hasOperational;
   const hasGoogle = !!ctx.hasGoogle;
   const hasStrategy = !!ctx.hasStrategy;
@@ -84,13 +86,31 @@ export function classify(text, ctx = {}) {
   if (/caut[aă]\s+[iî]n\s+drive[:\s]/.test(n))
     return decision("drive", { reason: "cautare in drive" });
 
-  // 7) Strategie. ChatGPT cand e activ; altfel fallback pe Claude (ChatGPT INACTIV).
+  // 6.5) Draft raspuns email (Nivel 2 — creeaza draft in Gmail, ca in brain.js step 7).
+  if (/draft(?:\s+raspuns)?(?:\s+la)?[:\s]/.test(n))
+    return decision("draft", { reason: "draft raspuns email" });
+
+  // 7) Strategie. Gata pe CAPABILITY: ChatGPT doar daca strategy e disponibila;
+  //    altfel ruta ramane "strategy" dar inactiva → fallback Claude (ChatGPT INACTIV).
   if (isStrategicTopic(text))
-    return decision("strategy", { provider: hasStrategy ? "chatgpt" : "claude", active: hasStrategy, reason: "intrebare strategica" });
+    return decision("strategy", caps.strategy
+      ? { provider: "chatgpt", active: true, reason: "intrebare strategica" }
+      : { provider: "claude", active: false, reason: "strategy_disabled" });
 
   // 8) Operational read-only (chat cu MCP de citire — cf. A1).
   if (hasOp && isOperationalTopic(text))
     return decision("operational_read", { reason: "intrebare operationala (read-only)" });
+
+  // 8.5) Capabilitati cerute EXPLICIT dar indisponibile → clarificare (nu inventa).
+  //      Plasat DUPA toate rutele existente → pur aditiv, zero regresii pe deciziile de sus.
+  if (!caps.railwayLogs && /(railway|loguri|logurile|\blogs?\b)/.test(n))
+    return decision("clarify", { reason: "capability_missing:railwayLogs" });
+  if (!caps.ga4 && /(google analytics|\banalytics\b|\bga4\b)/.test(n))
+    return decision("clarify", { reason: "capability_missing:ga4" });
+  if (!caps.searchConsole && /search console/.test(n))
+    return decision("clarify", { reason: "capability_missing:searchConsole" });
+  if (!caps.banking && /(\bbanking\b|extras(e|ul)? bancar)/.test(n))
+    return decision("clarify", { reason: "capability_missing:banking" });
 
   // 9) Chat simplu (fara tool-uri). Web search se decide in handler.
   return decision("simple", { reason: needsWeb(text) ? "chat + web" : "chat simplu" });

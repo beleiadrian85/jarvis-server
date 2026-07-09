@@ -1,11 +1,12 @@
 import { callClaude, callClaudeWithMCP } from "./claude.js";
-import { config, hasOperational, hasGoogle } from "./config.js";
+import { config, hasOperational, hasGoogle, hasStrategy } from "./config.js";
 import { pool, query } from "./db.js";
 import { appendMessage, getContext, maybeSummarize } from "./history.js";
 import { recall, saveMemory, saveDecision, listDecisions, extractFacts } from "./memory.js";
 import { activeReminders, settleReminder, formatReminders, addReminder } from "./reminders.js";
 import { prepareTaskCreate, prepareCalendarEvent, executeConfirmed } from "./taskflow.js";
 import { getPendingForChannel, confirmActionById, cancelActionById } from "./approvalGate.js";
+import { classify } from "./decisionEngine.js";
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
@@ -231,7 +232,17 @@ export async function handleMessage(channel, text) {
     return { reply: await makeDraft(drf[1].trim()) };
   }
 
-  // 8) Chat general cu memorie.
+  // 8) Coada deciziei — brain intreaba decisionEngine (fast-path-ul de sus ramane intact).
+  //    Gated de flag: cu DECISION_ENGINE=off (implicit) → comportament identic cu inainte.
+  if (config.useDecisionEngine) {
+    const decision = classify(text, { hasOperational, hasGoogle, hasStrategy });
+    if (decision.route === "clarify" && decision.reason.startsWith("capability_missing:")) {
+      return { reply: capabilityClarify(decision.reason.split(":")[1]) };
+    }
+    // strategy (inactiv) / operational_read / simple → chat Claude existent (identic).
+  }
+
+  // Chat general cu memorie.
   return { reply: await generalChat(channel, text) };
 }
 
@@ -426,6 +437,17 @@ async function handleEmailQuery(channel, text) {
 }
 
 // isCalendarTopic, needsWeb, guessCategory sunt in ./intents.js (B3).
+
+// C3 — mesaje oneste cand o capabilitate ceruta nu e (inca) conectata.
+function capabilityClarify(cap) {
+  const M = {
+    railwayLogs: "Logurile de pe Railway nu-s conectate încă la mine — nu le pot citi direct. Le vezi în dashboard-ul Railway.",
+    ga4: "Google Analytics nu e citit direct de mine încă. E activ pe site — îl vezi în dashboard-ul GA4.",
+    searchConsole: "Search Console nu e conectat încă la mine.",
+    banking: "Datele bancare nu-s conectate la mine (nu citesc și nu execut plăți). Pot pregăti datele unei plăți, dar execuția e la tine în aplicația băncii.",
+  };
+  return M[cap] || "Asta încă nu e conectat la mine.";
+}
 
 // Folosit de gmail la clasificare → reminders; reexportat pentru scheduler (Faza 3).
 export { addReminder };

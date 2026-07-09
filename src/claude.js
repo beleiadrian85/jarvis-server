@@ -64,9 +64,9 @@ export async function callClaudeWithMCP({ system, messages, mcpServers = [], web
       url: s.url,
       name: s.name,
       ...(s.authorization_token ? { authorization_token: s.authorization_token } : {}),
-      // A1: allowlist de tool-uri (ex. read-only pe calea de chat). Fara ea,
-      // serverul expune toate tool-urile (comportamentul anterior).
-      ...(s.allowedTools ? { tool_configuration: { allowed_tools: s.allowedTools } } : {}),
+      // NOTA: allowlist de tool-uri (read-only) NU se trimite prin tool_configuration —
+      // beta mcp-client-2025-11-20 il respinge (400). Read-only ramane impus prin prompt
+      // (A1). Reimplementare corecta a allowlist-ului via mcp_toolset = TODO separat.
     }));
   }
 

@@ -82,17 +82,40 @@ export function registerApi(app) {
         calendar: hasCalendar,
         memory: hasDb,
         voice: hasVoice,
-        stt: !!config.deepgramKey,
+        stt: !!(config.openaiKey || config.deepgramKey),
       },
       city: config.weather.city,
     });
   });
 
-  // Transcriere audio (Deepgram, ro) — upgrade peste recunoasterea din browser.
+  // Transcriere audio — OpenAI Whisper preferat, Deepgram fallback.
   app.post("/api/transcribe", async (req, res) => {
     const { data, mediaType } = req.body || {};
     if (!data) return res.status(400).json({ error: "audio lipsa." });
-    if (!config.deepgramKey) return res.status(503).json({ error: "deepgram neconfigurat." });
+    if (!config.openaiKey && !config.deepgramKey) return res.status(503).json({ error: "STT neconfigurat." });
+
+    // 1) OpenAI Whisper (multipart).
+    if (config.openaiKey) {
+      try {
+        const buf = Buffer.from(data, "base64");
+        const ext = { "audio/webm": "webm", "audio/mp4": "mp4", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/ogg": "ogg" }[mediaType] || "webm";
+        const form = new FormData();
+        form.append("file", new Blob([buf], { type: mediaType || "audio/webm" }), "audio." + ext);
+        form.append("model", config.openaiSttModel);
+        form.append("language", "ro");
+        const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST", headers: { authorization: "Bearer " + config.openaiKey }, body: form,
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(`whisper ${r.status}: ${JSON.stringify(d).slice(0, 160)}`);
+        return res.json({ text: d.text || "" });
+      } catch (e) {
+        console.error("[api/transcribe] OpenAI esuat, incerc Deepgram:", e.message);
+      }
+    }
+
+    // 2) Deepgram (fallback).
+    if (!config.deepgramKey) return res.status(502).json({ error: "Transcrierea a esuat." });
     try {
       // Termeni proprii impulsionati ca Deepgram sa-i recunoasca (nume, proiecte).
       const kw = (config.sttKeywords || "Nelu:3,Dana:3,Mihaela:2,Adrian:2,firida:3,Hipodromului:3,Marșa:3,EMCO:3,Colliers:2,Infosys:2,Bell Residence:3,Sibiu:2,Jarvis:3,task:2,santier:2")

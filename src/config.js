@@ -54,6 +54,12 @@ export const config = {
   elevenVoiceId: process.env.ELEVENLABS_VOICE_ID || "",
   sttKeywords: process.env.STT_KEYWORDS || "",
 
+  // OpenAI — voce (TTS + Whisper STT). Preferat, cu fallback pe ElevenLabs/Deepgram.
+  openaiKey: process.env.OPENAI_API_KEY || "",
+  openaiTtsVoice: process.env.OPENAI_TTS_VOICE || "alloy",
+  openaiTtsModel: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
+  openaiSttModel: process.env.OPENAI_STT_MODEL || "gpt-4o-mini-transcribe",
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

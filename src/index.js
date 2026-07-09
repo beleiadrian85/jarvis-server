@@ -9,6 +9,7 @@ import { startBackupSchedule } from "./backup.js";
 import { startScheduler } from "./scheduler.js";
 import { startNotifier } from "./notifier.js";
 import { startMonitor } from "./monitor.js";
+import { expireOldActions } from "./approvalGate.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,6 +36,9 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 // DB intai (memoria), apoi HTTP si bot.
 await initDb();
+
+// A2/A3: marcheaza expirate actiunile pending ramase de la un restart anterior.
+await expireOldActions().catch((e) => console.error("[approvalGate.expire]", e.message));
 
 app.listen(config.port, () => {
   console.log(`[http] pe :${config.port} (health: /health)`);

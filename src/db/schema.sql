@@ -78,3 +78,19 @@ CREATE TABLE IF NOT EXISTS notified (
 CREATE INDEX IF NOT EXISTS idx_conv_created ON conversations(id);
 CREATE INDEX IF NOT EXISTS idx_memories_cat ON memories(category) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status);
+
+-- A5: actiuni in asteptare de confirmare (persistente, inlocuiesc Map-ul din RAM).
+CREATE TABLE IF NOT EXISTS pending_actions (
+  id          TEXT PRIMARY KEY,
+  channel     TEXT NOT NULL,
+  type        TEXT NOT NULL,
+  payload     JSONB NOT NULL,
+  preview     TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at  TIMESTAMPTZ NOT NULL,
+  decided_at  TIMESTAMPTZ,
+  decision    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pending_channel_status
+  ON pending_actions(channel, status);

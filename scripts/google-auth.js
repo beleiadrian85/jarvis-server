@@ -7,6 +7,8 @@
  * pe http://localhost:8765 si iti afiseaza refresh token-ul.
  */
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
 
 const [clientId, clientSecret] = process.argv.slice(2);
 if (!clientId || !clientSecret) {
@@ -55,8 +57,21 @@ const server = http.createServer(async (req, res) => {
   });
   const d = await tokenRes.json();
   if (d.refresh_token) {
-    console.log("\n✅ GOOGLE_REFRESH_TOKEN:\n\n" + d.refresh_token + "\n\nSeteaza-l in Railway impreuna cu GOOGLE_CLIENT_ID si GOOGLE_CLIENT_SECRET.");
-    res.end("Gata! Refresh token-ul e in terminal. Poti inchide fereastra.");
+    // S2: nu afisam token-ul complet in terminal (ramane in scrollback/istoric).
+    // Il scriem intr-un fisier local cu permisiuni restranse si aratam doar o masca.
+    const token = d.refresh_token;
+    const masked = token.slice(0, 6) + "…" + token.slice(-4);
+    const outFile = path.resolve("google-refresh-token.local");
+    try {
+      fs.writeFileSync(outFile, `GOOGLE_REFRESH_TOKEN=${token}\n`, { mode: 0o600 });
+      fs.chmodSync(outFile, 0o600);
+    } catch (e) {
+      console.error("Nu am putut scrie fisierul local:", e.message);
+    }
+    console.log(`\n✅ Refresh token obtinut (${masked}).`);
+    console.log(`Scris in: ${outFile} (permisiuni 600).`);
+    console.log("Copiaza valoarea in Railway ca GOOGLE_REFRESH_TOKEN, apoi STERGE fisierul.");
+    res.end("Gata! Refresh token-ul e in fisierul local google-refresh-token.local (nu in terminal). Poti inchide fereastra.");
   } else {
     console.error("\n❌ Nu am primit refresh token:", JSON.stringify(d, null, 2));
     res.end("Eroare — vezi terminalul.");

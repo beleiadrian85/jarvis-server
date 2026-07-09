@@ -60,6 +60,9 @@ export const config = {
   openaiTtsModel: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
   openaiSttModel: process.env.OPENAI_STT_MODEL || "gpt-4o-mini-transcribe",
 
+  // D3 — rutare strategie (ChatGPT). Implicit OFF → ChatGPT ramane inactiv.
+  strategyRouting: process.env.STRATEGY_ROUTING === "on",
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {
@@ -87,3 +90,6 @@ export const hasGoogle = hasCalendar; // acelasi OAuth, trei scope-uri
 export const hasOperational = !!config.operationalMcpUrl;
 export const hasVault = !!(config.vault.path || (config.vault.repo && config.vault.token));
 export const hasDb = !!config.databaseUrl;
+
+// D3 — strategie activa DOAR daca exista cheie OpenAI SI rutarea e pornita explicit.
+export const hasStrategy = !!(config.openaiKey && config.strategyRouting);

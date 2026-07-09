@@ -1,34 +1,19 @@
-import crypto from "node:crypto";
 import { callClaude } from "./claude.js";
 import { createTask, updateTask } from "./mcp.js";
 import { createEvent } from "./sources/calendar.js";
 import { audit } from "./audit.js";
+import { proposeAction } from "./approvalGate.js";
 
 /**
  * Fluxuri cu confirmare pentru Operational:
  * - Nivel 2: creare task — parsare cu Claude, confirmare Da/Nu, creare directa prin MCP.
  * - Nivel 3: modificare task — intotdeauna confirmare inainte de executie.
- * Actiunile in asteptare traiesc in memorie (se pierd la restart — re-cere, nu e drama).
+ * Actiunile in asteptare se persista prin approvalGate (DB, cu fallback RAM) —
+ * supravietuiesc restart-ului (A2/A3).
  */
 
-const pending = new Map(); // id → {type:'create'|'update', payload, preview, expires}
-const TTL = 10 * 60 * 1000;
-
-function stash(type, payload, preview) {
-  const id = crypto.randomBytes(4).toString("hex");
-  pending.set(id, { type, payload, preview, expires: Date.now() + TTL });
-  return id;
-}
-
-export function takePending(id) {
-  const p = pending.get(id);
-  pending.delete(id);
-  if (!p || p.expires < Date.now()) return null;
-  return p;
-}
-
 /** "Jarvis, creeaza task: ..." → structura + confirmare. */
-export async function prepareTaskCreate(rawText) {
+export async function prepareTaskCreate(rawText, channel) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   let t;
   try {
@@ -55,12 +40,12 @@ export async function prepareTaskCreate(rawText) {
     `• Termen: ${t.deadline}\n` +
     `• Impact: ${t.impact || "-"}\n` +
     `• Descriere: ${t.description || "-"}`;
-  const id = stash("create", t, preview);
+  const id = await proposeAction(channel, "create", t, preview);
   return { id, preview };
 }
 
 /** "Pune-mi o intalnire / alarma / eveniment ..." → structura + confirmare. */
-export async function prepareCalendarEvent(rawText) {
+export async function prepareCalendarEvent(rawText, channel) {
   const now = new Date();
   const nowStr = now.toLocaleString("sv-SE", { timeZone: "Europe/Bucharest" }); // YYYY-MM-DD HH:mm:ss
   let ev;
@@ -101,14 +86,14 @@ export async function prepareCalendarEvent(rawText) {
     `• ${payload.title}\n• Când: ${when}` +
     (ev.isAlarm ? "\n• Notificare la ora exactă" : `\n• Durată: ${dur} min · notificare cu 10 min înainte`) +
     `\n\n(Se creează în Google Calendar și apare pe telefon.)`;
-  const id = stash("calendar", payload, preview);
+  const id = await proposeAction(channel, "calendar", payload, preview);
   return { id, preview };
 }
 
 /** Modificare task (Nivel 3) — pregateste si cere confirmare. */
-export function prepareTaskUpdate(args, humanSummary) {
+export async function prepareTaskUpdate(args, humanSummary, channel) {
   const preview = `✏️ MODIFICARE TASK (Nivel 3) — confirmi?\n\n${humanSummary}`;
-  const id = stash("update", args, preview);
+  const id = await proposeAction(channel, "update", args, preview);
   return { id, preview };
 }
 

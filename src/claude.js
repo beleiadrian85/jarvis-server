@@ -61,6 +61,9 @@ export async function callClaudeWithMCP({ system, messages, mcpServers = [], web
       url: s.url,
       name: s.name,
       ...(s.authorization_token ? { authorization_token: s.authorization_token } : {}),
+      // A1: allowlist de tool-uri (ex. read-only pe calea de chat). Fara ea,
+      // serverul expune toate tool-urile (comportamentul anterior).
+      ...(s.allowedTools ? { tool_configuration: { allowed_tools: s.allowedTools } } : {}),
     }));
   }
 

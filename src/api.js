@@ -12,6 +12,7 @@ import { buildAuthUrl, exchangeCode } from "./google.js";
 import { getRecent, appendMessage } from "./history.js";
 import { describeFile } from "./vision.js";
 import { saveMemory } from "./memory.js";
+import { rateLimit, isLockedOut, noteAuthFail, clearAuthFail } from "./ratelimit.js";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads";
 const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
@@ -30,13 +31,25 @@ function catFor(text) {
  */
 
 export function registerApi(app) {
+  // S5: pe Railway suntem in spatele unui proxy → req.ip corect.
+  app.set("trust proxy", 1);
+
+  // S5: limitatoare de rata (mono-instanta, in-memory).
+  const apiLimiter = rateLimit({ windowMs: 60_000, max: 60, prefix: "api" });         // 60/min
+  const authLimiter = rateLimit({ windowMs: 60 * 60_000, max: 10, prefix: "auth" });  // 10/ora
+
   // Parser cu limita mare pentru upload (poze/PDF) si audio (transcriere).
   app.use(["/api/upload", "/api/transcribe"], express.json({ limit: "16mb" }));
   app.use(express.json({ limit: "100kb" }));
 
   // Setup unic OAuth Google (Gmail/Calendar/Drive). Gateat cu PIN-ul (?k=).
-  app.get("/auth/google", (req, res) => {
-    if (req.query.k !== config.appSecret) return res.status(401).send("PIN gresit. Adauga ?k=PIN la link.");
+  app.get("/auth/google", authLimiter, (req, res) => {
+    if (isLockedOut(req.ip)) return res.status(429).send("Prea multe incercari. Reincearca peste 15 minute.");
+    if (req.query.k !== config.appSecret) {
+      noteAuthFail(req.ip);
+      return res.status(401).send("PIN gresit. Adauga ?k=PIN la link.");
+    }
+    clearAuthFail(req.ip);
     if (!config.google.clientId || !config.google.clientSecret) {
       return res.status(503).send("Lipsesc GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in Railway.");
     }
@@ -44,15 +57,16 @@ export function registerApi(app) {
     res.redirect(buildAuthUrl(redirectUri));
   });
 
-  app.get("/auth/google/callback", async (req, res) => {
+  app.get("/auth/google/callback", authLimiter, async (req, res) => {
     if (req.query.error) return res.status(400).send("Refuzat: " + req.query.error);
     if (!req.query.code) return res.status(400).send("Lipseste codul.");
     try {
       const redirectUri = `https://${req.get("host")}/auth/google/callback`;
       const tok = await exchangeCode(req.query.code, redirectUri);
       if (tok.refresh_token) {
-        console.log("[google] === GOOGLE_REFRESH_TOKEN ===\n" + tok.refresh_token + "\n=== copiaza-l in Railway ===");
-        res.send("<h2 style='font-family:sans-serif'>✅ Google conectat.</h2><p>Poți închide fila. Jarvis preia restul.</p>");
+        // S1: nu logam NICIODATA refresh token-ul (secret in logurile cloud).
+        console.log("[google] OAuth reusit — refresh token obtinut (nelogat, din motive de securitate).");
+        res.send("<h2 style='font-family:sans-serif'>✅ Google conectat.</h2><p>Poți închide fila. Pentru a seta <code>GOOGLE_REFRESH_TOKEN</code> în Railway, rulează local <code>node scripts/google-auth.js</code> (nu apare în loguri).</p>");
       } else {
         res.send("<h2 style='font-family:sans-serif'>⚠️ Fără refresh token.</h2><p>Revocă accesul aplicației în contul Google și reia /auth/google.</p>");
       }
@@ -62,14 +76,19 @@ export function registerApi(app) {
     }
   });
 
-  // Toate rutele /api cer PIN-ul (header x-jarvis-key).
-  app.use("/api", (req, res, next) => {
+  // Toate rutele /api cer PIN-ul (header x-jarvis-key) + rate-limit + lockout.
+  app.use("/api", apiLimiter, (req, res, next) => {
+    if (isLockedOut(req.ip)) {
+      return res.status(429).json({ error: "Prea multe incercari. Reincearca mai tarziu." });
+    }
     if (!config.appSecret) {
       return res.status(503).json({ error: "APP_SECRET nesetat pe server." });
     }
     if (req.get("x-jarvis-key") !== config.appSecret) {
+      noteAuthFail(req.ip);
       return res.status(401).json({ error: "PIN gresit." });
     }
+    clearAuthFail(req.ip);
     next();
   });
 

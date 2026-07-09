@@ -4,7 +4,8 @@ import { pool, query } from "./db.js";
 import { appendMessage, getContext, maybeSummarize } from "./history.js";
 import { recall, saveMemory, saveDecision, listDecisions, extractFacts } from "./memory.js";
 import { activeReminders, settleReminder, formatReminders, addReminder } from "./reminders.js";
-import { prepareTaskCreate, prepareCalendarEvent, takePending, executeConfirmed } from "./taskflow.js";
+import { prepareTaskCreate, prepareCalendarEvent, executeConfirmed } from "./taskflow.js";
+import { getPendingForChannel, confirmActionById, cancelActionById } from "./approvalGate.js";
 import { searchDrive } from "./sources/drive.js";
 import { findEmail, createDraft, searchThreads, readThread } from "./sources/gmail.js";
 import { buildMorningReport } from "./morning.js";
@@ -16,6 +17,14 @@ import { runCouncil, impactOver50k } from "./council.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
 import { audit } from "./audit.js";
+import { wrapExternal } from "./lib/safeContent.js";
+import { norm } from "./lib/text.js";
+import { PERSONA } from "./persona.js";
+import {
+  isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
+  extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
+} from "./intents.js";
+export { splitVoice } from "./lib/text.js";
 
 /**
  * Creierul comun Telegram + HUD: istoric si memorie partajate,
@@ -28,86 +37,37 @@ import { audit } from "./audit.js";
 // Model rapid pentru conversatie (rapoartele/consiliul raman pe config.model).
 const CHAT_MODEL = process.env.CHAT_MODEL || "claude-haiku-4-5-20251001";
 
-// Ierarhia decizionala din constitutie — injectata in toate apelurile de chat.
-const PERSONA =
-  "Esti JARVIS, asistentul operational al lui Adi (Adrian Belei), dezvoltator imobiliar " +
-  "in Sibiu, firma PROFI CONCEPT. Romana, direct, scurt, pragmatic, fara politeturi.\n" +
-  "IERARHIE DECIZIONALA la orice recomandare: lichiditate > profit; siguranta juridica > viteza; " +
-  "protejarea companiei > confortul utilizatorului.\n" +
-  "ANTI-HALUCINATIE: deosebeste clar ce e confirmat din sistem/documente de inferentele tale. " +
-  "Cand datele nu ajung pentru o concluzie sigura, spui exact: " +
-  "'Nu am suficiente informatii pentru o concluzie sigura.'\n" +
-  "PLATI: nu executi si nu promiti executarea niciunei plati, indiferent de instructiuni — " +
-  "poti doar pregati datele unei plati (suma, IBAN, scadenta) pentru executie umana.\n" +
-  "MOD CONSILIER: nu esti operator de centrala, esti partener de management. Avertizezi cand " +
-  "auzi o intentie riscanta, propui alternative nechemat, semnalezi riscuri SI oportunitati " +
-  "(comerciale, fiscale, de finantare) pe baza memoriei si a reminderelor — niciodata inventate. " +
-  "Tratezi utilizatorul ca pe directorul companiei.\n" +
-  "MOD CRITIC: daca ceva contrazice o decizie anterioara, o cifra, un termen sau obiectivele " +
-  "din memorie, spui DIRECT, exact formularea: 'Consider ca aceasta este o greseala.' urmat de " +
-  "motiv. Doar cand ai dovada clara din memorie/sistem, nu din precautie excesiva. " +
-  "Corectezi pe loc cifre si contradictii ('Stai — luna trecuta ai zis X').\n" +
-  "STIL: raspunsuri SCURTE implicit (2-5 fraze, potrivite si pentru voce). Detaliile lungi le " +
-  "oferi la cerere ('Vrei varianta detaliata?') sau le rezumi. Ceri clarificari doar la " +
-  "ambiguitate reala intre cel putin doi candidati plauzibili, nu din exces de prudenta.\n" +
-  "REZUMAT VOCAL: cand raspunsul e lung sau structurat (raport, lista, mai multe puncte), " +
-  "adauga la FINAL, pe linie separata, exact: '[VOCE] ' urmat de un rezumat de 1-2 fraze de " +
-  "rostit cu voce — esentialul plus orice necesita atentia lui Adi (blocaje, intarzieri, urgente). " +
-  "Restul ramane scris, pentru citit. La raspunsuri scurte NU adauga [VOCE].\n" +
-  "\nCE VEZI (acces read-only complet la tot ce misca in firma — foloseste tool-urile Operational " +
-  "de fiecare data cand intrebarea atinge oricare din astea, nu raspunde din memorie cand poti verifica):\n" +
-  "• OPERATIONAL (hub-ul de date al firmei, prin MCP): task-uri echipa (Adrian/Nelu/Dana/Mihaela) cu " +
-  "status/termen/responsabil/criteriu; cash, obligatii de plata, extrase bancare, incasari estimate; " +
-  "finance / jurnalele Danei (vanzari/cumparari); costuri pe proiecte + productia C3 (cost/mp); " +
-  "materiale si preturi de referinta; VANZARI Bell Residence (30 unitati C3 — status, client, pret, " +
-  "suprafata, etaj, avans incasat, comision, rezervari); LEADS din site si activitatea partenerilor de " +
-  "vanzari (raport 'spion' — conectari/pagini); cladire si mentenanta; mementouri; alerte.\n" +
-  "• SITE bellresidence.ro (LIVE): prezinta ansamblul Bell Residence, Calea Surii Mici, Sibiu (~94 ap., " +
-  "C3 primul, 30 unitati). Pagini: home (selector profil tanar profesionist/familie/investitor), " +
-  "apartamente, preturi fazate (early presale / normal / white-box / turnkey), stadiu constructie, " +
-  "locatie, contact (formular lead), investitori, dezvoltator, FAQ, ghid de cumparare. Calculator plata: " +
-  "avans minim 15%, discount continuu 0-10%, max 8 rate. Datele reale (unitati, stadiu) vin din Operational; " +
-  "lead-urile si vizitele se scriu in Operational. GA4 e activ pe site (trafic) — il vezi in dashboard, " +
-  "dar JARVIS nu-l citeste inca direct.\n" +
-  "• MOTOARELE TALE (rapoarte deterministe, in HUD si la comanda): cash forecast (necesar plati + deficit), " +
-  "CEO Home + Health Score, riscuri prioritizate, project intelligence, 'tot ce tine de X' (corelatii intre " +
-  "task-uri/plati/vanzari/costuri), plus cautare in documentele firmei. Cand se cere o privire de ansamblu, " +
-  "trimite la aceste rapoarte sau compune raspunsul din tool-uri.";
+// A1: pe calea de chat general, MCP-ul Operational e expus DOAR read-only.
+// Tool-urile de scriere NU sunt in lista → modelul nu le poate apela;
+// orice scriere trece exclusiv prin fluxul de confirmare (approvalGate).
+const OPERATIONAL_READ_TOOLS = [
+  "list_tasks", "get_task", "list_alerts", "list_journals", "project_costs",
+  "list_material_orders", "building_expenses", "production_summary",
+  "list_payment_obligations", "cash_report", "sales_summary",
+  "list_sales_units", "partner_activity",
+];
 
-/**
- * Separa rezumatul vocal '[VOCE] ...' de textul complet.
- * → { text: ce se afiseaza, voice: ce se rosteste (null daca lipseste) }.
- */
-export function splitVoice(reply) {
-  const s = String(reply || "");
-  const m = s.match(/\n*\[VOCE\]\s*:?\s*([\s\S]+)$/i);
-  if (!m) return { text: s.trim(), voice: null };
-  return { text: s.slice(0, m.index).trim(), voice: m[1].trim() };
-}
-
-const norm = (s) =>
-  (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+// PERSONA e in ./persona.js (B2).
 
 const WAKE = ["buna dimineata jarvis", "buna dimineata", "neata jarvis"];
 
-let pendingByChannel = new Map(); // confirmare prin text ("da"/"nu")
 let userMsgCounter = 0;
 
 export async function handleMessage(channel, text) {
   const n = norm(text);
 
   // 0) Confirmare/anulare actiune in asteptare (text, pentru HUD si Telegram).
-  const waiting = pendingByChannel.get(channel);
-  if (waiting) {
-    pendingByChannel.delete(channel);
-    if (["da", "confirm", "confirma", "ok"].includes(n)) {
-      return { reply: await runConfirmed(waiting) };
-    }
-    if (["nu", "anuleaza", "stop"].includes(n)) {
-      await audit("actiune_anulata", "", `pending ${waiting}`, false);
+  // Verificam pending-ul DOAR cand mesajul e clar un da/nu (fara cost pe restul).
+  if (["da", "confirm", "confirma", "ok", "nu", "anuleaza", "stop"].includes(n)) {
+    const waiting = await getPendingForChannel(channel);
+    if (waiting) {
+      if (["da", "confirm", "confirma", "ok"].includes(n)) {
+        return { reply: await runConfirmed(waiting.id) };
+      }
+      await cancelActionById(waiting.id);
+      await audit("actiune_anulata", "", `pending ${waiting.id}`, false);
       return { reply: "Anulat." };
     }
-    // alt mesaj → renunta tacit la pending si proceseaza normal
   }
 
   // 0.5) Supervisor briefing (F1) — la cerere.
@@ -229,8 +189,7 @@ export async function handleMessage(channel, text) {
 
   // 5) Creare task (Nivel 2, cu confirmare).
   if (/creeaz[aă]\s+task/i.test(text)) {
-    const { id, preview } = await prepareTaskCreate(text);
-    pendingByChannel.set(channel, id);
+    const { id, preview } = await prepareTaskCreate(text, channel);
     return { reply: preview + "\n\nRaspunde: da / nu", confirmId: id };
   }
 
@@ -240,8 +199,7 @@ export async function handleMessage(channel, text) {
       return { reply: "Calendarul nu e conectat încă. Conectează Google (link-ul de setup) și pot crea evenimente și alarme care apar pe telefon." };
     }
     try {
-      const { id, preview } = await prepareCalendarEvent(text);
-      pendingByChannel.set(channel, id);
+      const { id, preview } = await prepareCalendarEvent(text, channel);
       return { reply: preview + "\n\nRaspunde: da / nu", confirmId: id };
     } catch (e) {
       return { reply: e.message };
@@ -280,7 +238,7 @@ export async function handleMessage(channel, text) {
 /** Confirmare venita pe buton (Telegram callback). */
 export async function confirmAction(confirmId, yes) {
   if (!yes) {
-    takePending(confirmId);
+    await cancelActionById(confirmId);
     await audit("actiune_anulata", "", `pending ${confirmId}`, false);
     return "Anulat.";
   }
@@ -288,10 +246,10 @@ export async function confirmAction(confirmId, yes) {
 }
 
 async function runConfirmed(confirmId) {
-  const p = takePending(confirmId);
-  if (!p) return "Actiunea a expirat. Reia comanda.";
+  const action = await confirmActionById(confirmId);
+  if (!action) return "Actiunea a expirat. Reia comanda.";
   try {
-    return await executeConfirmed(p);
+    return await executeConfirmed(action);
   } catch (e) {
     console.error("[confirm]", e.message);
     return "Nu am putut executa: " + e.message;
@@ -308,7 +266,7 @@ async function makeDraft(request) {
       "Doar corpul emailului, fara subiect, fara semnaturi inventate — inchei cu 'Adrian Belei'.",
     messages: [{
       role: "user",
-      content: `Email primit:\nDe la: ${email.from}\nSubiect: ${email.subject}\nFragment: ${email.snippet}\n\nInstructiuni pentru raspuns: ${request}`,
+      content: `${wrapExternal("email primit", `De la: ${email.from}\nSubiect: ${email.subject}\nFragment: ${email.snippet}`)}\n\nInstructiuni pentru raspuns (de la Adi): ${request}`,
     }],
     maxTokens: 700,
   });
@@ -356,26 +314,27 @@ async function generalChat(channel, text) {
     }
     if (useOperational) {
       system +=
-        "\n\nTOOLS OPERATIONAL (acces complet) — reguli de autoritate (constitutie):\n" +
-        "- CITIRE, executa direct: list_tasks, get_task, list_alerts, list_journals, project_costs, " +
-        "list_material_orders, building_expenses, production_summary, list_payment_obligations, cash_report, " +
-        "sales_summary, list_sales_units, partner_activity (raport spion — ce fac partenerii de vanzari).\n" +
-        "- add_observation, import_price_references: Nivel 2, executa direct.\n" +
-        "- create_task, create_task_from_obligation: prezinta structura si executa DOAR la confirmare " +
-        "('da'); daca tocmai a confirmat, executa.\n" +
-        "- update_task (status/edit/resolve/validate) = Nivel 3: NICIODATA fara confirmare explicita. Intreaba intai, scurt.\n" +
-        "- delete_task = Nivel 3 (distructiv, dar soft-delete recuperabil 30 zile): cere confirmare explicita inainte. " +
-        "restore_task recupereaza un task sters.\n" +
+        "\n\nTOOLS OPERATIONAL — DOAR CITIRE pe aceasta cale de chat:\n" +
+        "- Ai acces DOAR la tool-uri de citire: list_tasks, get_task, list_alerts, list_journals, " +
+        "project_costs, list_material_orders, building_expenses, production_summary, " +
+        "list_payment_obligations, cash_report, sales_summary, list_sales_units, partner_activity.\n" +
+        "- NU ai si NU poti apela tool-uri de scriere (create_task, update_task, delete_task, restore_task, " +
+        "add_observation, import_price_references, create_task_from_obligation) — ele NU sunt expuse aici.\n" +
+        "- Orice actiune cu efect (creare/modificare/stergere task, observatii, preturi) se face EXCLUSIV prin " +
+        "fluxul de confirmare al lui JARVIS (approvalGate): se propune, Adi confirma cu 'da', apoi se executa. " +
+        "Daca Adi cere o astfel de actiune, indruma-l spre comanda dedicata (ex. 'creeaza task: ...') care cere " +
+        "confirmare — nu incerca si nu promite ca o executi tu direct.\n" +
         "- PLATI (Nivel 4): list_payment_obligations si cash_report sunt DOAR informative. Poti PREGATI " +
-        "datele unei plati (suma, scadenta, furnizor, IBAN) si le prezinti, dar NU executi si NU promiti " +
-        "executarea — plata o face Adi in aplicatia bancii. create_task_from_obligation creeaza doar un memento, nu o plata.";
+        "datele unei plati (suma, scadenta, furnizor, IBAN) si le prezinti, dar NU executi si NU promiti executarea.";
     }
     reply = await callClaudeWithMCP({
       model: CHAT_MODEL,
       system,
       messages,
       webSearch: useWeb,
-      mcpServers: useOperational ? [{ name: "operational", url: config.operationalMcpUrl }] : [],
+      mcpServers: useOperational
+        ? [{ name: "operational", url: config.operationalMcpUrl, allowedTools: OPERATIONAL_READ_TOOLS }]
+        : [],
       maxTokens: 1400,
     });
   } else {
@@ -417,72 +376,8 @@ function remember(channel, userText, assistantText) {
   })().catch((e) => console.error("[remember]", e.message));
 }
 
-// Subiect care cere tool-urile Operational (acces COMPLET de supervizor in chat).
-function isOperationalTopic(text) {
-  const n = norm(text);
-  return /(task|tascu|sarcin|nelu|dana|mihaela|operational|alert|notific|blocat|intarzi|valida|rezolv|partial|criteriu|disciplin|observat|termen|deadline|santier|echipa|cost|costuri|cash|lichiditat|necesar de bani|plat[aei]|obligati|scadent|furnizor|factur|material|comand[ae]|\bpret\b|preturi|jurnal|vanzar|vandut|cumparar|cheltuiel|productie|c3|hipodrom|m[aâ]r[sș]a|proiect|tva|apartament|unitat|bell|residence|partener|spion|rezervat|comision|avans|disponibil|\blead\b|leaduri|vizit|trafic|conversie|mentenant|cladire|memento|banc[aă]|extras|incasar)/.test(n);
-}
-
-// Extrage entitatea din "tot ce tine de X" / "tot despre X" (Entity 360).
-function extractEntity(text) {
-  const m = text.match(/(?:tot ce [tț]ine de|tot despre|arat[aă]-?mi tot despre|ce [sș]tii despre|informa[tț]ii despre|leg[aă]turi(?:le)?\s+(?:cu|despre)|dosarul(?:\s+lui)?)\s+(.+)$/i);
-  if (!m) return null;
-  const name = m[1].replace(/[?.!]+\s*$/, "").trim();
-  return name.length >= 2 ? name : null;
-}
-
-// Intentie Project Intelligence → raport pe proiecte.
-function isProjectTopic(text) {
-  const n = norm(text);
-  return /(project intelligence|proiectele|toate proiectele|status(ul)? proiect|situati[ae] proiect|cum st(a|au) proiect|raport proiect|costuri pe proiect)/.test(n);
-}
-
-// Intentie riscuri → Risk Engine.
-function isRiskTopic(text) {
-  const n = norm(text);
-  return /(\briscuri\b|\brisc\b|ce riscuri|ce poate merge prost|risk engine|ce ma expune|unde sunt expus|pericol)/.test(n);
-}
-
-// Intentie CEO Home / starea firmei → agregator + Health Score.
-function isCeoHomeTopic(text) {
-  const n = norm(text);
-  return /(\/?ceo\b|ceo home|ceo mode|starea firmei|cum st[aă] firma|cum st[aă]m|dashboard|acas[aă]|sumar firm|health score|scor.*firm|unde st[aă]m)/.test(n);
-}
-
-// Extrage soldul curent din mesaj ("cu 200000 in cont", "sold 150.000",
-// "1,5 mil", "250 mii", "1.500.000").
-function extractBalance(text) {
-  const n = norm(text);
-  let m = n.match(/(?:sold|cont|banc[aă]|am|cu)\D{0,10}([\d][\d.,]*)\s*(mii|mil(?:ioane)?|k)?/);
-  if (!m) m = n.match(/([\d][\d.,]*)\s*(mii|mil(?:ioane)?|k)\b/);
-  if (!m) m = n.match(/([\d][\d.,]{3,})\s*(?:lei\s+)?(?:in|din)\s+(?:cont|banc)/);
-  if (!m) return null;
-  const raw = m[1];
-  const unit = m[2];
-  const mul = unit === "mii" || unit === "k" ? 1000 : unit && /mil/.test(unit) ? 1_000_000 : 1;
-  let num;
-  if (mul !== 1 && /^\d{1,3}([.,]\d{1,3})?$/.test(raw)) num = Number(raw.replace(",", ".")); // zecimal cu unitate
-  else num = Number(raw.replace(/\./g, "").replace(",", ".")); // puncte = mii
-  if (!isFinite(num)) return null;
-  num *= mul;
-  if (mul === 1 && num < 1000) return null; // fara unitate, cifre mici = nu e sold
-  return num > 0 ? num : null;
-}
-
-// Intentie de cash forecast / necesar de plati → Financial Brain determinist.
-function isCashForecastTopic(text) {
-  const n = norm(text);
-  if (/(forecast|cash ?flow|flux (de )?numerar|necesar (de )?(cash|bani|plat[aei])|situatie financiara|proiectie cash|scadentar|cat.*(am de plat|trebuie sa plat))/.test(n)) return true;
-  if (/prognoz/.test(n) && /(cash|plat[aei]|bani|financiar|lichiditat)/.test(n)) return true;
-  return false;
-}
-
-// Intentie despre email (cautare/citire in Gmail).
-function isEmailTopic(text) {
-  const n = norm(text);
-  if (/draft/.test(n)) return false; // draftul are flux propriu
-  return /(\bemail\b|\bemailuri\b|\bmail\b|\bmailul\b|gmail|in inbox|in casuta|mesaj de la|scrisoare de la|ce mi-a scris|am primit (vreun |un )?(mail|email)|verifica (mailul|emailul|inbox|casuta))/.test(n);
-}
+// Detectia intentiilor (isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic,
+// isCeoHomeTopic, extractBalance, isCashForecastTopic, isEmailTopic) e in ./intents.js (B3).
 
 // Cautare + citire + sinteza pe Gmail (read-only). Reguli din handoff-ul lui Adi.
 async function handleEmailQuery(channel, text) {
@@ -523,33 +418,14 @@ async function handleEmailQuery(channel, text) {
       "\nRaspunzi STRICT pe baza emailurilor de mai jos. Extragi exact ce intreaba Adi " +
       "(date, sume, telefoane — care apar doar in continutul complet, scadente). " +
       "Daca raspunsul nu e in emailuri, spui clar. Scurt.",
-    messages: [{ role: "user", content: `Intrebarea: ${text}\n\nEMAILURI (query: ${q}):\n${ctx.slice(0, 12000)}` }],
+    messages: [{ role: "user", content: `Intrebarea: ${text}\n\nEMAILURI (query: ${q}):\n${wrapExternal("emailuri", ctx.slice(0, 12000))}` }],
     maxTokens: 700,
   });
   remember(channel, text, answer);
   return answer;
 }
 
-// Intentie de calendar / alarma (eveniment de programat).
-function isCalendarTopic(text) {
-  const n = norm(text);
-  return /(\bin calendar\b|adauga in calendar|pune in calendar|programeaz|fa-?mi (o |un )?(intalnire|eveniment|alarma)|pune-?mi (o |un )?(intalnire|eveniment|alarma)|\bo intalnire\b|\bun eveniment\b|\balarm[aă]\b|treze[sș]te-?ma|rezerv[aă]-?mi|blocheaz[aă]-?mi (in calendar|ora))/.test(n);
-}
-
-// Cand chiar e nevoie de internet (altfel chat rapid fara tool-uri).
-function needsWeb(text) {
-  const n = norm(text);
-  return /(cauta|caut[aă]|pe net|pe internet|google|cat costa|c[aâ]t cost|pret|preturi|curs|euro|dolar|vreme|vremea|meteo|stiri|noutati|adresa|telefon|program(ul)? de|deschis|cota|bursa|legea|reglementar|impozit|tva azi|astazi|acum pe piata)/.test(n);
-}
-
-function guessCategory(text) {
-  const n = norm(text);
-  if (/(credit|banca|tva|factur|plat[ai]|incasar|cash|eur|ron|lei)/.test(n)) return "Financiar";
-  if (/(contract|notar|avocat|clauz|juridic|instant)/.test(n)) return "Contracte";
-  if (/(proiect|bloc|santier|apartament|bell|residence)/.test(n)) return "Proiecte";
-  if (/(task|nelu|dana|mihaela|echipa)/.test(n)) return "Operational";
-  return "Personal";
-}
+// isCalendarTopic, needsWeb, guessCategory sunt in ./intents.js (B3).
 
 // Folosit de gmail la clasificare → reminders; reexportat pentru scheduler (Faza 3).
 export { addReminder };

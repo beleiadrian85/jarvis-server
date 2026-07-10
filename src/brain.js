@@ -28,6 +28,28 @@ import {
   extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
 } from "./intents.js";
 export { splitVoice } from "./lib/text.js";
+// FAZA FINALA — module pipeline (perceptie → decizie → rutare → provider → compunere).
+import { getCapabilities } from "./capabilities.js";
+import { buildContext, neededSources } from "./contextBuilder.js";
+import { routeModel } from "./modelRouter.js";
+import { buildProviderRequest } from "./providerAdapter.js";
+import { composeResponse } from "./responseComposer.js";
+import { validateResponse } from "./responseValidator.js";
+import { buildTrace } from "./executionTrace.js";
+import { estimateTokens, enforceBudget } from "./tokenBudget.js";
+import { createMetrics } from "./providerMetrics.js";
+import { createCache } from "./cache.js";
+import { withTimeout, withRetry, withFallback } from "./resilience.js";
+import { resolveModes } from "./modes.js";
+import { reviewDecision } from "./postDecisionReview.js";
+import { orchestrateStrategy } from "./strategyOrchestrator.js";
+import { callOpenAI } from "./openai.js";
+
+// Instante partajate (in-memory, fara egress).
+const _metrics = createMetrics();
+const _promptCache = createCache({ maxEntries: 200, ttlMs: 5 * 60_000 });
+/** Telemetrie provider (expusa pentru diagnostic). */
+export function providerMetrics() { return _metrics.snapshot(); }
 
 /**
  * Creierul comun Telegram + HUD: istoric si memorie partajate,
@@ -318,6 +340,12 @@ async function generalChat(channel, text) {
     activeReminders(5).then((r) => { T.reminders = Date.now() - th; return r; }),
   ]);
 
+  // FAZA FINALA — perceptie → decizie → rutare (pur, ieftin).
+  const decision = classify(text, { hasOperational, hasGoogle, hasStrategy });
+  const caps = getCapabilities();
+  const modes = resolveModes({ strategy: hasStrategy });
+  const router = routeModel({ route: decision.route, capabilities: caps, options: {} });
+
   let system = PERSONA;
   if (ctx.summary) system += `\n\nSUMARUL CONVERSATIEI DE PANA ACUM:\n${ctx.summary}`;
   if (memories.length) {
@@ -337,8 +365,12 @@ async function generalChat(channel, text) {
   const useWeb = needsWeb(text);
 
   const tc = Date.now();
-  let reply;
-  if (useOperational || useWeb) {
+  let reply, providerUsed = "claude";
+  if (config.pipeline && router.provider === "chatgpt" && hasStrategy && modes.canSend) {
+    // STRATEGY (ChatGPT) — DOAR cand STRATEGY_ROUTING=on. Read-only, cu fallback Claude.
+    providerUsed = "chatgpt";
+    reply = await runStrategyPipeline(text, memories, decision);
+  } else if (useOperational || useWeb) {
     if (useWeb) {
       system +=
         "\n\nINTERNET: ai cautare web. Foloseste-o cand intrebarea cere info curenta/externa " +
@@ -375,6 +407,7 @@ async function generalChat(channel, text) {
   }
   T.claude = Date.now() - tc;
   reply = reply || "…";
+  _metrics.record({ provider: providerUsed, ms: T.claude, ok: true, tokens: estimateTokens(system + "\n" + text) });
 
   // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.
   if (reminders.length) {
@@ -385,9 +418,50 @@ async function generalChat(channel, text) {
   }
 
   remember(channel, text, reply);
-  const lbl = useOperational ? "claude+mcp" : useWeb ? "claude+web" : "claude";
+
+  // FAZA FINALA — TOATE raspunsurile trec prin ResponseComposer + validare + trace
+  // (telemetrie; pentru chat liber textul ramane al modelului). Gated de config.pipeline.
+  if (config.pipeline) {
+    const plan = buildContext(text, decision.route, { capabilities: caps });
+    const composed = composeResponse({ route: decision.route, capabilities: caps });
+    const validation = validateResponse(composed);
+    if (!validation.valid) console.error("[pipeline] validare raspuns:", validation.errors.join("; "));
+    const trace = buildTrace({ decision: { route: decision.route, provider: providerUsed }, context: plan, router, response: composed });
+    reviewDecision({ brief: {}, response: composed, trace });
+    console.log(`[trace] route=${trace.route} provider=${providerUsed} fallback=${router.fallback} sources=${neededSources(plan).length} steps=${trace.steps.length}`);
+  }
+  const lbl = providerUsed === "chatgpt" ? "chatgpt" : useOperational ? "claude+mcp" : useWeb ? "claude+web" : "claude";
   console.log(`[timing] route=generalChat recall=${T.recall}ms history=${T.history}ms reminders=${T.reminders}ms ${lbl}=${T.claude}ms total=${Date.now() - gt0}ms`);
   return reply;
+}
+
+/** FAZA FINALA — pipeline de strategie (ChatGPT). Chemat DOAR cand STRATEGY_ROUTING=on.
+ *  orchestrator (brief/strategyEngine/adapter) → OpenAI cu resilience/budget/cache/metrics
+ *  → fallback Claude. ChatGPT NU are tool-uri (read-only, nu executa nimic). */
+async function runStrategyPipeline(text, memories, decision) {
+  const state = { memory: (memories || []).map((m) => m && m.fact).filter(Boolean) };
+  const orch = orchestrateStrategy({ route: decision.route, question: text, state, capabilities: getCapabilities(), options: {} });
+  const req = orch.request; // format openai (executes:false)
+  const sys = req && req.body ? req.body.messages[0].content : PERSONA;
+  const usr = req && req.body && req.body.messages[1] ? req.body.messages[1].content : text;
+  const budgeted = enforceBudget(sys + "\n" + usr, 6000);
+
+  const cacheKey = "strat:" + norm(usr).slice(0, 240);
+  const hit = _promptCache.get(cacheKey);
+  if (hit !== undefined) { _metrics.record({ provider: "cache", ms: 0, ok: true, tokens: 0 }); return hit; }
+
+  const callGpt = () => callOpenAI({ system: sys, messages: [{ role: "user", content: usr }], model: config.strategyModel, maxTokens: 900 });
+  const resilient = withFallback(
+    withRetry(withTimeout(callGpt, 20000), { retries: 1 }),
+    async () => callClaude({ model: CHAT_MODEL, system: sys, messages: [{ role: "user", content: usr }], maxTokens: 800 }),
+  );
+  const t0 = Date.now();
+  let out, ok = true;
+  try { out = await resilient(); }
+  catch (e) { ok = false; out = "Nu am putut rula analiza strategica acum."; console.error("[strategy]", e.message); }
+  _metrics.record({ provider: "chatgpt", ms: Date.now() - t0, ok, tokens: budgeted.estimated });
+  _promptCache.set(cacheKey, out);
+  return out;
 }
 
 /** Persistenta istoric + intretinere async (sumar, extragere fapte). */

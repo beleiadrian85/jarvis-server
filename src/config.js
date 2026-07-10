@@ -69,6 +69,9 @@ export const config = {
   // C7 — model OpenAI pentru strategie (folosit DOAR cand STRATEGY_ROUTING=on).
   strategyModel: process.env.OPENAI_STRATEGY_MODEL || "gpt-4o",
 
+  // FAZA FINALA — pipeline integrat live. Implicit ON; kill-switch: PIPELINE=off.
+  pipeline: process.env.PIPELINE !== "off",
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

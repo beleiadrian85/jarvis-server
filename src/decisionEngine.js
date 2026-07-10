@@ -1,6 +1,6 @@
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
-  isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, isStrategicTopic,
+  isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, isStrategicTopic, isStrongStrategic,
 } from "./intents.js";
 import { norm } from "./lib/text.js";
 import { getCapabilities } from "./capabilities.js";
@@ -46,6 +46,15 @@ export function classify(text, ctx = {}, opts = {}) {
   if (ctx.hasPending && YESNO.includes(n)) {
     return decision("confirm", { reason: "raspuns da/nu la o actiune in asteptare" });
   }
+
+  // 0.5) Intrebari strategice REFLEXIVE (ce risc nu vad / ce proiect oprit / ce arde /
+  //       ce mi-ai interzice) → strategy, cu PRECEDENTA inaintea rapoartelor/operational.
+  //       Comenzile de raport nu se potrivesc aici → rapoartele deterministe raman neschimbate.
+  //       ChatGPT doar cand strategy e disponibila; altfel fallback Claude.
+  if (isStrongStrategic(text))
+    return decision("strategy", caps.strategy
+      ? { provider: "chatgpt", active: true, reason: "strategic reflexiv" }
+      : { provider: "claude", active: false, reason: "strategy_disabled" });
 
   // 1) Rapoarte deterministe „de comanda".
   if (/^\/?(supervizor|briefing|brief|ce probleme)\b/.test(n) || n === "ce e cu operational")

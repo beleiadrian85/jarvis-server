@@ -26,6 +26,7 @@ import { PERSONA } from "./persona.js";
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
   extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
+  isStrongStrategic,
 } from "./intents.js";
 export { splitVoice } from "./lib/text.js";
 // FAZA FINALA — module pipeline (perceptie → decizie → rutare → provider → compunere).
@@ -94,6 +95,14 @@ export async function handleMessage(channel, text) {
       await audit("actiune_anulata", "", `pending ${waiting.id}`, false);
       return { reply: "Anulat." };
     }
+  }
+
+  // 0.4) STRATEGIC REFLEXIV → Director de Strategie (ChatGPT), prin generalChat.
+  //       DOAR cand strategy e activ (hasStrategy). Cu flag off → NU intercepteaza,
+  //       deci rapoartele deterministe (risc etc.) raman EXACT ca inainte (zero regresie).
+  //       Comenzile de raport nu se potrivesc cu isStrongStrategic → raman deterministe.
+  if (hasStrategy && isStrongStrategic(text)) {
+    return { reply: await generalChat(channel, text) };
   }
 
   // 0.5) Supervisor briefing (F1) — la cerere.

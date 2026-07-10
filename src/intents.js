@@ -93,9 +93,25 @@ export function guessCategory(text) {
   return "Personal";
 }
 
-// D2 — intentie strategica / de decizie → (in viitor) Strategy Engine (ChatGPT).
+// D2 — intentie strategica / de decizie → Strategy Engine (ChatGPT, cand e activ).
 // Detector pur; nu activeaza nimic singur (rutarea o decide decisionEngine + flag).
 export function isStrategicTopic(text) {
   const n = norm(text);
-  return /(strategie|strategic|ce ai face|ce as face|in locul meu|ce ne facem|merita sa|ar trebui sa|are sens sa|ce ma sfatui|ce (imi )?recomanzi|ce decizie|sa iau decizia|sa vand|sa cumpar|sa investesc|pe ce ma concentrez|pe termen lung|viziune|ce imi propui)/.test(n);
+  if (isStrongStrategic(text)) return true;
+  return /(strategie|strategic|ce ai face|ce as face|in locul meu|ce ne facem|merita sa|ar trebui sa|are sens sa|ce ma sfatui|ce (imi )?recomanzi|ce decizie|sa iau decizia|sa vand|sa cumpar|sa investesc|pe ce ma concentrez|pe termen lung|viziune|ce imi propui|greseal|prioritizeaz|critica[^.]{0,20}(plan|strateg|idee|dezvolt|proiect|abord|model)|critica-mi|drept de veto|ai avea veto|ce (imi )?lipse|informatii[^.]{0,15}lipse|ce nu stiu|decizie sigura|ce ar trebui sa fac)/.test(n);
+}
+
+// Subset STRATEGIC REFLEXIV: intrebari care altfel ar fi prinse de rapoartele
+// deterministe (risc) sau de ruta operationala (proiect). Au nevoie de PRECEDENTA
+// inaintea acelor rute. NU se potrivesc cu comenzile de raport ("riscuri", "raport
+// proiecte") → rapoartele deterministe raman neschimbate.
+export function isStrongStrategic(text) {
+  const n = norm(text);
+  return (
+    /\brisc\w*\b[^.]{0,18}\bnu\b[^.]{0,10}(vad|observ|vede|sesiz)/.test(n) ||   // "ce risc nu vad"
+    /\bce\s+nu\s+(vad|observ|sesiz|stiu)\b/.test(n) ||                          // "ce nu vad / ce nu stiu"
+    /\b(ce|care)\s+proiect\w*\b[^.]{0,30}(oprit|opresc|opreste|opri|amanat|amana|abandon|renunt|inchid|sistat|stop)/.test(n) || // "ce proiect ar trebui oprit"
+    /\bce\s+(mi-?ai|m-?ai|ai)\s+interzic/.test(n) ||                            // "ce mi-ai interzice"
+    /\bce\s+arde\b/.test(n)                                                      // triaj "in 30s: ce arde..."
+  );
 }

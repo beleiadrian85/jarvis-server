@@ -32,8 +32,8 @@ assert.equal(act.route, "action_propose");
 assert.equal(act.requiresApproval, true);
 console.log(`✅ "creeaza task ..." → ${act.route} (requiresApproval=${act.requiresApproval})`);
 
-// Strategie cu ChatGPT INACTIV → strategy, fallback Claude, reason strategy_disabled.
-const s = classify("ce ai face in locul meu", OP);
+// Strategie cu ChatGPT INACTIV (capability off, deterministic fata de env) → fallback Claude.
+const s = classify("ce ai face in locul meu", OP, { capabilities: { ...getCapabilities(), strategy: false } });
 assert.equal(s.route, "strategy");
 assert.equal(s.provider, "claude");
 assert.equal(s.active, false);

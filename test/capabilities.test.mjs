@@ -6,6 +6,7 @@ process.env.TELEGRAM_BOT_TOKEN ||= "dummy";
 process.env.TELEGRAM_OWNER_CHAT_ID ||= "1";
 
 const { getCapabilities, supports, listUnavailable } = await import("../src/capabilities.js");
+const { hasStrategy } = await import("../src/config.js");
 
 const caps = getCapabilities();
 
@@ -20,13 +21,15 @@ assert.equal(Object.keys(caps).length, KEYS.length, "numar de chei neasteptat");
 // 2) Toate valorile sunt boolean.
 for (const [k, v] of Object.entries(caps)) assert.equal(typeof v, "boolean", `${k} nu e boolean`);
 
-// 3) Capabilitatile neintegrate sunt false (inclusiv strategy — ChatGPT neactivat).
-for (const k of ["railwayLogs", "ga4", "searchConsole", "banking", "strategy"]) {
+// 3) Capabilitatile neintegrate sunt false.
+for (const k of ["railwayLogs", "ga4", "searchConsole", "banking"]) {
   assert.equal(caps[k], false, `${k} trebuie false`);
 }
+// strategy urmeaza flag-ul: false implicit, true DOAR cand OPENAI_API_KEY && STRATEGY_ROUTING=on.
+assert.equal(caps.strategy, hasStrategy, "strategy trebuie sa reflecte hasStrategy");
 
 // 4) supports()
-assert.equal(supports("strategy"), false);
+assert.equal(supports("strategy"), hasStrategy);
 assert.equal(supports("ga4"), false);
 assert.equal(supports("inexistent"), false, "cheie necunoscuta → false");
 assert.equal(supports("vision"), caps.vision);
@@ -38,7 +41,8 @@ assert.deepEqual(
   [...unavail].sort(),
   Object.keys(caps).filter((k) => !caps[k]).sort(),
 );
-assert.ok(unavail.includes("strategy") && unavail.includes("banking") && unavail.includes("ga4"));
+assert.ok(unavail.includes("banking") && unavail.includes("ga4"));
+assert.equal(unavail.includes("strategy"), !hasStrategy, "strategy in unavailable doar cand e off");
 
 console.log("✅ getCapabilities:", JSON.stringify(caps));
 console.log("✅ supports() OK (cheie necunoscuta → false)");

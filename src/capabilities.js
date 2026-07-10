@@ -1,4 +1,4 @@
-import { config, hasCalendar, hasGoogle, hasOperational, hasDb } from "./config.js";
+import { config, hasCalendar, hasGoogle, hasOperational, hasDb, hasStrategy } from "./config.js";
 import { hasVoice } from "./tts.js";
 
 /**
@@ -21,7 +21,7 @@ export function getCapabilities() {
     ga4: false,                      // neintegrat
     searchConsole: false,            // neintegrat
     banking: false,                  // neintegrat (Faza 5 blocata)
-    strategy: false,                 // Strategy Engine neconstruit (openai.js/strategy.js); flag-ul singur nu ajunge
+    strategy: !!hasStrategy,         // Strategy Engine construit+integrat; activ DOAR cand OPENAI_API_KEY && STRATEGY_ROUTING=on
     voice: !!hasVoice,               // TTS (OpenAI/ElevenLabs)
     vision: !!config.anthropicKey,   // Claude vision (documente/foto)
   };

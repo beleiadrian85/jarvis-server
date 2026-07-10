@@ -17,6 +17,7 @@ bot.start((ctx) => {
       "JARVIS online. Faza 4 activa: inteligenta critica + consiliu.",
       "",
       "• 'Bună dimineața Jarvis' sau /raport — raportul complet",
+      "• /birou — starea firmei într-un ecran (cash, vânzări, task-uri, scor)",
       "• 'consiliu: ...' — 5 perspective (CFO, contabil, jurist, dezvoltator, bancher)",
       "• 'creează task: ...' — task in Operational (cu confirmare)",
       "• 'notează decizia: ...' — registrul de decizii (/decizii); consiliu auto la >50k €",
@@ -32,6 +33,7 @@ bot.start((ctx) => {
 });
 
 bot.command("raport", (ctx) => handle(ctx, "/raport"));
+bot.command("birou", (ctx) => handle(ctx, "/birou"));
 bot.command("decizii", (ctx) => handle(ctx, "/decizii"));
 
 bot.command("id", (ctx) => {

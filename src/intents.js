@@ -34,7 +34,7 @@ export function isRiskTopic(text) {
 // Intentie CEO Home / starea firmei → agregator + Health Score.
 export function isCeoHomeTopic(text) {
   const n = norm(text);
-  return /(\/?ceo\b|ceo home|ceo mode|starea firmei|cum st[aă] firma|cum st[aă]m|dashboard|acas[aă]|sumar firm|health score|scor.*firm|unde st[aă]m)/.test(n);
+  return /(\/?ceo\b|ceo home|ceo mode|\/?birou\b|la birou|starea firmei|cum st[aă] firma|cum st[aă]m|dashboard|acas[aă]|sumar firm|health score|scor.*firm|unde st[aă]m)/.test(n);
 }
 
 // Extrage soldul curent din mesaj ("cu 200000 in cont", "sold 150.000",

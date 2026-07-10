@@ -66,6 +66,9 @@ export const config = {
   // C3 — gate pentru conectarea decisionEngine. Implicit OFF → comportament identic.
   useDecisionEngine: process.env.DECISION_ENGINE === "on",
 
+  // C7 — model OpenAI pentru strategie (folosit DOAR cand STRATEGY_ROUTING=on).
+  strategyModel: process.env.OPENAI_STRATEGY_MODEL || "gpt-4o",
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

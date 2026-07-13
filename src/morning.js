@@ -140,8 +140,15 @@ export async function buildMorningReport() {
       role: "user",
       content: `Data de azi: ${dateStr}.\n\nDate brute:\n\n${raw}\n\nScrie raportul de dimineata.`,
     }],
-    maxTokens: 1400,
+    maxTokens: 3000,
   });
+
+  // Rezilienta: daca sinteza Claude vine goala, nu lasam raportul zilnic gol —
+  // cadem pe datele brute structurate (nu depindem 100% de model).
+  if (!report || !report.trim()) {
+    console.error("[morning] callClaude a intors gol — fallback pe date brute.");
+    report = `☀️ RAPORT DE DIMINEAȚĂ — ${dateStr}\n(sinteză indisponibilă; date brute mai jos)\n\n${raw}`;
+  }
 
   // P2 — insereaza DETERMINIST (fara LLM) primele alerte high/critical care NU
   //       dubleaza gruparea de task-uri, inainte de linia [VOCE]. GATED pe flag.

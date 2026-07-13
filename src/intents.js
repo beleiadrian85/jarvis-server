@@ -115,3 +115,13 @@ export function isStrongStrategic(text) {
     /\bce\s+arde\b/.test(n)                                                      // triaj "in 30s: ce arde..."
   );
 }
+
+// P2 — intentie de PREDICTIE (probabilitati viitoare, determinist). Detector pur;
+// activeaza ruta doar cand PREDICTION_ENGINE=on (gating in brain.js).
+export function isPredictionTopic(text) {
+  const n = norm(text);
+  return (
+    /(ce urmeaza|ce se va (intampla|bloca)|ce (se )?(va )?blocheaza in urmatoarele|ce task\w*\s+vor int[aâ]rzia|ce\s+va\s+int[aâ]rzia|risca sa sar[ea] termenul|risca sa (sara|depaseasca)|scenariul (prost|negativ|rau)|worst ?case|cum arata urmatoarele|urmatoarele\s+\d+\s+(de\s+)?zile|predicti|prezic|ce prevezi|ce riscuri vin|probabilitate)/.test(n) ||
+    (/cand\b/.test(n) && /(ram[aâ]nem fara (bani|cash|lichidit)|lipsa de (bani|cash)|fara acoperire)/.test(n))
+  );
+}

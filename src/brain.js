@@ -26,8 +26,12 @@ import { PERSONA } from "./persona.js";
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
   extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
-  isStrongStrategic,
+  isStrongStrategic, isPredictionTopic,
 } from "./intents.js";
+// P2 — Prediction Engine (determinist, GATED pe config.predictionEngine).
+import { predict } from "./predictionEngine.js";
+import { buildPredictionState } from "./predictionState.js";
+import { formatPredictionReport } from "./predictionReport.js";
 export { splitVoice } from "./lib/text.js";
 // FAZA FINALA — module pipeline (perceptie → decizie → rutare → provider → compunere).
 import { getCapabilities } from "./capabilities.js";
@@ -125,6 +129,18 @@ export async function handleMessage(channel, text) {
     await audit("raport", "raport de dimineata generat", "vreme+calendar+gmail+operational+reminders");
     remember(channel, text, report);
     return { reply: report };
+  }
+
+  // 1.4) Prediction Engine — probabilitati VIITOARE (determinist, ZERO LLM).
+  //       GATED pe config.predictionEngine. OFF (implicit) → comportament neschimbat.
+  if (config.predictionEngine && hasOperational && isPredictionTopic(text)) {
+    const t0p = Date.now();
+    const state = await buildPredictionState({ openingBalance: extractBalance(text) });
+    const rep = formatPredictionReport(predict(state));
+    console.log(`[route=prediction] ${Date.now() - t0p}ms`);
+    await audit("prediction", "predictii generate (determinist)", "predictionEngine:obligatii+taskuri+vanzari");
+    remember(channel, text, rep);
+    return { reply: rep };
   }
 
   // 1.5) Financial Brain — cash forecast / necesar de plati (determinist).

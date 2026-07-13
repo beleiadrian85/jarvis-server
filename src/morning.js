@@ -4,8 +4,11 @@ import { getImportantEmails, getUnansweredSent } from "./sources/gmail.js";
 import { listTasks } from "./mcp.js";
 import { getVaultDigest } from "./sources/vault.js";
 import { activeReminders, formatReminders } from "./reminders.js";
-import { hasOperational, hasVault } from "./config.js";
+import { config, hasOperational, hasVault } from "./config.js";
 import { callClaude } from "./claude.js";
+// P2 — predictii deterministe (GATED pe config.predictionEngine).
+import { buildPredictionState } from "./predictionState.js";
+import { predict } from "./predictionEngine.js";
 
 /**
  * Raportul de dimineata extins (constitutie 2.5).
@@ -107,7 +110,7 @@ export async function buildMorningReport() {
     timeZone: "Europe/Bucharest",
   });
 
-  const report = await callClaude({
+  let report = await callClaude({
     system:
       "Esti JARVIS, asistentul operational al lui Adi — dezvoltator imobiliar in Sibiu (PROFI CONCEPT). " +
       "Scrii raportul de dimineata in romana, ton direct si pragmatic, fara politeturi.\n\n" +
@@ -140,5 +143,34 @@ export async function buildMorningReport() {
     maxTokens: 1400,
   });
 
+  // P2 — insereaza DETERMINIST (fara LLM) primele alerte high/critical care NU
+  //       dubleaza gruparea de task-uri, inainte de linia [VOCE]. GATED pe flag.
+  if (config.predictionEngine && hasOperational) {
+    try {
+      const block = await morningPredictionBlock();
+      if (block) {
+        const idx = report.search(/\n*\[VOCE\]/i);
+        report = idx >= 0
+          ? report.slice(0, idx).replace(/\s+$/, "") + "\n\n" + block + "\n\n" + report.slice(idx).replace(/^\s+/, "")
+          : report + "\n\n" + block;
+      }
+    } catch (e) { console.error("[morning.prediction]", e.message); }
+  }
+
   return report;
+}
+
+// Bloc determinist de predictii pentru morning (top 3 high/critical, fara
+// dublarea blocajelor/intarzierilor deja prezente in STATUS OPERATIONAL).
+async function morningPredictionBlock() {
+  const result = predict(await buildPredictionState());
+  const alerts = result.predictions
+    .filter((p) => p.severity === "high" || p.severity === "critical")
+    .filter((p) => !/^op_block|^task_overrun|^proj_delay/.test(p.key))
+    .slice(0, 3);
+  if (!alerts.length) return null;
+  const lc = result.confidence < 0.5 ? ` (confidence ${Math.round(result.confidence * 100)}% — date parțiale)` : "";
+  return "🔮 PREDICȚII (probabilistic)" + lc + ":\n" +
+    alerts.map((p) => `  ${p.severity === "critical" ? "🔴" : "🟠"} ${p.title} — probabilitate ${Math.round(p.probability * 100)}%` +
+      (p.daysUntilProblem != null ? `, în ${p.daysUntilProblem}z` : "")).join("\n");
 }

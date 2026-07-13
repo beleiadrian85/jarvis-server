@@ -72,6 +72,10 @@ export const config = {
   // FAZA FINALA — pipeline integrat live. Implicit ON; kill-switch: PIPELINE=off.
   pipeline: process.env.PIPELINE !== "off",
 
+  // P2 — PREDICTION ENGINE (determinist, probabilitati viitoare). Implicit OFF
+  // → comportament identic. Cand e "on": rutele de predictie + alerte in morning.
+  predictionEngine: process.env.PREDICTION_ENGINE === "on",
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

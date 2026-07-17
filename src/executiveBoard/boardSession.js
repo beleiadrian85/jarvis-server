@@ -24,15 +24,16 @@ import { validateDirectorOutput, REVERSIBILITY } from "./boardValidator.js";
 // Generarea JSON-ului structurat (4-8 perspective) e LENTA — 45s taia toate
 // raspunsurile (descoperit live in shadow: lipsa=N/N pe toate sedintele).
 // Boardul nu e cale rapida: shadow e fire-and-forget, iar activ e o „sedinta”.
-const LLM_TIMEOUT_MS = 120_000;
+const LLM_TIMEOUT_MS = 180_000;
 
 /**
- * Buget de tokeni DINAMIC: un board de investitie are 8 perspective LLM si nu
- * incape in bugetul unuia de 4 (raspuns trunchiat → JSON invalid → toate
- * perspectivele picate). ~700 tokeni/director + 2000 pentru meta-sedinta.
+ * Buget de tokeni DINAMIC. ATENTIE (invatat live, de 2 ori azi): modelul
+ * consuma din max_tokens si pe THINKING inainte de text — la buget strans,
+ * JSON-ul iese TRUNCHIAT (coada taiata in mijlocul stringului). Bugetul
+ * trebuie sa acopere thinking (~2-3k) + JSON-ul complet al tuturor rolurilor.
  */
 export function tokensForRoles(llmRoleCount) {
-  return Math.min(8000, 2000 + 700 * Math.max(1, llmRoleCount));
+  return Math.min(16000, 6000 + 900 * Math.max(1, llmRoleCount));
 }
 
 // Aceeasi intrebare pe aceleasi date nu redeclanseaza analiza (10 min).

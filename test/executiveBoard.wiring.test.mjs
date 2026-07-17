@@ -155,11 +155,12 @@ const mR = await runBoardMeeting("Retry pe JSON malformat?", { llm: flakyLlm, da
 ok(rCalls === 2, `JSON malformat → exact o reincercare (apeluri: ${rCalls})`);
 ok(mR.missing_perspectives.length === 0 && mR.recommendation !== null, "reincercarea recupereaza sedinta complet");
 
-// Buget de tokeni dinamic: un board de 8 directori nu incape in bugetul unuia de 4
-// (descoperit LIVE in shadow: investment cu 8 roluri → JSON trunchiat → DATE_INSUFICIENTE).
+// Buget de tokeni dinamic. Regresie live (de 2 ori azi): modelul consuma din
+// max_tokens si pe THINKING — bugetul strans taie JSON-ul in mijlocul stringului.
+// Minim 6000 + 900/rol acopera thinking (~2-3k) + JSON-ul complet.
 ok(tokensForRoles(8) > tokensForRoles(4), "bugetul de tokeni creste cu numarul de roluri");
-ok(tokensForRoles(4) >= 4000, `board de 4 → minim 4000 tokeni (${tokensForRoles(4)})`);
-ok(tokensForRoles(8) >= 7000 && tokensForRoles(20) <= 8000, `board de 8 → ~7600, plafonat la 8000 (${tokensForRoles(8)})`);
+ok(tokensForRoles(4) >= 9000, `board de 4 → minim 9000 tokeni, peste thinking (${tokensForRoles(4)})`);
+ok(tokensForRoles(8) >= 13000 && tokensForRoles(20) <= 16000, `board de 8 → ~13200, plafonat la 16000 (${tokensForRoles(8)})`);
 
 // Zero schema DB noua din modulele Board.
 ok(!/CREATE TABLE|ALTER TABLE/i.test(allBoard), "executiveBoard/*: zero modificari de schema DB");

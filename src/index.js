@@ -9,6 +9,7 @@ import { startBackupSchedule } from "./backup.js";
 import { startScheduler } from "./scheduler.js";
 import { startNotifier } from "./notifier.js";
 import { startMonitor } from "./monitor.js";
+import { startObservationEngine } from "./observationEngine/index.js";
 import { expireOldActions } from "./approvalGate.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -56,6 +57,9 @@ if (hasDb) startBackupSchedule();
 startScheduler();
 startNotifier();
 startMonitor();
+
+// CODEX Faza 4 — Observation Engine (GATED: OFF implicit → dormant, zero cron).
+startObservationEngine();
 
 // Oprire curata.
 process.once("SIGINT", () => bot.stop("SIGINT"));

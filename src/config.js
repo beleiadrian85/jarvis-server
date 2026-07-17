@@ -82,6 +82,16 @@ export const config = {
   executiveBoard: ["on", "true"].includes(String(process.env.EXECUTIVE_BOARD_ENABLED || "").toLowerCase()),
   executiveBoardShadow: ["on", "true"].includes(String(process.env.EXECUTIVE_BOARD_SHADOW_MODE || "").toLowerCase()),
 
+  // CODEX Faza 4 — OBSERVATION ENGINE (proactiv: observa, NU decide, NU executa).
+  // ENABLED implicit OFF → motorul nu ruleaza deloc. SHADOW implicit ON → cand
+  // ruleaza, scrie DOAR in audit/jarvis_state. Notificari + convocarea Boardului
+  // implicit OFF (etapa ulterioara).
+  observationEngine: ["on", "true"].includes(String(process.env.OBSERVATION_ENGINE_ENABLED || "").toLowerCase()),
+  observationShadow: !["off", "false"].includes(String(process.env.OBSERVATION_ENGINE_SHADOW_MODE || "").toLowerCase()),
+  observationNotifications: ["on", "true"].includes(String(process.env.OBSERVATION_NOTIFICATIONS_ENABLED || "").toLowerCase()),
+  observationBoardEscalation: ["on", "true"].includes(String(process.env.OBSERVATION_BOARD_ESCALATION_ENABLED || "").toLowerCase()),
+  observationIntervalMinutes: Math.max(30, Number(process.env.OBSERVATION_INTERVAL_MINUTES || 45) || 45),
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

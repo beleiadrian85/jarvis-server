@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "codex/schemas/observation.schema.json",
+  "title": "Observation",
+  "description": "O observatie a Observation Engine (CODEX Faza 4). Impusa in cod de src/observationEngine/observationValidator.js. Motorul OBSERVA — nu decide, nu executa; observatiile fara dovezi se resping.",
+  "type": "object",
+  "required": [
+    "observation_id", "type", "category", "title", "summary", "detected_at",
+    "period_analyzed", "severity", "confidence", "data_quality", "evidence",
+    "sources", "metrics", "baseline", "deviation", "business_impact",
+    "urgency_reason", "possible_causes", "unknowns", "recommended_next_analysis",
+    "requires_board_review", "requires_founder_attention", "requires_immediate_action",
+    "deduplication_key", "status", "safe_to_notify"
+  ],
+  "properties": {
+    "observation_id": { "type": "string", "description": "Stabil: obs:<deduplication_key>." },
+    "type": { "type": "string", "description": "Tipul detectorului (ex. cash_gap_21d, restante, decision_contradiction)." },
+    "category": { "enum": ["cash", "sales", "traffic", "projects", "people", "decisions", "ops_risk", "founder"] },
+    "title": { "type": "string" },
+    "summary": { "type": "string", "description": "Formulare factuala; la categoria founder — obligatoriu neutra (fara analiza psihologica)." },
+    "detected_at": { "type": "string" },
+    "period_analyzed": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } } },
+    "severity": { "enum": ["info", "low", "medium", "high", "critical"], "description": "EXCLUSIV din scoringul determinist (observationScoring.js) — LLM-ul nu o inventeaza." },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 100 },
+    "data_quality": { "enum": ["complete", "partial", "poor"], "description": "Datele vechi degradeaza calitatea (>24h → partial, >72h → poor)." },
+    "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^\\[[^\\]]+\\]" }, "description": "Obligatoriu nenul; fiecare intrare prefixata cu sursa [sursa]. Fara dovezi → observatie RESPINSA." },
+    "sources": { "type": "array", "items": { "type": "string" } },
+    "metrics": { "type": "object" },
+    "baseline": { "type": "object" },
+    "deviation": { "type": "object" },
+    "business_impact": { "type": "array", "items": { "type": "string" } },
+    "urgency_reason": { "type": "string" },
+    "possible_causes": { "type": "array", "items": { "type": "string" }, "description": "La categoria people se separa: lipsa competentei / resurselor / claritatii / autoritatii / disciplinei / datelor." },
+    "unknowns": { "type": "array", "items": { "type": "string" }, "description": "Limitari declarate explicit (ex. sold bancar neconectat). Lipsa datelor NU se interpreteaza drept zero." },
+    "recommended_next_analysis": { "type": "array", "items": { "type": "string" } },
+    "requires_board_review": { "type": "boolean", "description": "DOAR marcare in aceasta etapa — Executive Board NU e convocat automat (OBSERVATION_BOARD_ESCALATION_ENABLED=false)." },
+    "requires_founder_attention": { "type": "boolean" },
+    "requires_immediate_action": { "type": "boolean" },
+    "deduplication_key": { "type": "string", "description": "Stabila: categorie:tip:entitate — baza anti-spam si a statusurilor." },
+    "status": { "enum": ["new", "repeated", "worsening", "improving", "resolved"] },
+    "safe_to_notify": { "type": "boolean", "description": "true DOAR cu notificari pornite SI shadow oprit SI severitate ≥ high. In shadow: mereu false." }
+  }
+}

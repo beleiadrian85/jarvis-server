@@ -24,6 +24,8 @@ export function getCapabilities() {
     strategy: !!hasStrategy,         // Strategy Engine construit+integrat; activ DOAR cand OPENAI_API_KEY && STRATEGY_ROUTING=on
     voice: !!hasVoice,               // TTS (OpenAI/ElevenLabs)
     vision: !!config.anthropicKey,   // Claude vision (documente/foto)
+    executiveBoard: !!config.executiveBoard,                                    // Board ACTIV (EXECUTIVE_BOARD_ENABLED)
+    executiveBoardShadow: !config.executiveBoard && !!config.executiveBoardShadow, // Board in SHADOW (doar audit)
   };
 }
 

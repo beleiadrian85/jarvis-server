@@ -10,10 +10,11 @@ const { hasStrategy } = await import("../src/config.js");
 
 const caps = getCapabilities();
 
-// 1) Forma completa — exact 12 chei.
+// 1) Forma completa — exact 14 chei.
 const KEYS = [
   "operational", "googleCalendar", "gmail", "drive", "memory",
   "railwayLogs", "ga4", "searchConsole", "banking", "strategy", "voice", "vision",
+  "executiveBoard", "executiveBoardShadow",
 ];
 for (const k of KEYS) assert.ok(k in caps, `lipseste cheia ${k}`);
 assert.equal(Object.keys(caps).length, KEYS.length, "numar de chei neasteptat");
@@ -27,6 +28,9 @@ for (const k of ["railwayLogs", "ga4", "searchConsole", "banking"]) {
 }
 // strategy urmeaza flag-ul: false implicit, true DOAR cand OPENAI_API_KEY && STRATEGY_ROUTING=on.
 assert.equal(caps.strategy, hasStrategy, "strategy trebuie sa reflecte hasStrategy");
+// Executive Board (CODEX Faza 3): ambele implicit OFF (gated).
+if (!process.env.EXECUTIVE_BOARD_ENABLED) assert.equal(caps.executiveBoard, false, "executiveBoard trebuie OFF implicit");
+if (!process.env.EXECUTIVE_BOARD_SHADOW_MODE) assert.equal(caps.executiveBoardShadow, false, "executiveBoardShadow trebuie OFF implicit");
 
 // 4) supports()
 assert.equal(supports("strategy"), hasStrategy);

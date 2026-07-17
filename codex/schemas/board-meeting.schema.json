@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "codex/schemas/board-meeting.schema.json",
+  "title": "BoardMeeting",
+  "description": "O sedinta completa de Executive Board (cele 22 de puncte din BOARD_MEETING_PROTOCOL.md). Impusa in cod de src/executiveBoard/boardValidator.js (validateMeeting). Punctele 20-22 (founder_decision, outcome, lesson) se completeaza ULTERIOR sedintei, nu la emitere.",
+  "type": "object",
+  "required": [
+    "id", "asOf", "type", "question", "problem", "purpose",
+    "data_available", "data_missing", "assumptions", "options", "perspectives",
+    "risks", "impact", "reversibility", "scenarios", "recommendation",
+    "blocked", "missing_perspectives", "founder_decision", "outcome", "lesson"
+  ],
+  "properties": {
+    "id": { "type": "string" },
+    "asOf": { "type": "string", "description": "Data sedintei (YYYY-MM-DD)." },
+    "type": { "enum": ["investment", "hiring", "technical", "marketing", "contract", "general"] },
+    "question": { "type": "string", "description": "Intrebarea originala a fondatorului." },
+    "problem": { "type": "string", "description": "Punctul 1 — problema." },
+    "purpose": { "type": "string", "description": "Punctul 2 — scopul deciziei." },
+    "data_available": { "type": "array", "items": { "type": "string" }, "description": "Punctul 3 — datele disponibile, cu sursa etichetata." },
+    "data_missing": { "type": "array", "items": { "type": "string" }, "description": "Punctul 4 — datele lipsa (nu se inventeaza)." },
+    "assumptions": { "type": "array", "items": { "type": "string" }, "description": "Punctul 5 — ipotezele." },
+    "options": { "type": "array", "items": { "type": "string" }, "description": "Punctul 6 — optiunile analizate." },
+    "perspectives": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Punctul 7 — perspectiva fiecarui director convocat (DirectorOutput).",
+      "items": {
+        "type": "object",
+        "required": ["role", "position", "confidence", "arguments", "evidence", "risks", "conditions", "alternatives", "unanswered_questions"],
+        "properties": {
+          "role": { "enum": ["CEO", "CFO", "COO", "CRO", "CLO", "CHRO", "CMO", "CSO", "CTO", "INNOVATION", "GUARDIAN", "FOUNDER_VOICE"] },
+          "position": { "enum": ["approve", "approve_with_conditions", "reject", "insufficient_data"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 100 },
+          "arguments": { "type": "array", "items": { "type": "string" } },
+          "evidence": { "type": "array", "items": { "type": "string" }, "description": "Fiecare intrare prefixata cu sursa: [cashForecast] / [riskEngine] / [operational] / [memorie] / [founder-dna] / [declarat]." },
+          "risks": { "type": "array", "items": { "type": "string" } },
+          "conditions": { "type": "array", "items": { "type": "string" } },
+          "alternatives": { "type": "array", "items": { "type": "string" } },
+          "unanswered_questions": { "type": "array", "items": { "type": "string" } },
+          "principles": { "type": "array", "items": { "type": "string", "pattern": "^F[0-9]{2}$" }, "description": "Doar FOUNDER_VOICE: principiile documentate citate (F01-F40)." }
+        }
+      }
+    },
+    "risks": { "type": "array", "items": { "type": "string" }, "description": "Punctul 8 — riscurile agregate." },
+    "impact": {
+      "type": "object",
+      "description": "Punctele 9-13 — impact financiar / operational / uman / legal / brand+vanzari.",
+      "required": ["financial", "operational", "human", "legal", "brand_sales"],
+      "properties": {
+        "financial": { "type": "string" },
+        "operational": { "type": "string" },
+        "human": { "type": "string" },
+        "legal": { "type": "string" },
+        "brand_sales": { "type": "string" }
+      }
+    },
+    "reversibility": { "enum": ["reversibila", "partial_reversibila", "ireversibila", "necunoscuta"], "description": "Punctul 14. F23-F24: reversibil → testeaza repede; ireversibil → analiza profunda (consens sub 80% → AMANA)." },
+    "scenarios": {
+      "type": "object",
+      "description": "Punctul 15 — scenariile de succes si esec.",
+      "required": ["success", "failure"],
+      "properties": { "success": { "type": "string" }, "failure": { "type": "string" } }
+    },
+    "recommendation": {
+      "description": "Punctele 16-19 (recomandare, incredere, conditii, criterii de oprire). null cand Guardianul/validatorul a blocat emiterea.",
+      "oneOf": [{ "type": "null" }, { "$ref": "board-recommendation.schema.json" }]
+    },
+    "blocked": {
+      "description": "Motivul blocarii emiterii (structura invalida / neconforma CODEX), altfel null.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["by", "issues"],
+          "properties": {
+            "by": { "type": "string" },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "missing_perspectives": { "type": "array", "items": { "type": "string" }, "description": "Directorii LLM care nu au raspuns (timeout/structura invalida) — sedinta continua fara ei." },
+    "founder_decision": { "oneOf": [{ "type": "null" }, { "type": "string" }], "description": "Punctul 20 — decizia fondatorului (ulterior)." },
+    "outcome": { "oneOf": [{ "type": "null" }, { "type": "string" }], "description": "Punctul 21 — rezultatul ulterior." },
+    "lesson": { "oneOf": [{ "type": "null" }, { "type": "string" }], "description": "Punctul 22 — lectia invatata." }
+  }
+}

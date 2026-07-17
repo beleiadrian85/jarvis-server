@@ -17,6 +17,8 @@ import { ceoHomeReport, riskReport } from "./engines/ceoHome.js";
 import { projectIntelReport } from "./engines/projectIntel.js";
 import { entity360Report } from "./engines/entity360.js";
 import { runCouncil, impactOver50k } from "./council.js";
+// CODEX Faza 3 — Executive Board (GATED: ambele flag-uri implicit OFF → no-op).
+import { boardMode, runBoardMeeting, formatBoardReport, maybeShadowBoard } from "./executiveBoard/index.js";
 import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
 import { audit } from "./audit.js";
@@ -193,10 +195,18 @@ export async function handleMessage(channel, text) {
     return { reply: msg };
   }
 
-  // 2.5) Consiliu AI (la cerere).
-  if (/\bconsiliu\b/i.test(n)) {
-    const q = text.replace(/.*consiliu[:\s]*/i, "").trim() || "ultima decizie discutata";
+  // 2.5) Consiliu AI (la cerere) / Executive Board (CODEX Faza 3, GATED).
+  //      Cu ambele flag-uri OFF (implicit): comportament IDENTIC cu inainte.
+  if (/\bconsiliu\b/i.test(n) || (boardMode() !== "off" && /\b(board|sedinta de board)\b/.test(n))) {
+    const q = text.replace(/.*(consiliu|board)[:\s]*/i, "").trim() || "ultima decizie discutata";
+    if (boardMode() === "active") {
+      const meeting = await runBoardMeeting(q);
+      const rep = formatBoardReport(meeting);
+      remember(channel, text, rep);
+      return { reply: rep };
+    }
     const r = await runCouncil(q);
+    maybeShadowBoard(q); // no-op cu shadow OFF; cu shadow ON: analiza doar in audit
     remember(channel, text, r);
     return { reply: "🏛️ CONSILIU JARVIS\n\n" + r };
   }

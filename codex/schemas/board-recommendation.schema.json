@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "codex/schemas/board-recommendation.schema.json",
+  "title": "BoardRecommendation",
+  "description": "Recomandarea finala sintetizata a Executive Board (CODEX). Impusa in cod de src/executiveBoard/boardValidator.js (validateRecommendation). Boardul recomanda — decide DOAR Adrian Belei.",
+  "type": "object",
+  "required": [
+    "consensus_level", "major_disagreements", "recommendation", "conditions",
+    "risk_limits", "stop_conditions", "founder_decision_required",
+    "codex_compliance", "data_quality", "confidence", "contradicts_prior"
+  ],
+  "properties": {
+    "consensus_level": { "type": "number", "minimum": 0, "maximum": 100, "description": "Ponderea taberei majoritare in pozitiile valide (nu media increderii)." },
+    "major_disagreements": {
+      "type": "array",
+      "description": "Dezacordurile majore — NU se elimina niciodata din sinteza.",
+      "items": {
+        "type": "object",
+        "required": ["role", "position", "reason"],
+        "properties": {
+          "role": { "type": "string" },
+          "position": { "enum": ["approve", "approve_with_conditions", "reject", "insufficient_data"] },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "recommendation": { "enum": ["DA", "NU", "AMANA", "DATE_INSUFICIENTE"] },
+    "conditions": { "type": "array", "items": { "type": "string" }, "description": "Reuniunea conditiilor din pozitiile approve_with_conditions." },
+    "risk_limits": { "type": "array", "items": { "type": "string" }, "description": "Limite explicite de capital/timp/expunere (obligatorii la override-ul fondatorului — F28)." },
+    "stop_conditions": { "type": "array", "items": { "type": "string" }, "description": "Criterii masurabile de oprire a executiei." },
+    "founder_decision_required": { "type": "boolean", "description": "true la emitere (Boardul nu decide); false doar dupa founder_override." },
+    "codex_compliance": {
+      "type": "object",
+      "required": ["compliant", "issues"],
+      "properties": {
+        "compliant": { "type": "boolean" },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      },
+      "description": "Verdictul determinist al Guardianului (src/executiveBoard/guardian.js)."
+    },
+    "data_quality": { "enum": ["completa", "partiala", "slaba"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 100 },
+    "contradicts_prior": {
+      "description": "F39-F40: contradictia fata de o decizie aprobata anterior TREBUIE explicata, altfel Guardianul blocheaza emiterea.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["ref", "explanation"],
+          "properties": {
+            "ref": { "type": "string" },
+            "explanation": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "founder_override": {
+      "type": "object",
+      "description": "F27-F28: Adrian poate demonta un NU unanim si decide DA; override-ul ataseaza obligatoriu limite si criterii de oprire.",
+      "required": ["decision", "applied"],
+      "properties": {
+        "decision": { "type": "string" },
+        "rationale": { "type": "string" },
+        "applied": { "type": "boolean" }
+      }
+    }
+  }
+}

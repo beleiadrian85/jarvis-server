@@ -76,6 +76,12 @@ export const config = {
   // → comportament identic. Cand e "on": rutele de predictie + alerte in morning.
   predictionEngine: process.env.PREDICTION_ENGINE === "on",
 
+  // CODEX Faza 3 — EXECUTIVE BOARD. Ambele implicit OFF → comportament identic
+  // (council.js neatins). ENABLED: raportul Board pe ruta "consiliu"/"board".
+  // SHADOW: council raspunde ca acum, Boardul analizeaza in fundal DOAR in audit.
+  executiveBoard: ["on", "true"].includes(String(process.env.EXECUTIVE_BOARD_ENABLED || "").toLowerCase()),
+  executiveBoardShadow: ["on", "true"].includes(String(process.env.EXECUTIVE_BOARD_SHADOW_MODE || "").toLowerCase()),
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

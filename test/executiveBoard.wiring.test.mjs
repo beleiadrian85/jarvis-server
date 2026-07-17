@@ -146,6 +146,14 @@ ok(caps.executiveBoard === false && caps.executiveBoardShadow === false, "capabi
 // parseBoardJson tolerant.
 ok(parseBoardJson('```json\n{"a":1}\n```')?.a === 1, "parseBoardJson: taie fence-urile markdown");
 ok(parseBoardJson("text fara json") === null && parseBoardJson(null) === null, "parseBoardJson: invalid → null, fara exceptie");
+// Regresie live: modelul emite uneori newline LITERAL in stringuri (JSON invalid).
+ok(parseBoardJson('{"a":"linia unu\nlinia doi"}')?.a === "linia unu linia doi", "parseBoardJson: repara newline literal in string");
+// Regresie live: JSON malformat la primul apel → EXACT o reincercare (max 2 apeluri).
+let rCalls = 0;
+const flakyLlm = async () => { rCalls++; return rCalls === 1 ? '{"problem":"taiat la juma' : fullAnswer(["CEO", "CFO", "COO", "CRO"]); };
+const mR = await runBoardMeeting("Retry pe JSON malformat?", { llm: flakyLlm, data: DATA, memories: [], priorDecisions: [], noCache: true, id: "bm-retry" });
+ok(rCalls === 2, `JSON malformat → exact o reincercare (apeluri: ${rCalls})`);
+ok(mR.missing_perspectives.length === 0 && mR.recommendation !== null, "reincercarea recupereaza sedinta complet");
 
 // Buget de tokeni dinamic: un board de 8 directori nu incape in bugetul unuia de 4
 // (descoperit LIVE in shadow: investment cu 8 roluri → JSON trunchiat → DATE_INSUFICIENTE).

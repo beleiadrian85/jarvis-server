@@ -123,14 +123,18 @@ function defaultLlm(maxTokens) {
   return withFallback(withRetry(withTimeout(call, LLM_TIMEOUT_MS), { retries: 1 }), () => null);
 }
 
-/** Parsare toleranta a JSON-ului din raspunsul modelului. → obiect sau null. */
+/** Parsare toleranta a JSON-ului din raspunsul modelului. → obiect sau null.
+ *  Repara si defectul frecvent al modelelor: newline-uri LITERALE in stringuri
+ *  (invalid in JSON) — structura nu are nevoie de newline-uri, le inlocuim. */
 export function parseBoardJson(text) {
   if (!text || typeof text !== "string") return null;
   const cleaned = text.replace(/```json|```/g, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
-  try { return JSON.parse(cleaned.slice(start, end + 1)); } catch { return null; }
+  const body = cleaned.slice(start, end + 1);
+  try { return JSON.parse(body); } catch { /* incearca reparat */ }
+  try { return JSON.parse(body.replace(/[\u0000-\u0008\u000B-\u001F]/g, " ").replace(/\r?\n/g, " ")); } catch { return null; }
 }
 
 /** Placeholder pentru o perspectiva LLM lipsa/invalida — sedinta continua. */
@@ -166,16 +170,25 @@ export async function runBoardMeeting(question, opts = {}) {
     opts.priorDecisions ? Promise.resolve(opts.priorDecisions) : listDecisions(10).catch(() => []),
   ]);
 
-  // UNICUL apel LLM al sedintei (buget de tokeni scalat cu numarul de roluri).
+  // Apelul LLM al sedintei (buget de tokeni scalat cu numarul de roluri).
+  // Cost LIMITAT: 1 apel; DOAR daca JSON-ul vine malformat (defect stohastic de
+  // model, vazut live in shadow) se mai incearca EXACT o data. Maxim 2 apeluri.
   const llm = opts.llm || defaultLlm(tokensForRoles(llmRoleIds.length));
-  const raw = await llm({
+  const req = {
     system: buildBoardSystem(roleIds),
     user: buildBoardUser({ question, type, dataBlock: data.dataBlock, memories, priorDecisions }),
-  });
-  const parsed = parseBoardJson(raw) || {};
-  // Telemetrie pe cauza esecului (vizibila in railway logs, nu doar in audit).
-  if (raw == null) console.error("[board] llm fara raspuns (timeout/eroare API) — toate perspectivele LLM vor lipsi");
-  else if (!parseBoardJson(raw)) console.error(`[board] JSON neparsabil de la model (len=${String(raw).length}): ${String(raw).slice(0, 120)}`);
+  };
+  let raw = await llm(req);
+  let parsed = parseBoardJson(raw);
+  if (raw == null) {
+    console.error("[board] llm fara raspuns (timeout/eroare API) — toate perspectivele LLM vor lipsi");
+  } else if (!parsed) {
+    console.error(`[board] JSON neparsabil (len=${String(raw).length}, coada: ...${String(raw).slice(-160)}) — reincerc o data`);
+    raw = await llm(req);
+    parsed = parseBoardJson(raw);
+    if (raw != null && !parsed) console.error(`[board] JSON neparsabil si la reincercare (len=${String(raw).length})`);
+  }
+  parsed = parsed || {};
 
   // Normalizare perspective LLM: rol lipsa sau structura invalida → marcata
   // lipsa, sedinta continua (un director picat nu blocheaza Boardul).

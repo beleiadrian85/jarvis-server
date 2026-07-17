@@ -21,7 +21,10 @@ import { guardianReview } from "./guardian.js";
 import { synthesize } from "./boardSynthesis.js";
 import { validateDirectorOutput, REVERSIBILITY } from "./boardValidator.js";
 
-const LLM_TIMEOUT_MS = 45_000;
+// Generarea JSON-ului structurat (4-8 perspective) e LENTA — 45s taia toate
+// raspunsurile (descoperit live in shadow: lipsa=N/N pe toate sedintele).
+// Boardul nu e cale rapida: shadow e fire-and-forget, iar activ e o „sedinta”.
+const LLM_TIMEOUT_MS = 120_000;
 
 /**
  * Buget de tokeni DINAMIC: un board de investitie are 8 perspective LLM si nu
@@ -170,6 +173,9 @@ export async function runBoardMeeting(question, opts = {}) {
     user: buildBoardUser({ question, type, dataBlock: data.dataBlock, memories, priorDecisions }),
   });
   const parsed = parseBoardJson(raw) || {};
+  // Telemetrie pe cauza esecului (vizibila in railway logs, nu doar in audit).
+  if (raw == null) console.error("[board] llm fara raspuns (timeout/eroare API) — toate perspectivele LLM vor lipsi");
+  else if (!parseBoardJson(raw)) console.error(`[board] JSON neparsabil de la model (len=${String(raw).length}): ${String(raw).slice(0, 120)}`);
 
   // Normalizare perspective LLM: rol lipsa sau structura invalida → marcata
   // lipsa, sedinta continua (un director picat nu blocheaza Boardul).

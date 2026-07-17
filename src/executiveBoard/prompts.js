@@ -24,6 +24,7 @@ export function buildBoardSystem(roleIds) {
     "- INNOVATION analizeaza minimum 6 scenarii in arguments si propune in alternatives o „solutie a saptea” neconventionala.\n" +
     "- Daca datele nu ajung pentru o pozitie onesta, directorul raspunde position=\"insufficient_data\" si spune in unanswered_questions ce lipseste.\n" +
     "- Dezacordurile intre directori sunt VALOROASE: nu le netezi, nu cauta consens artificial.\n" +
+    "- Fii CONCIS: maxim 2 intrari per lista, fraze scurte si dense. Listele fara continut raman goale [].\n" +
     "- Ierarhie la conflict: lichiditate > profit; siguranta juridica > viteza; compania > confort.\n" +
     "\nRaspunzi DOAR cu JSON valid (fara text inainte/dupa, fara markdown), exact cu forma:\n" +
     JSON.stringify({

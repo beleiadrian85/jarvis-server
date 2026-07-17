@@ -18,11 +18,11 @@ export const SELECTION = {
 /** Tipul deciziei, dedus determinist din text. Prima potrivire castiga. */
 export function classifyDecision(text) {
   const n = norm(text || "");
-  if (/(angaj|concedi|demisi|recrut|interviu|salari[uz]|marire de salariu|post nou|fisa postului|om nou in echipa|inlocui(m|re).*(om|angajat)|mentorat)/.test(n)) return "hiring";
+  if (/(angaj|concedi|demisi|recrut|interviu|salari[uz]|marire de salariu|post nou|fisa postului|om nou in echipa|inlocui\w*[^.?!]{0,30}\b(om(ul)?|oameni|angajat)|pastr\w*[^.?!]{0,30}\b(om(ul)?|angajat)|\bom(ul)?\b[^.?!]{0,40}(greseal|performant|obose)|mentorat)/.test(n)) return "hiring";
   if (/(contract|clauz|act aditional|notar|semnam|semnarea|acord cadru|parteneriat|antrepriz|furnizor nou|licitati)/.test(n)) return "contract";
   if (/(campanie|marketing|brand|reclam|promovare|\bads\b|google ads|meta ads|social media|lansare pe piata|pret de lista|pozitionare)/.test(n)) return "marketing";
   if (/(tehnic|arhitectur|software|server|automatiz|integrare|aplicati|sistem nou|migrare|refactor|deploy|infrastructur)/.test(n)) return "technical";
-  if (/(investi|achiziti|cumpar(am|a|are)? (teren|utilaj|echipament|apartament|imobil|actiuni)|proiect nou|extindere|dezvoltare noua|credit nou|finantare|imprumut|capital nou|leasing nou)/.test(n)) return "investment";
+  if (/(investi|achiziti|cumpar(am|a|are)? (teren|utilaj|echipament|apartament|imobil|actiuni)|proiect nou|extindere|dezvoltare noua|credit nou|finantare|imprumut|capital nou|leasing nou|incep\w*\s+(inca\s+)?(un|o)\s+(corp|bloc|cladire|imobil|proiect|santier)|inca un (corp|bloc)|(corp|bloc|cladire)\s+nou|constru(im|iesc|ctie noua))/.test(n)) return "investment";
   return "general";
 }
 

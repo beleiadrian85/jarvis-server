@@ -31,6 +31,11 @@ ok(classifyDecision("Lansam campanie Google Ads pentru Corp 3?") === "marketing"
 ok(classifyDecision("Migrare server si automatizare facturare?") === "technical", "clasificare: tehnic");
 ok(classifyDecision("Cumparam terenul de langa Hipodrom, investitie noua?") === "investment", "clasificare: investitie");
 ok(classifyDecision("Ce facem cu situatia de azi?") === "general", "clasificare: general (implicit)");
+// Frazele exacte din validarea live shadow (3.1) — fixate ca sa nu regreseze.
+ok(classifyDecision("Analizeaza daca ar trebui sa incep inca un corp la Bell Residence.") === "investment", "clasificare: 'inca un corp' → investitie");
+ok(classifyDecision("Avem suficiente resurse pentru urmatoarele 90 de zile?") === "general", "clasificare: resurse 90 zile → general (CEO/CFO/COO/CRO/Guardian)");
+ok(classifyDecision("Ar trebui sa pastrez sau sa inlocuiesc un om care repeta aceeasi greseala?") === "hiring", "clasificare: pastrez/inlocuiesc om → oameni");
+ok(classifyDecision("Merita sa automatizam complet procesul de obligatii de plata?") === "technical", "clasificare: automatizare → tehnic");
 ok(JSON.stringify(selectDirectors("investment")) === JSON.stringify(["CEO","CFO","COO","CRO","CLO","CSO","CMO","GUARDIAN","FOUNDER_VOICE","INNOVATION"]), "matrice: investitie → 10 directori");
 ok(JSON.stringify(selectDirectors("hiring")) === JSON.stringify(["CEO","COO","CHRO","CFO","GUARDIAN","FOUNDER_VOICE"]), "matrice: angajare → 6 directori");
 ok(JSON.stringify(selectDirectors("technical")) === JSON.stringify(["CEO","CTO","COO","CRO","GUARDIAN"]), "matrice: tehnic → 5");

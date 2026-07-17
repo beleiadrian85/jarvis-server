@@ -76,7 +76,10 @@ export function formatBoardReport(m) {
 export function maybeShadowBoard(question) {
   if (boardMode() !== "shadow") return;
   runBoardMeeting(question, { shadow: true })
-    .then((m) => console.log(`[board:shadow] ${m.type} rec=${m.recommendation?.recommendation || "BLOCATA"}`))
+    .then((m) => console.log(
+      `[board:shadow] ${m.type} rec=${m.recommendation?.recommendation || "BLOCATA"} ` +
+      `consens=${m.recommendation?.consensus_level ?? "-"} dq=${m.recommendation?.data_quality ?? "-"} ` +
+      `lipsa=${m.missing_perspectives.length}/${m.perspectives.length} [${m.missing_perspectives.join(",") || "-"}]`))
     .catch((e) => {
       console.error("[board:shadow]", e.message);
       audit("board_shadow_error", String(e.message).slice(0, 200)).catch(() => {});

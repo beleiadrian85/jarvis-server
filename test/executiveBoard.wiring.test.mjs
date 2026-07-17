@@ -13,7 +13,7 @@ delete process.env.EXECUTIVE_BOARD_SHADOW_MODE;
 const { config } = await import("../src/config.js");
 const { getCapabilities } = await import("../src/capabilities.js");
 const { boardMode, formatBoardReport, maybeShadowBoard } = await import("../src/executiveBoard/index.js");
-const { runBoardMeeting, parseBoardJson } = await import("../src/executiveBoard/boardSession.js");
+const { runBoardMeeting, parseBoardJson, tokensForRoles } = await import("../src/executiveBoard/boardSession.js");
 const { validateMeeting } = await import("../src/executiveBoard/boardValidator.js");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -146,6 +146,12 @@ ok(caps.executiveBoard === false && caps.executiveBoardShadow === false, "capabi
 // parseBoardJson tolerant.
 ok(parseBoardJson('```json\n{"a":1}\n```')?.a === 1, "parseBoardJson: taie fence-urile markdown");
 ok(parseBoardJson("text fara json") === null && parseBoardJson(null) === null, "parseBoardJson: invalid → null, fara exceptie");
+
+// Buget de tokeni dinamic: un board de 8 directori nu incape in bugetul unuia de 4
+// (descoperit LIVE in shadow: investment cu 8 roluri → JSON trunchiat → DATE_INSUFICIENTE).
+ok(tokensForRoles(8) > tokensForRoles(4), "bugetul de tokeni creste cu numarul de roluri");
+ok(tokensForRoles(4) >= 4000, `board de 4 → minim 4000 tokeni (${tokensForRoles(4)})`);
+ok(tokensForRoles(8) >= 7000 && tokensForRoles(20) <= 8000, `board de 8 → ~7600, plafonat la 8000 (${tokensForRoles(8)})`);
 
 // Zero schema DB noua din modulele Board.
 ok(!/CREATE TABLE|ALTER TABLE/i.test(allBoard), "executiveBoard/*: zero modificari de schema DB");

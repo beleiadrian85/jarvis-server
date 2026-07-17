@@ -22,7 +22,15 @@ import { synthesize } from "./boardSynthesis.js";
 import { validateDirectorOutput, REVERSIBILITY } from "./boardValidator.js";
 
 const LLM_TIMEOUT_MS = 45_000;
-const MAX_TOKENS = 4000; // lectia morning: buget generos, altfel raspuns gol
+
+/**
+ * Buget de tokeni DINAMIC: un board de investitie are 8 perspective LLM si nu
+ * incape in bugetul unuia de 4 (raspuns trunchiat → JSON invalid → toate
+ * perspectivele picate). ~700 tokeni/director + 2000 pentru meta-sedinta.
+ */
+export function tokensForRoles(llmRoleCount) {
+  return Math.min(8000, 2000 + 700 * Math.max(1, llmRoleCount));
+}
 
 // Aceeasi intrebare pe aceleasi date nu redeclanseaza analiza (10 min).
 const _cache = createCache({ maxEntries: 20, ttlMs: 10 * 60_000 });
@@ -104,10 +112,10 @@ export async function collectBoardData() {
 }
 
 /** Apelul LLM implicit: UN call, cu timeout + 1 retry + fallback null. */
-function defaultLlm() {
+function defaultLlm(maxTokens) {
   const call = ({ system, user }) => callClaude({
     system, messages: [{ role: "user", content: user }],
-    maxTokens: MAX_TOKENS, model: config.model,
+    maxTokens, model: config.model,
   });
   return withFallback(withRetry(withTimeout(call, LLM_TIMEOUT_MS), { retries: 1 }), () => null);
 }
@@ -155,8 +163,8 @@ export async function runBoardMeeting(question, opts = {}) {
     opts.priorDecisions ? Promise.resolve(opts.priorDecisions) : listDecisions(10).catch(() => []),
   ]);
 
-  // UNICUL apel LLM al sedintei.
-  const llm = opts.llm || defaultLlm();
+  // UNICUL apel LLM al sedintei (buget de tokeni scalat cu numarul de roluri).
+  const llm = opts.llm || defaultLlm(tokensForRoles(llmRoleIds.length));
   const raw = await llm({
     system: buildBoardSystem(roleIds),
     user: buildBoardUser({ question, type, dataBlock: data.dataBlock, memories, priorDecisions }),

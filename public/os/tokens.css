@@ -1,0 +1,130 @@
+/* JARVIS CEO OS — DESIGN TOKENS.
+   Directie: JARVIS HUD + Apple restraint + aviation legibility + Bloomberg rigor.
+   Dark = flagship; light = first-class (auto prin prefers-color-scheme,
+   suprascris manual prin [data-theme]). Culorile de STATUS sunt strict semantice. */
+
+:root {
+  /* ─ Geometrie & ritm ─ */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --nav-w: 72px;
+  --topbar-h: 52px;
+  --askbar-h: 56px;
+
+  /* ─ Tipografie ─ */
+  --font: "Inter", "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --num: "tnum" 1, "lnum" 1; /* numerale tabulare pt. date financiare */
+
+  /* ─ Miscare (state-driven, intrerupibila) ─ */
+  --t-fast: 140ms cubic-bezier(.4,0,.2,1);
+  --t-med: 260ms cubic-bezier(.4,0,.2,1);
+  --orbit-period: 46s;
+  --pulse-period: 2.6s;
+}
+
+/* ─────────── DARK FLAGSHIP ─────────── */
+:root, :root[data-theme="dark"] {
+  --bg: #060a10;            /* near-black albastru-grafit */
+  --bg-elev: #0b111a;       /* panouri */
+  --bg-elev2: #101826;      /* carduri ridicate */
+  --line: #1b2636;          /* linii fine */
+  --line-strong: #2a3a52;
+  --tx: #dfe8f2;            /* text principal */
+  --tx-dim: #8595aa;        /* text secundar */
+  --tx-faint: #56657a;      /* suport */
+
+  --sys: #4fc3e8;           /* cyan sistem/informatie */
+  --sys-soft: rgba(79,195,232,.13);
+  --ok: #3ecf7a;            /* verde: sanatos/verificat */
+  --ok-soft: rgba(62,207,122,.12);
+  --warn: #e8b34b;          /* chihlimbar: atentie/incertitudine */
+  --warn-soft: rgba(232,179,75,.13);
+  --bad: #f2564d;           /* rosu: actiune/critic */
+  --bad-soft: rgba(242,86,77,.13);
+  --neutral: #6b7c92;
+
+  --glow-sys: 0 0 24px rgba(79,195,232,.18);
+  --shadow-1: 0 2px 12px rgba(0,0,0,.35);
+  --shadow-2: 0 8px 32px rgba(0,0,0,.5);
+  --scrim: rgba(3,6,10,.6);
+  color-scheme: dark;
+}
+
+/* ─────────── LIGHT — first-class ─────────── */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg: #f4f6f9;
+    --bg-elev: #ffffff;
+    --bg-elev2: #eef2f7;
+    --line: #dde4ec;
+    --line-strong: #c3cedb;
+    --tx: #17222f;
+    --tx-dim: #55667a;
+    --tx-faint: #8595aa;
+
+    --sys: #0c7fa8;
+    --sys-soft: rgba(12,127,168,.1);
+    --ok: #12805c;
+    --ok-soft: rgba(18,128,92,.1);
+    --warn: #9a6b08;
+    --warn-soft: rgba(154,107,8,.12);
+    --bad: #c0362e;
+    --bad-soft: rgba(192,54,46,.1);
+    --neutral: #7a8a9d;
+
+    --glow-sys: none;
+    --shadow-1: 0 1px 4px rgba(23,34,47,.08);
+    --shadow-2: 0 8px 24px rgba(23,34,47,.12);
+    --scrim: rgba(23,34,47,.35);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f4f6f9;
+  --bg-elev: #ffffff;
+  --bg-elev2: #eef2f7;
+  --line: #dde4ec;
+  --line-strong: #c3cedb;
+  --tx: #17222f;
+  --tx-dim: #55667a;
+  --tx-faint: #8595aa;
+
+  --sys: #0c7fa8;
+  --sys-soft: rgba(12,127,168,.1);
+  --ok: #12805c;
+  --ok-soft: rgba(18,128,92,.1);
+  --warn: #9a6b08;
+  --warn-soft: rgba(154,107,8,.12);
+  --bad: #c0362e;
+  --bad-soft: rgba(192,54,46,.1);
+  --neutral: #7a8a9d;
+
+  --glow-sys: none;
+  --shadow-1: 0 1px 4px rgba(23,34,47,.08);
+  --shadow-2: 0 8px 24px rgba(23,34,47,.12);
+  --scrim: rgba(23,34,47,.35);
+  color-scheme: light;
+}
+
+/* Miscarea se opreste cand utilizatorul o cere. Informatia nu depinde de ea. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 0ms; --t-med: 0ms; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

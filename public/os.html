@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ro" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#060a10">
+<title>JARVIS — CEO OS</title>
+<link rel="stylesheet" href="/os/tokens.css">
+<link rel="stylesheet" href="/os/os.css">
+<link rel="manifest" href="/os/manifest.webmanifest">
+</head>
+<body>
+<noscript>JARVIS CEO OS are nevoie de JavaScript.</noscript>
+
+<!-- Poarta PIN — aceeasi cheie (x-jarvis-key) ca HUD-ul si Command Center-ul existent. -->
+<div id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <svg class="gate-mark" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="26" fill="none" stroke="var(--sys)" stroke-width="1.5" opacity=".5"/>
+      <circle cx="32" cy="32" r="18" fill="none" stroke="var(--sys)" stroke-width="1" opacity=".8"
+              stroke-dasharray="6 4"/>
+      <circle cx="32" cy="32" r="7" fill="var(--sys)" opacity=".9"/>
+    </svg>
+    <h1>JARVIS <span>CEO OS</span></h1>
+    <p class="gate-sub" id="gate-company">&nbsp;</p>
+    <form id="gate-form" autocomplete="off">
+      <input id="gate-pin" type="password" inputmode="numeric" placeholder="PIN" aria-label="PIN" autofocus>
+      <button type="submit">Intră</button>
+    </form>
+    <p class="gate-err" id="gate-err" role="alert"></p>
+  </div>
+</div>
+
+<!-- Scheletul aplicatiei -->
+<div id="app" class="app" hidden>
+  <div id="demo-banner" class="demo-banner" hidden>DATE DEMO — aceasta NU este realitatea companiei</div>
+
+  <header class="topbar">
+    <button class="topbar-brand" id="btn-home" title="TODAY">
+      <span class="brand-dot" id="brand-dot" aria-hidden="true"></span>
+      <span id="company-name">…</span>
+    </button>
+    <div class="topbar-state" id="jarvis-state-badge" role="status" aria-live="polite"></div>
+    <div class="topbar-right">
+      <span class="topbar-stamp" id="data-stamp" title="Ultima generare a datelor"></span>
+      <button class="icon-btn" id="btn-theme" title="Temă (întunecat/luminos)" aria-label="Schimbă tema">◐</button>
+      <button class="icon-btn" id="btn-refresh" title="Reîmprospătează datele" aria-label="Reîmprospătează">⟳</button>
+    </div>
+  </header>
+
+  <nav class="nav" id="nav" aria-label="Navigație principală">
+    <a href="#/today"    data-route="today"><span class="nav-ico">◉</span><span class="nav-label">Today</span></a>
+    <a href="#/jarvis"   data-route="jarvis"><span class="nav-ico">✦</span><span class="nav-label">Jarvis</span></a>
+    <a href="#/company"  data-route="company"><span class="nav-ico">▣</span><span class="nav-label">Company</span></a>
+    <a href="#/work"     data-route="work"><span class="nav-ico">☰</span><span class="nav-label">Work</span><span class="nav-badge" id="work-badge" hidden></span></a>
+    <a href="#/organism" data-route="organism"><span class="nav-ico">⬡</span><span class="nav-label">Organism</span></a>
+  </nav>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <!-- Ask JARVIS — mereu accesibil (tastatura: /) -->
+  <form id="ask-bar" class="ask-bar" autocomplete="off">
+    <input id="ask-input" placeholder="Întreabă JARVIS…" aria-label="Întreabă JARVIS">
+    <button type="submit" aria-label="Trimite">→</button>
+  </form>
+
+  <!-- Sertar de dovezi / detalii — pastreaza contextul -->
+  <aside id="drawer" class="drawer" hidden aria-label="Detalii și dovezi">
+    <div class="drawer-head">
+      <b id="drawer-title"></b>
+      <button class="icon-btn" id="drawer-close" aria-label="Închide">✕</button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+  </aside>
+</div>
+
+<script type="module" src="/os/main.js"></script>
+</body>
+</html>

@@ -108,6 +108,12 @@ export const config = {
   founderAttentionShadow: !["off", "false"].includes(String(process.env.FOUNDER_ATTENTION_SHADOW_MODE || "").toLowerCase()),
   founderNotifications: ["on", "true"].includes(String(process.env.FOUNDER_NOTIFICATIONS_ENABLED || "").toLowerCase()),
 
+  // CODEX Faza 4.6 — canale REALE, SEPARATE deliberat (activarea digestului NU
+  // poate activa alertele): digestul zilnic si alertele interruptive au flag-uri
+  // proprii, ambele implicit OFF. Alertele nu au inca nicio cale de trimitere.
+  founderDailyDigest: ["on", "true"].includes(String(process.env.FOUNDER_DAILY_DIGEST_ENABLED || "").toLowerCase()),
+  founderInterruptiveAlerts: ["on", "true"].includes(String(process.env.FOUNDER_INTERRUPTIVE_ALERTS_ENABLED || "").toLowerCase()),
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

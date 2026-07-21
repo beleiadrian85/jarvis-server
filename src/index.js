@@ -3,13 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, hasCalendar, hasOperational, hasDb } from "./config.js";
 import { initDb } from "./db.js";
-import { bot } from "./telegram.js";
+import { bot, pushToOwner } from "./telegram.js";
 import { registerApi } from "./api.js";
 import { startBackupSchedule } from "./backup.js";
 import { startScheduler } from "./scheduler.js";
 import { startNotifier } from "./notifier.js";
 import { startMonitor } from "./monitor.js";
 import { startObservationEngine } from "./observationEngine/index.js";
+import { startDigestSchedule } from "./founderAttention/index.js";
 import { expireOldActions } from "./approvalGate.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,10 @@ startMonitor();
 
 // CODEX Faza 4 — Observation Engine (GATED: OFF implicit → dormant, zero cron).
 startObservationEngine();
+
+// CODEX Faza 4.6 — Daily CEO Digest (GATED separat; senderul e injectat aici,
+// modulele founderAttention raman structural fara canale de notificare).
+startDigestSchedule({ send: pushToOwner });
 
 // Oprire curata.
 process.once("SIGINT", () => bot.stop("SIGINT"));

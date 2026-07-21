@@ -19,9 +19,14 @@ export function buildDailyDigest({ episodes = [], candidates = [] }) {
   };
 
   // 1) Atentia ta: alerte/decizii (inclusiv cele retrogradate din quiet hours).
+  //    DATA_REQUIRED se afiseaza EXPLICIT ca cerere de date, nu ca decizie.
   for (const c of candidates.filter((x) =>
-    ["INTERRUPTIVE_ALERT", "FOUNDER_DECISION_REQUIRED", "DATA_REQUIRED_BEFORE_DECISION"].includes(x.attention_level) || x.quiet_deferred))
-    add("CE NECESITĂ ATENȚIA TA", `${c.title}${c.deadline ? ` (${c.deadline})` : ""} — ${c.why_now.slice(0, 110)}`);
+    ["INTERRUPTIVE_ALERT", "FOUNDER_DECISION_REQUIRED", "DATA_REQUIRED_BEFORE_DECISION"].includes(x.attention_level) || x.quiet_deferred)) {
+    const prefix = c.attention_level === "DATA_REQUIRED_BEFORE_DECISION"
+      ? `Întâi avem nevoie de date: ${(c.missing_data[0] || "date esențiale").replace(/\.$/, "")} → apoi decizia „${c.title}”`
+      : `${c.title}${c.deadline ? ` (${c.deadline})` : ""} — ${c.why_now.slice(0, 110)}`;
+    add("CE NECESITĂ ATENȚIA TA", prefix);
+  }
 
   // 2) Agravari.
   for (const e of eps.filter((x) => x.status === "worsening"))

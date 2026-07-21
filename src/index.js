@@ -11,6 +11,7 @@ import { startNotifier } from "./notifier.js";
 import { startMonitor } from "./monitor.js";
 import { startObservationEngine } from "./observationEngine/index.js";
 import { startDigestSchedule } from "./founderAttention/index.js";
+import { registerCeoApi } from "./ceo/api.js";
 import { expireOldActions } from "./approvalGate.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,6 +33,8 @@ app.get("/health", (_req, res) => {
 
 // API pentru HUD (chat + raport, protejat cu PIN).
 registerApi(app);
+// CEO Command Center (Master Phase) — READ-ONLY, sub acelasi PIN /api.
+registerCeoApi(app);
 
 // HUD-ul (PWA) — servit static de pe radacina.
 app.use(express.static(path.join(__dirname, "..", "public")));

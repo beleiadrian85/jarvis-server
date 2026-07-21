@@ -42,7 +42,7 @@ export function getBankStatementsSummary() {
       lines: agg?.lines ?? 0, last_op: agg?.last_op ? String(agg.last_op).slice(0, 10) : null,
       note: "Extrasele contin RULAJE, nu sold — soldul curent ramane input manual pana la o sursa cu sold.",
     };
-  });
+  }, "bank_statements");
 }
 
 /** Incasarile estimate introduse in Operational (mecanismul EXISTA; poate fi gol). */
@@ -55,7 +55,7 @@ export function getEstimatedInflows() {
       label: r.label, amountRON: r.currency === "EUR" ? r.amount * 5.06 : r.amount,
       currency: r.currency, dueDate: String(r.for_date).slice(0, 10), project: r.project, by: r.created_by,
     }));
-  });
+  }, "estimated_inflows");
 }
 
 /** Facturile emise (income_invoices) — sursa incasarilor CONFIRMATE de primit. */
@@ -71,7 +71,7 @@ export function getIncomeInvoices() {
       currency: r.currency, dueDate: r.due_date ? String(r.due_date).slice(0, 10) : null,
       status: r.status, documentDate: r.document_date ? String(r.document_date).slice(0, 10) : null,
     }));
-  });
+  }, "income_invoices");
 }
 
 /** Traficul site-ului (Spion) — agregat zilnic, ultimele N zile. */
@@ -85,7 +85,7 @@ export function getSiteTraffic(days = 28) {
       daily: rows.map((r) => ({ date: r.date, visits: r.visitors, hits: r.hits })),
       lastDataAt: last?.latest ? new Date(last.latest).toISOString() : null,
     };
-  });
+  }, "site_traffic");
 }
 
 /** Lead-urile din site (mecanismul exista; volumul poate fi mic). */
@@ -98,7 +98,7 @@ export function getLeads() {
       name: r.name, source: r.source || r.utm_source || "necunoscut", status: r.status,
       handledBy: r.handled_by, createdAt: String(r.created_at).slice(0, 10),
     }));
-  });
+  }, "leads");
 }
 
 /** Backlog-ul de facturi furnizori (neconfirmate → nu intra in necesarul oficial). */
@@ -111,7 +111,7 @@ export function getSupplierBacklog() {
              sum(due_amount) FILTER (WHERE COALESCE(confirmed,0)=0 AND COALESCE(paid,0)=0)::float AS unconfirmed_amount
       FROM supplier_due_items WHERE COALESCE(superseded,0)=0`);
     return agg || { total: 0, unconfirmed: 0, unconfirmed_amount: 0 };
-  });
+  }, "supplier_backlog");
 }
 
 /** Rulajele bancare linie cu linie (pentru Bank Intelligence). */

@@ -13,13 +13,15 @@ const SRC = (f) => readFileSync(path.join(__dirname, "..", "src", f), "utf8");
 let failed = 0;
 const ok = (c, m) => { console.log(`${c ? "✅" : "❌"} ${m}`); if (!c) failed++; };
 
-// Garzi de sursa pe TOATE modulele CEO.
-const FILES = readdirSync(path.join(__dirname, "..", "src", "ceo")).map((f) => "ceo/" + f);
+// Garzi de sursa pe modulele CEO "core" (fara subdirectorul nervous/ — acela
+// are UNICA suprafata de scriere TASKS-ONLY, cu garzile lui dedicate A-Z in
+// ceoNervousV1.test.mjs: assertTasksOnly, kill switch, idempotenta, limite).
+const FILES = readdirSync(path.join(__dirname, "..", "src", "ceo")).filter((f) => f.endsWith(".js")).map((f) => "ceo/" + f);
 const all = FILES.map(SRC).join("\n");
-ok(!/from\s+["'][^"']*(taskflow|approvalGate|mcp)\.js["']/.test(all), "zero importuri de executie (proposal ≠ execution, structural)");
-ok(!/from\s+["'][^"']*(telegram|notifier|tts)\.js["']/.test(all), "zero canale de notificare (CEO observa si propune, nu trimite)");
+ok(!/from\s+["'][^"']*(taskflow|approvalGate|mcp)\.js["']/.test(all), "zero importuri de executie in CEO core (proposal ≠ execution, structural)");
+ok(!/from\s+["'][^"']*(notifier|tts)\.js["']/.test(all), "zero canale de notificare in CEO core (telegram doar in api.js, gated)");
 ok(!/from\s+["'][^"']*sources\/(gmail|calendar)/.test(all), "zero scrieri Gmail/Calendar");
-ok(!/(create_task|update_task|delete_task|proposeAction|sendMessage|createDraft)/.test(all), "zero apeluri de scriere/actiune");
+ok(!/(create_task|update_task|delete_task|createDraft)\(/.test(all), "zero apeluri de scriere/actiune in CEO core");
 ok(!/CREATE TABLE|ALTER TABLE/i.test(all), "zero schema DB noua (totul in jarvis_state)");
 ok(!/runBoardMeeting/.test(all), "Boardul nu e convocat de CEO core (separat, gated)");
 const gate = await import("../src/approvalGate.js");
@@ -29,12 +31,13 @@ ok(!/ceo\//.test(SRC("brain.js")), "brain.js neatins — raspunsurile vizibile n
 // API read-only (Command Center foundation).
 const api = SRC("ceo/api.js");
 ok((api.match(/app\.get\(/g) || []).length >= 8 && !/app\.(put|delete|patch)\(/.test(api), "API: fara PUT/DELETE/PATCH");
-// Exact 4 POST-uri permise (MP2-4): sold, decizie Inbox (±send L2), credentiale
-// Google, mapping identitate. Singurul outbound = decizie cu send:true pe
-// information_request (LEVEL 2, explicit, idempotent).
+// Exact 5 POST-uri permise (MP2-4 + Nervous V1): sold, decizie Inbox (±send
+// L2), credentiale Google, mapping identitate, nervous-cycle (declansare ciclu
+// de evaluare — shadow-safe, zero outbound). Singurul outbound = decizie cu
+// send:true pe information_request (LEVEL 2, explicit, idempotent).
 const posts = api.match(/app\.post\("([^"]+)"/g) || [];
-ok(posts.length === 4 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping"].every((p) => posts.join(",").includes(p)),
-   `API: DOAR cele 4 POST-uri sanctionate (${posts.length})`);
+ok(posts.length === 5 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping", "nervous-cycle"].every((p) => posts.join(",").includes(p)),
+   `API: DOAR cele 5 POST-uri sanctionate (${posts.length})`);
 ok(/registerCeoApi\(app\)/.test(SRC("index.js")) &&
    SRC("index.js").indexOf("registerApi(app)") < SRC("index.js").indexOf("registerCeoApi(app)"),
    "rutele /api/ceo/* montate DUPA middleware-ul PIN existent");

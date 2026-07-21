@@ -73,6 +73,9 @@ export function registerCeoApi(app) {
         // gap-ul se inchide, recalculul (min cash/deficit) e automat la citire.
         const { correlateResponse } = await import("./requestDelivery.js");
         r.loop = await correlateResponse("cash", { valid: true, note: `sold ${r.account.bank}/${r.account.account} introdus de ${r.account.enteredBy}` });
+        // NERVOUS V1 §2: reactie la schimbare de stare (nu doar cron) —
+        // ciclul reevalueaza compania cu datele noi (best-effort, ne-blocant).
+        import("./nervous/index.js").then((n) => n.triggerReactiveCycle("bank-balance")).catch(() => {});
       }
       res.status(r.ok ? 200 : 400).json(r);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -101,6 +104,8 @@ export function registerCeoApi(app) {
         };
         r.delivery = await deliverApprovedRequest(req.body.proposal_id, { send: pushToChat, formUrl, stillNeeded });
       }
+      // NERVOUS V1: o decizie a fondatorului e schimbare de stare → reevaluare.
+      import("./nervous/index.js").then((n) => n.triggerReactiveCycle("founder-decision")).catch(() => {});
       res.json(r);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
@@ -253,6 +258,45 @@ export function registerCeoApi(app) {
         needs_decision: Object.values(proposals).filter((p) => ["draft", "proposed"].includes(p.state)),
         gaps: answers.q7_informatii_lipsa,
       });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ── NERVOUS SYSTEM V1 (§25-26) — vederea ORGANISM + pulsul ─────────────
+  // Ce face CEO AI acum, in maximum 10 secunde: ultimul snapshot de ciclu.
+  app.get("/api/ceo/organism", async (_req, res) => {
+    try {
+      const last = await getState("ceo:nervous:last", null);
+      const { config: cfg } = await import("../config.js");
+      if (!last) return res.json({ status: cfg.nervousSystem ? "PORNIT — primul ciclu inca nu a rulat" : "DORMANT (CEO_NERVOUS_SYSTEM_ENABLED=off)", enabled: cfg.nervousSystem, mode: cfg.taskAutonomy });
+      res.json({ enabled: cfg.nervousSystem, mode: cfg.taskAutonomy, autonomous_info_tasks: cfg.autonomousInfoTasks, kill_switch: cfg.nervousKill, ...last });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Activity Stream — pulsul organismului, auditabil (§26).
+  app.get("/api/ceo/activity-stream", async (_req, res) => {
+    try {
+      const stream = await getState("ceo:nervous:stream", []) || [];
+      const { formatStream } = await import("./nervous/activityStream.js");
+      res.json({ entries: stream.slice(-40), text: formatStream(stream, 25) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Sanatatea sistemului nervos (§24) + memoria organizationala (§21).
+  app.get("/api/ceo/nervous-health", async (_req, res) => {
+    try {
+      const last = await getState("ceo:nervous:last", null);
+      const memory = await getState("ceo:nervous:memory", {}) || {};
+      const { summarizeMemory } = await import("./nervous/orgMemory.js");
+      res.json({ health: last?.system_health || { status: "UNKNOWN", note: "niciun ciclu inca" }, selfeval: last?.selfeval || null, memory: summarizeMemory(memory) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Declansare manuala a unui ciclu (shadow-safe; util pentru validare).
+  app.post("/api/ceo/nervous-cycle", async (_req, res) => {
+    try {
+      const { runNervousCycle } = await import("./nervous/cycle.js");
+      const r = await runNervousCycle({ kind: "manual", persist: true });
+      res.json(r.error ? { ok: false, error: r.error } : { ok: true, skipped: r.skipped || null, organism: r.organism || null });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

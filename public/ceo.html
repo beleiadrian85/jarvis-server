@@ -89,6 +89,12 @@ small{color:var(--dim)}
 <div class="card"><h2>Identități Telegram (mapare pentru livrări)</h2><div id="idents" class="dim">—</div>
   <div class="row"><select id="mapPerson"><option value="dana">Dana</option><option value="nelu">Nelu</option><option value="mihaela">Mihaela</option></select><input id="mapChat" placeholder="chat id (din candidați)"><button onclick="saveMap()">Map</button></div>
 </div>
+<div class="card"><h2>ORGANISM — ce face CEO AI acum</h2>
+  <div id="orgStatus" class="dim">—</div>
+  <div id="orgBody" style="margin-top:8px"></div>
+  <div class="row" style="margin-top:8px"><button class="ghost" onclick="runCycle()">Rulează un ciclu acum (shadow-safe)</button><span id="orgMsg" class="dim"></span></div>
+</div>
+<div class="card"><h2>Pulsul organismului (activity stream)</h2><pre id="orgStream" class="dim" style="white-space:pre-wrap;font-size:12px;margin:0">—</pre></div>
 <div class="card"><h2>Harta datelor (click = de ce + cum reparăm)</h2><div id="dataMap"></div></div>
 <div class="card"><h2>Îmbunătățiri propuse (backlog CEO)</h2><ul id="improve"></ul></div>
 </div>
@@ -134,6 +140,7 @@ async function boot() {
   renderBalances();
   renderExtras();
   renderMp5();
+  renderOrganism();
 }
 async function renderExtras() {
   const gs = await api("/api/ceo/google-status");
@@ -181,6 +188,32 @@ async function renderMp5() {
 async function saveMap() {
   const r = await api("/api/ceo/people-mapping", { method: "POST", body: JSON.stringify({ person_id: $("mapPerson").value, chat_id: $("mapChat").value.trim() }) });
   alert(r?.ok ? "Mapat." : "Eroare: " + (r?.error || "")); renderMp5();
+}
+async function renderOrganism() {
+  const o = await api("/api/ceo/organism");
+  if (!o) return;
+  if (!o.at) { $("orgStatus").textContent = o.status || "—"; return; }
+  $("orgStatus").innerHTML = "<b class=" + (o.kill_switch ? "bad" : "ok") + ">" + (o.ceo_status || "") + "</b>" +
+    " · mod: <b>" + (o.mode || "?").toUpperCase() + "</b> · task-uri autonome: " + (o.autonomous_info_tasks ? "<b class=warn>ON</b>" : "OFF") +
+    " · sănătate: " + (o.system_health?.status || "?") + " (" + (o.system_health?.score ?? "—") + ")";
+  const L = (t, items, f) => items && items.length ? "<b>" + t + ":</b><br>" + items.map(f).join("<br>") + "<br>" : "";
+  $("orgBody").innerHTML =
+    L("CE VĂD", [o.what_i_see], (w) => "date " + w.data_health + "/100 · " + w.observations + " observații · " + w.open_tasks + " taskuri deschise" + (w.stale_sources?.length ? " · surse stale: " + w.stale_sources.join(", ") : "")) +
+    L("CE AM NEVOIE", o.what_i_need, (n) => "• [" + n.type + "] " + n.title) +
+    L("CE AM CERUT OAMENILOR", o.what_i_asked, (a) => "• " + (a.title || "?") + " → " + (a.owner || "?") + " [" + a.state + (a.shadow ? " · SHADOW" : "") + "]") +
+    L("ÎN AȘTEPTARE", o.waiting, (w) => "• " + w) +
+    L("BLOCAT", o.blocked, (b) => "• " + b) +
+    L("REZOLVAT", o.resolved, (r) => "• " + r) +
+    L("NECESITĂ " + (o.founder_label || "FONDATOR").toUpperCase(), o.needs_founder, (n) => "• " + n) +
+    (o.verdict ? "<small class=dim>" + o.verdict + "</small>" : "");
+  const s = await api("/api/ceo/activity-stream");
+  if (s && s.text) $("orgStream").textContent = s.text;
+}
+async function runCycle() {
+  $("orgMsg").textContent = "rulează…";
+  const r = await api("/api/ceo/nervous-cycle", { method: "POST", body: "{}" });
+  $("orgMsg").textContent = r?.ok ? (r.skipped ? "sărit: " + r.skipped : "ciclu rulat") : "eroare: " + (r?.error || "?");
+  renderOrganism();
 }
 function renderInbox(list) {
   const el = $("inbox"); el.innerHTML = "";

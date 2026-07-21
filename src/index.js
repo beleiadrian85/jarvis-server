@@ -69,6 +69,11 @@ startObservationEngine();
 // modulele founderAttention raman structural fara canale de notificare).
 startDigestSchedule({ send: pushToOwner });
 
+// NERVOUS SYSTEM V1 — organismul managerial (GATED: OFF implicit → dormant).
+// FULL READ / TASKS-ONLY WRITE; shadow implicit; autonomia o decide Adrian.
+const { startNervousSystem } = await import("./ceo/nervous/index.js");
+startNervousSystem();
+
 // Oprire curata.
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));

@@ -68,6 +68,12 @@ export function registerCeoApi(app) {
   app.post("/api/ceo/bank-balance", async (req, res) => {
     try {
       const r = await setBalance({ ...req.body, source: "command-center" });
+      if (r.ok) {
+        // Bucla se inchide: soldul primit → request-ul CASH devine COMPLETED,
+        // gap-ul se inchide, recalculul (min cash/deficit) e automat la citire.
+        const { correlateResponse } = await import("./requestDelivery.js");
+        r.loop = await correlateResponse("cash", { valid: true, note: `sold ${r.account.bank}/${r.account.account} introdus de ${r.account.enteredBy}` });
+      }
       res.status(r.ok ? 200 : 400).json(r);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
@@ -76,11 +82,42 @@ export function registerCeoApi(app) {
     catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // Approval Inbox: decizia fondatorului (nu trimite nimic — doar stare+audit).
+  // Approval Inbox: decizia fondatorului. Cu send:true (butonul APPROVE & SEND)
+  // si DOAR pentru information_request cu flag-ul Level 2 activ → livrare
+  // imediata, idempotenta, catre identitatea verificata. Restul = doar stare.
   app.post("/api/ceo/proposals/decision", async (req, res) => {
     try {
       const r = await decideProposal({ ...req.body, decided_by: "adrian" });
+      if (!r.ok) return res.status(400).json(r);
+      if (req.body.send === true && String(req.body.decision).toUpperCase() === "APPROVE") {
+        const { deliverApprovedRequest } = await import("./requestDelivery.js");
+        const { pushToChat } = await import("../telegram.js");
+        const formUrl = `https://${req.get("host")}/ceo.html`;
+        r.delivery = await deliverApprovedRequest(req.body.proposal_id, { send: pushToChat, formUrl });
+      }
+      res.json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Mapping identitate (persoana → Telegram chat id; persoana trimite /id botului).
+  app.post("/api/ceo/people-mapping", async (req, res) => {
+    try {
+      const { setIdentity } = await import("./requestDelivery.js");
+      const r = await setIdentity(req.body.person_id, req.body.chat_id, "adrian");
       res.status(r.ok ? 200 : 400).json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Raport de reconciliere SmartBill ↔ Operational ↔ banca (read-only, grupat).
+  app.get("/api/ceo/reconciliation", async (_req, res) => {
+    try {
+      const { reconcileWithOperational, smartbillConfigured } = await import("../connectors/smartbill.js");
+      const { getIncomeInvoices, getBankLines } = await import("../connectors/opsdata.js");
+      const { buildReconciliationReport } = await import("./nervousSystem.js");
+      if (!smartbillConfigured()) return res.json({ status: "NOT_CONNECTED" });
+      const [inv, lines] = await Promise.all([getIncomeInvoices(), getBankLines(300)]);
+      const rec = await reconcileWithOperational(inv || [], { maxCalls: 10 });
+      res.json(buildReconciliationReport({ recResults: rec.results || [], incomeInvoices: inv || [], bankLines: lines || [] }));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

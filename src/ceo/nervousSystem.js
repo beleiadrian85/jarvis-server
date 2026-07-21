@@ -183,3 +183,59 @@ export function buildAttribution({ traffic = null, leads = null, funnelCounts = 
   }
   return { chain, findings, attribution_gaps: gaps };
 }
+
+// ── 7. RECONCILIERE SmartBill ↔ Operational ↔ banca (fara auto-corectie) ─
+export function buildReconciliationReport({ recResults = [], incomeInvoices = [], bankLines = [] } = {}) {
+  const rows = recResults.filter((r) => r.totalRON != null || r.status).map((r) => {
+    const inv = incomeInvoices.find((i) => i.ref === r.ref) || {};
+    const bankHit = bankLines.find((l) => l.direction === "in" &&
+      Math.abs(Math.abs(l.amountRON) - (r.paidRON || inv.amountRON || 0)) <= Math.max(10, (inv.amountRON || 0) * 0.01));
+    const diff = (r.unpaidRON ?? null) != null && (inv.remainingRON ?? null) != null
+      ? Math.round(r.unpaidRON - inv.remainingRON) : null;
+    return {
+      ref: r.ref, client: r.client || inv.client,
+      operational_says: inv.remainingRON != null ? `${Math.round(inv.remainingRON)} lei de incasat` : "necunoscut",
+      smartbill_says: r.unpaidRON != null ? `${Math.round(r.unpaidRON)} lei neincasat (platit ${Math.round(r.paidRON)} lei)` : (r.status || r.error || "?"),
+      bank_says: bankHit ? `incasare ${Math.round(Math.abs(bankHit.amountRON))} lei pe ${bankHit.date}` : "fara potrivire in rulaje",
+      difference: diff, likely_cause: diff === null ? "date incomplete" : diff !== 0 ? "paid_amount neactualizat in Operational (SmartBill e sursa colectarii)" : "-",
+      needs_human_review: diff !== null && diff !== 0,
+    };
+  });
+  const needing = rows.filter((r) => r.needs_human_review);
+  return {
+    rows, divergences: needing.length,
+    // UN singur Information Request grupat (nu 5 mesaje separate).
+    grouped_review_proposal: needing.length ? {
+      to: "dana", type: "information_request",
+      ask: `Clarifica statusul de incasare pentru ${needing.length} facturi (${needing.map((r) => r.ref).join(", ")}): SmartBill si Operational difera. Actualizeaza paid_amount in Operational unde e cazul.`,
+      no_auto_correction: true,
+    } : null,
+  };
+}
+// ── 10. BOOTSTRAP registre din datele EXISTENTE (fara inventare) ────────
+export function bootstrapRegisters({ asOf, obligations = [], financing = null } = {}) {
+  const contracts = [];
+  const assets = [];
+  // Chirii recurente = contracte de inchiriere (partea din titlu).
+  for (const o of obligations.filter((x) => /chirie/i.test(x.title || ""))) {
+    if (contracts.some((c) => c.party === o.title)) continue;
+    contracts.push({ party: o.title.replace(/chirie\s*/i, "").trim() || o.title, type: "inchiriere",
+      value: { VALUE: o.amountRON, SOURCE: "[operational] obligatii recurente", AS_OF: asOf, CONFIDENCE: 80 },
+      start: null, end: null, notice_period: null, document_source: "obligatii Operational" });
+  }
+  // Finantarile = contracte de credit/leasing; leasingurile auto = active.
+  for (const e of financing?.entries || []) {
+    contracts.push({ party: e.creditor, type: `contract ${e.type}`,
+      value: { VALUE: e.installmentRON, SOURCE: "[financingRegister] scadentar", AS_OF: asOf, CONFIDENCE: 75 },
+      obligations: `${e.known_installments} rate cunoscute`, document_source: "scadentar Operational" });
+    if (e.type === "leasing" && /mercedes|bcr|rci|transilvania/i.test(e.creditor))
+      assets.push({ asset: e.creditor.replace(/laesing|leasing|rata/gi, "").trim() || e.creditor, owner: "PROFI CONCEPT (leasing)",
+        value: { VALUE: "UNKNOWN", SOURCE: "-", AS_OF: asOf, CONFIDENCE: 0 },
+        debt: { VALUE: e.installmentRON + " lei/luna", SOURCE: "[financingRegister]", AS_OF: asOf, CONFIDENCE: 75 } });
+  }
+  return {
+    contracts: { entries: contracts, status: contracts.length ? "PARTIAL (derivat din date)" : "NOT_CONNECTED" },
+    assets: { entries: assets, status: assets.length ? "PARTIAL (derivat din leasinguri)" : "NOT_CONNECTED" },
+    legal: { entries: [], status: "NOT_CONNECTED", note: "fara sursa juridica structurata — Information Request cand devine relevant" },
+  };
+}

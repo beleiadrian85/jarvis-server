@@ -29,11 +29,12 @@ ok(!/ceo\//.test(SRC("brain.js")), "brain.js neatins — raspunsurile vizibile n
 // API read-only (Command Center foundation).
 const api = SRC("ceo/api.js");
 ok((api.match(/app\.get\(/g) || []).length >= 8 && !/app\.(put|delete|patch)\(/.test(api), "API: fara PUT/DELETE/PATCH");
-// Exact 3 POST-uri permise (MP2+MP3): soldul, decizia din Inbox, credentialele
-// Google (wizard). Toate aditive (jarvis_state), auditate, fara efecte externe.
+// Exact 4 POST-uri permise (MP2-4): sold, decizie Inbox (±send L2), credentiale
+// Google, mapping identitate. Singurul outbound = decizie cu send:true pe
+// information_request (LEVEL 2, explicit, idempotent).
 const posts = api.match(/app\.post\("([^"]+)"/g) || [];
-ok(posts.length === 3 && posts.join(",").includes("bank-balance") && posts.join(",").includes("proposals/decision") && posts.join(",").includes("google-credentials"),
-   `API: DOAR cele 3 POST-uri sanctionate (${posts.length})`);
+ok(posts.length === 4 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping"].every((p) => posts.join(",").includes(p)),
+   `API: DOAR cele 4 POST-uri sanctionate (${posts.length})`);
 ok(/registerCeoApi\(app\)/.test(SRC("index.js")) &&
    SRC("index.js").indexOf("registerApi(app)") < SRC("index.js").indexOf("registerCeoApi(app)"),
    "rutele /api/ceo/* montate DUPA middleware-ul PIN existent");

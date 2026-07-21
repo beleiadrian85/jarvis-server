@@ -112,6 +112,10 @@ export const config = {
   // poate activa alertele): digestul zilnic si alertele interruptive au flag-uri
   // proprii, ambele implicit OFF. Alertele nu au inca nicio cale de trimitere.
   founderDailyDigest: ["on", "true"].includes(String(process.env.FOUNDER_DAILY_DIGEST_ENABLED || "").toLowerCase()),
+
+  // Master Phase 4 — LEVEL 2 DOAR pentru INFORMATION_REQUEST aprobate explicit
+  // (buton APPROVE & SEND). Implicit OFF; restul tipurilor raman LEVEL 1.
+  inforeqDelivery: ["on", "true"].includes(String(process.env.CEO_INFOREQUEST_DELIVERY_ENABLED || "").toLowerCase()),
   founderInterruptiveAlerts: ["on", "true"].includes(String(process.env.FOUNDER_INTERRUPTIVE_ALERTS_ENABLED || "").toLowerCase()),
 
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.

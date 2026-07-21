@@ -16,7 +16,7 @@ export function validateBalanceEntry(e) {
   if (!e.bank) errors.push("bank lipsa");
   if (!e.account) errors.push("account lipsa");
   if (!["RON", "EUR"].includes(e.currency)) errors.push("currency RON|EUR");
-  if (typeof e.available !== "number" || !isFinite(e.available) || e.available < 0) errors.push("available invalid");
+  if (typeof e.available !== "number" || !isFinite(e.available)) errors.push("available invalid"); // negativ = overdraft REAL, permis si marcat
   if (e.blocked != null && (typeof e.blocked !== "number" || e.blocked < 0)) errors.push("blocked invalid");
   if (!e.enteredBy) errors.push("enteredBy lipsa");
   return { valid: !errors.length, errors };
@@ -33,6 +33,7 @@ export async function setBalance(entry) {
     available: entry.available, blocked: entry.blocked ?? 0,
     asOf: entry.asOf || new Date().toISOString(),
     source: entry.source || "manual", enteredBy: entry.enteredBy,
+    overdraft: entry.available < 0 || undefined,
   };
   st.accounts = [...st.accounts.filter((a) => `${a.bank}|${a.account}` !== key), acc];
   await setState(KEY, st);
@@ -51,10 +52,12 @@ export async function getBalances({ nowMs = Date.now(), eurRon = 5.06 } = {}) {
   const usable = withAge.filter((a) => a.age_hours <= EXPIRED_HOURS);
   if (!usable.length) return { expired: true, accounts: withAge, totalRON: null, freshness: "EXPIRED" };
   const totalRON = usable.reduce((s, a) => s + a.available * (a.currency === "EUR" ? eurRon : 1), 0);
+  // FX explicit, cu sursa — niciodata implicit.
   const oldest = Math.max(...usable.map((a) => a.age_hours));
   return {
     totalRON: Math.round(totalRON), accounts: withAge,
     freshness: oldest <= STALE_HOURS ? "FRESH" : "STALE",
     oldest_hours: oldest,
+    fx: { EUR_RON: eurRon, source: "config EUR_RON (explicit)" },
   };
 }

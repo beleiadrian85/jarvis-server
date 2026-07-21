@@ -57,9 +57,14 @@ export function buildReceivablesRegister({ asOf, incomeInvoices = null, estimate
   };
 }
 
-/** Incasarile CONFIRMATE ca intrari pt Cash Intelligence. PUR. */
+// POLITICA DE FORECAST (explicita): lichiditatea foloseste DOAR CONFIRMED
+// integral + OVERDUE ponderat 0.6 (restantele nu sunt certe). PROBABLE intra
+// separat, ponderat, NICIODATA in available_cash. Nu se umfla lichiditatea.
+export const FORECAST_POLICY = { CONFIRMED: 1.0, OVERDUE: 0.6, PROBABLE: 0.0 };
+
+/** Incasarile CONFIRMATE ca intrari pt Cash Intelligence (politica de mai sus). PUR. */
 export function confirmedForCash(register) {
   return (register?.items || [])
     .filter((i) => ["CONFIRMED", "OVERDUE"].includes(i.state) && typeof i.remainingRON === "number" && i.dueDate)
-    .map((i) => ({ dueDate: i.dueDate, amountRON: i.remainingRON }));
+    .map((i) => ({ dueDate: i.dueDate, amountRON: Math.round(i.remainingRON * (FORECAST_POLICY[i.state] ?? 0)) }));
 }

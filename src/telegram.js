@@ -91,6 +91,12 @@ function deny(ctx) {
 /**
  * Trimite un mesaj proactiv proprietarului (folosit de scheduler in Faza 3).
  */
+export async function pushToChat(chatId, text) {
+  // Livrare catre o persoana anume (LEVEL 2, doar cu mapping verificat).
+  const r = await bot.telegram.sendMessage(String(chatId), text);
+  return { message_id: r?.message_id ?? null };
+}
+
 export async function pushToOwner(text) {
   try {
     await bot.telegram.sendMessage(config.ownerChatId, splitVoice(text).text);

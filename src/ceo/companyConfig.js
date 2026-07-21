@@ -10,7 +10,7 @@ export const COMPANY = {
   brand: "Bell Residence",
   founder: { name: "Adrian Belei", role: "Fondator si decident final" },
   people: [
-    { id: "adrian", name: "Adrian", role: "fondator", aliases: ["adi", "adrian belei"] },
+    { id: "adrian", name: "Adrian", role: "fondator", aliases: ["adi", "adrian belei"], telegram_env: "TELEGRAM_OWNER_CHAT_ID" },
     { id: "dana", name: "Dana", role: "financiar/contabilitate", aliases: [] },
     { id: "nelu", name: "Nelu", role: "executie/santier", aliases: [] },
     { id: "mihaela", name: "Mihaela", role: "administrativ", aliases: [] },

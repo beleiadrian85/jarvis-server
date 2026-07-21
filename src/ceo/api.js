@@ -98,6 +98,75 @@ export function registerCeoApi(app) {
 
   app.get("/api/ceo/smartbill-health", (_req, res) => res.json(smartbillHealth()));
 
+  // ── Master Phase 3 — Nervous System ────────────────────────────────────
+  app.get("/api/ceo/bank-intel", async (_req, res) => {
+    try {
+      const { getBankLines } = await import("../connectors/opsdata.js");
+      const { analyzeBankFlows } = await import("./nervousSystem.js");
+      const lines = await getBankLines();
+      res.json(lines ? analyzeBankFlows(lines) : { status: "SOURCE_DOWN" });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get("/api/ceo/attribution", async (_req, res) => {
+    try {
+      const { getSiteTraffic, getLeads, getFunnelCounts } = await import("../connectors/opsdata.js");
+      const { buildAttribution } = await import("./nervousSystem.js");
+      const ctx = await collectCeoContext();
+      const [leads, fc] = await Promise.all([getLeads(), getFunnelCounts()]);
+      res.json(buildAttribution({ traffic: ctx.world.traffic, leads, funnelCounts: fc, sales: ctx.world.sales, salesHistory: ctx.salesHistory }));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get("/api/ceo/source-health", async (_req, res) => {
+    try {
+      const { getSourcesHealth } = await import("../connectors/opsdata.js");
+      res.json({ sources: getSourcesHealth(), autonomy: (await import("./nervousSystem.js")).AUTONOMY_LEVELS, active_level: 1 });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get("/api/ceo/registers/:name", async (req, res) => {
+    try {
+      const { getRegister } = await import("./nervousSystem.js");
+      res.json(await getRegister(req.params.name));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get("/api/ceo/decisions", async (_req, res) => {
+    try {
+      const [proposals, memory, loop] = await Promise.all([
+        listProposals(), getState("ceo:decision-memory", []), getState("ceo:closedloop", { records: {}, confidence: {} }),
+      ]);
+      res.json({ proposals, decision_memory: memory.slice(-20), loop });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Google Connection Wizard: pasul 1 — client id/secret (stocate sigur, nelogate).
+  app.post("/api/ceo/google-credentials", async (req, res) => {
+    try {
+      const { client_id, client_secret } = req.body || {};
+      if (!client_id || !client_secret) return res.status(400).json({ ok: false, error: "client_id + client_secret" });
+      const { getState: gs2, setState: ss2 } = await import("../state.js");
+      const prev = await gs2("google:oauth", {}) || {};
+      await ss2("google:oauth", { ...prev, client_id, client_secret, creds_at: new Date().toISOString() });
+      res.json({ ok: true, next: "/auth/google?k=PIN" });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.get("/api/ceo/google-status", async (_req, res) => {
+    try {
+      const { config: cfg } = await import("../config.js");
+      const st = await getState("google:oauth", {}) || {};
+      const hasClient = !!(cfg.google.clientId || st.client_id);
+      const hasRefresh = !!(cfg.google.refreshToken || st.refresh_token);
+      res.json({
+        configured: hasClient && hasRefresh,
+        source: cfg.google.refreshToken ? "env" : st.refresh_token ? "state" : null,
+        has_client: hasClient, has_refresh: hasRefresh,
+        next_step: hasRefresh ? "conectat" : hasClient ? "apasa CONNECT (consimtamant Google, ~1 min)" : "introdu Client ID + Secret din console.cloud.google.com (wizard, ~5 min, o singura data)",
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // TODAY: totul pentru ecranul principal Command Center intr-un singur call.
   app.get("/api/ceo/today", async (_req, res) => {
     try {

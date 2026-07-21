@@ -112,6 +112,19 @@ export async function collectBoardData() {
     risks.map((r) => `  ${r.level} ${r.descriere} — impact: ${r.impact}; probabilitate: ${r.probabilitate}; recomandare: ${r.recomandare}`).join("\n"));
   L.push(`Date lipsa: ${data_missing.length ? data_missing.join("; ") : "niciuna"}.`);
 
+  // Master Phase 3 — CONTEXT EXECUTIV automat (pachetul de dimineata al CEO AI):
+  // Boardul nu porneste de la zero. Doar esentialul relevant, nu dump total.
+  try {
+    const { getState } = await import("../state.js");
+    const cx = await getState("ceo:context", null);
+    if (cx?.at) {
+      L.push(`[ceo-context ${String(cx.at).slice(0, 10)}] Prioritati: ${(cx.priorities || []).map((p) => p.title).join("; ") || "-"}. ` +
+        `Cash minim 90z: ${typeof cx.cash_min?.minimum_cash === "number" ? Math.round(cx.cash_min.minimum_cash).toLocaleString("ro-RO") + " lei la " + cx.cash_min.minimum_cash_date : "UNKNOWN"}. ` +
+        (cx.receivables ? `Incasari: ${cx.receivables} ` : "") +
+        `Data health: ${cx.data_health?.score ?? "?"}/100. Necunoscute: ${(cx.unknowns || []).join("; ") || "-"}.`);
+    }
+  } catch { /* fara context — Boardul merge pe dosarul standard */ }
+
   return { asOf, dataBlock: L.join("\n"), data_available, data_missing, dataQuality, risks, health, taskGroups, cash };
 }
 

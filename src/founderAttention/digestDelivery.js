@@ -31,14 +31,21 @@ export function priorityOfDay({ candidates = [], episodes = [] }) {
   return top ? `Ține sub control „${top.title}”.` : "Zi fără presiuni majore — construiește.";
 }
 
-/** Textul final al digestului (sectiuni numerotate + prioritatea zilei). PUR. */
-export function composeDigestMessage({ digest, candidates, episodes }) {
+/** Textul final: sectiuni numerotate + prioritate + risc + oportunitate. PUR.
+ *  Raspunde in ≤60s de citit: ce stiu / ce decid / ce fac oamenii / riscul /
+ *  oportunitatea / ce nu stim. */
+export function composeDigestMessage({ digest, candidates, episodes, extras = {} }) {
   const numbered = DIGEST_SECTIONS
     .map((s, i) => ({ title: `${i + 1}. ${s}`, items: digest.sections[s] || [] }))
     .filter((s) => s.items.length)
     .map((s) => `${s.title}\n${s.items.map((t) => `• ${t}`).join("\n")}`)
     .join("\n\n");
-  return `DAILY CEO BRIEF\n\n${numbered}\n\nPRIORITATEA ZILEI:\n${priorityOfDay({ candidates, episodes })}`;
+  const tail = [
+    `PRIORITATEA ZILEI:\n${priorityOfDay({ candidates, episodes })}`,
+    extras.main_risk ? `RISC PRINCIPAL:\n${extras.main_risk}` : "",
+    extras.main_opportunity ? `OPORTUNITATE:\n${extras.main_opportunity}` : "",
+  ].filter(Boolean).join("\n\n");
+  return `DAILY CEO BRIEF\n\n${numbered}\n\n${tail}`;
 }
 
 /**
@@ -70,7 +77,7 @@ export async function deliverDailyDigest(opts = {}) {
       return { sent: false, reason: "nimic_relevant", points: 0 };
     }
 
-    const text = composeDigestMessage({ digest, candidates: material.candidates, episodes: material.episodes });
+    const text = composeDigestMessage({ digest, candidates: material.candidates, episodes: material.episodes, extras: material.extras || {} });
     const hash = contentHash(text);
     if (st.lastHash === hash) return { sent: false, reason: "continut_neschimbat", points: digest.points };
 
@@ -95,12 +102,14 @@ export async function deliverDailyDigest(opts = {}) {
   }
 }
 
-/** Snapshot live al lantului: observatii → episoade → candidati. READ-ONLY. */
+/** Snapshot live al lantului + PACHETUL DE CONTEXT EXECUTIV (ciclul de
+ *  dimineata consolidat: un singur flux 07:40, fara cron-uri duplicate).
+ *  Pachetul se persista in jarvis_state "ceo:context" → Board + Command Center. */
 async function liveMaterial() {
   const { runObservationCycle } = await import("../observationEngine/observationRunner.js");
   const { runProactivePipeline } = await import("../proactiveCeo/pipelineRunner.js");
   const { runFounderGate } = await import("./founderGateRunner.js");
-  const { getState: gs } = await import("../state.js");
+  const { getState: gs, setState: ss } = await import("../state.js");
 
   const obs = await runObservationCycle({ kind: "digest-snapshot", noCache: true, llm: null, persist: false, previousState: {} });
   if (obs.error || !obs.observations?.length) return { episodes: [], candidates: [] };
@@ -111,5 +120,25 @@ async function liveMaterial() {
     { briefable: pipe.episodes, allEpisodes: pipe.episodes },
     { persist: false, previousCandidates: {}, counters: null }
   );
-  return { episodes: pipe.episodes, candidates: gate.error ? [] : gate.candidates };
+  const candidates = gate.error ? [] : gate.candidates;
+
+  // Contextul executiv (risc/oportunitate + esentialul pt Board) — best-effort.
+  let extras = {};
+  try {
+    const ceo = await import("../ceo/index.js");
+    const ctx = await ceo.collectCeoContext();
+    const a = ceo.ceoShadowAnswers(ctx);
+    extras = {
+      main_risk: (a.q10_riscuri_30_zile || [])[0] || "",
+      main_opportunity: ((a.q9_top3_oportunitati || [])[0] || "").split(" · ")[0],
+    };
+    await ss("ceo:context", {
+      at: ctx.world.now,
+      priorities: a.priorities, cash_min: a.q2_cash?.minim,
+      receivables: a.receivables?.statement, data_health: a.data_health,
+      unknowns: a.q7_informatii_lipsa?.slice(0, 4),
+    }).catch(() => {});
+  } catch (e) { console.warn("[digest.context]", e.message); }
+
+  return { episodes: pipe.episodes, candidates, extras };
 }

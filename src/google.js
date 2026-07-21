@@ -8,16 +8,36 @@ import { config, hasGoogle } from "./config.js";
 
 let cached = { token: null, exp: 0 };
 
+/**
+ * Credentialele Google: env (sursa primara) SAU jarvis_state "google:oauth"
+ * (setate de Connection Wizard din Command Center — pana la propagarea in env).
+ * Aditiv si retro-compatibil: cu env setat, comportamentul e identic.
+ */
+export async function getGoogleCreds() {
+  if (config.google.clientId && config.google.clientSecret && config.google.refreshToken) {
+    return { clientId: config.google.clientId, clientSecret: config.google.clientSecret, refreshToken: config.google.refreshToken, source: "env" };
+  }
+  try {
+    const { getState } = await import("./state.js");
+    const st = await getState("google:oauth", null);
+    if (st?.client_id && st?.client_secret && st?.refresh_token) {
+      return { clientId: st.client_id, clientSecret: st.client_secret, refreshToken: st.refresh_token, source: "state" };
+    }
+  } catch { /* fara stare */ }
+  return null;
+}
+
 export async function googleToken() {
-  if (!hasGoogle) throw new Error("Google neconfigurat.");
+  const creds = await getGoogleCreds();
+  if (!creds) throw new Error("Google neconfigurat.");
   if (cached.token && Date.now() < cached.exp - 60_000) return cached.token;
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: config.google.clientId,
-      client_secret: config.google.clientSecret,
-      refresh_token: config.google.refreshToken,
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+      refresh_token: creds.refreshToken,
       grant_type: "refresh_token",
     }),
   });
@@ -35,9 +55,11 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.readonly",
 ];
 
-export function buildAuthUrl(redirectUri) {
+export async function buildAuthUrl(redirectUri) {
+  const creds = await getGoogleCreds();
+  const clientId = creds?.clientId || config.google.clientId;
   const p = new URLSearchParams({
-    client_id: config.google.clientId,
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
     access_type: "offline",
@@ -49,12 +71,13 @@ export function buildAuthUrl(redirectUri) {
 }
 
 export async function exchangeCode(code, redirectUri) {
+  const creds = await getGoogleCreds();
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: config.google.clientId,
-      client_secret: config.google.clientSecret,
+      client_id: creds?.clientId || config.google.clientId,
+      client_secret: creds?.clientSecret || config.google.clientSecret,
       code,
       redirect_uri: redirectUri,
       grant_type: "authorization_code",

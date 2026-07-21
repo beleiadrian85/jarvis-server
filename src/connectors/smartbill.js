@@ -37,15 +37,47 @@ async function sbGet(path, params = {}) {
   } finally { clearTimeout(t); }
 }
 
-/** Soldul de incasat per clienti (raport oficial "solduri clienti"). */
-export async function getClientBalances() {
-  const r = await sbGet("/report/client/balance");
+// Maparea OFICIALA (docs api.smartbill.ro + clienti open-source verificati):
+// DISPONIBIL read-only: GET /series, GET /invoice/paymentstatus, GET /stocks.
+// NOT_AVAILABLE_FROM_SOURCE: listare bulk facturi, solduri clienti agregate.
+export const NOT_AVAILABLE_FROM_SOURCE = ["listare bulk facturi emise", "solduri clienti agregate", "facturi primite (furnizori)"];
+
+/** Seriile de documente — proba de conectivitate reala. */
+export async function getSeries() {
+  const r = await sbGet("/series", { type: "f" });
   if (r?.error) return { error: r.error };
-  const list = r?.list || r?.clients || [];
+  return { series: (r.list || []).map((s) => s.name), raw_count: (r.list || []).length };
+}
+
+/** Statusul de plata al UNEI facturi cunoscute (seriesname+number). */
+export async function getPaymentStatus(seriesname, number) {
+  const r = await sbGet("/invoice/paymentstatus", { seriesname, number });
+  if (r?.error) return { error: r.error };
   return {
-    clients: list.map((c) => ({ client: c.name || c.clientName, balanceRON: Number(c.balance ?? c.sold ?? 0) })),
-    total_receivableRON: list.reduce((a, c) => a + Number(c.balance ?? c.sold ?? 0), 0),
+    totalRON: Number(r.invoiceTotalAmount ?? 0),
+    paidRON: Number(r.paidAmount ?? 0),
+    unpaidRON: Number(r.unpaidAmount ?? 0),
   };
+}
+
+/**
+ * Reconciliere cu facturile din Operational (income_invoices au doc_ref):
+ * pentru fiecare ref "SERIE NUMAR" intreaba SmartBill de statusul REAL de
+ * incasare. Emisa ≠ incasata — SmartBill e sursa adevarului pe colectare.
+ */
+export async function reconcileWithOperational(incomeInvoices = [], { maxCalls = 10 } = {}) {
+  if (!smartbillConfigured()) return { error: "NOT_CONNECTED" };
+  const out = [];
+  for (const inv of incomeInvoices.slice(0, maxCalls)) {
+    const m = String(inv.ref || "").trim().match(/^([A-Za-z]+)\s*-?\s*(\d+)$/);
+    if (!m) { out.push({ ref: inv.ref, status: "REF_NEPARSABIL" }); continue; }
+    const ps = await getPaymentStatus(m[1], m[2]);
+    out.push(ps.error
+      ? { ref: inv.ref, status: "EROARE", error: ps.error }
+      : { ref: inv.ref, client: inv.client, ...ps, operational_remainingRON: inv.remainingRON,
+          divergent: Math.abs((ps.unpaidRON ?? 0) - (inv.remainingRON ?? 0)) > 1 });
+  }
+  return { checked: out.length, results: out, divergences: out.filter((r) => r.divergent).length };
 }
 
 /** Reconciliere PURA: factura ↔ creanta ↔ incasare. Emisa ≠ incasata. */

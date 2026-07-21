@@ -68,8 +68,24 @@ small{color:var(--dim)}
 </div>
 
 <div class="card"><h2>Riscuri — următoarele 30 de zile</h2><ul id="risks"></ul></div>
-<div class="card"><h2>Data gaps</h2><ul id="gaps"></ul></div>
 <div class="card"><h2>Încasări (receivables)</h2><div id="recv" class="dim">—</div></div>
+
+<div class="card"><h2>Connect Google (Gmail + Calendar, read-only)</h2>
+  <div id="gStatus" class="dim">verific…</div>
+  <div id="gWizard" class="hidden">
+    <small>O singură dată: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--acc)">console.cloud.google.com/apis/credentials</a> → Create OAuth client ID (Web) → Authorized redirect URI: <code id="gRedir"></code> → copiază ID + Secret aici:</small>
+    <div class="row"><input id="gcid" placeholder="Client ID"><input id="gcsec" placeholder="Client Secret" type="password"></div>
+    <div class="row"><button onclick="saveGoogle()">Salvează</button></div>
+  </div>
+  <div class="row"><button id="gConnect" class="ghost hidden" onclick="connectGoogle()">CONNECT GOOGLE →</button></div>
+  <small id="gMsg"></small>
+</div>
+
+<div class="card"><h2>Bancă — rulaje (fără sold)</h2><div id="bankIntel" class="dim">—</div></div>
+<div class="card"><h2>Vânzări — atribuție trafic → cash</h2><div id="attr" class="dim">—</div></div>
+
+<div class="card"><h2>Harta datelor (click = de ce + cum reparăm)</h2><div id="dataMap"></div></div>
+<div class="card"><h2>Îmbunătățiri propuse (backlog CEO)</h2><ul id="improve"></ul></div>
 </div>
 
 <script>
@@ -108,11 +124,42 @@ async function boot() {
   fill("prio", (t.priorities || []).map(p => p.rank + ". " + p.title + " (" + p.score + ")"), "fără priorități critice");
   fill("wAdrian", t.who?.ADRIAN); fill("wDana", t.who?.DANA); fill("wNelu", t.who?.NELU); fill("wSys", t.who?.SYSTEM);
   fill("risks", (t.forward30?.risks || []).map(r => r.text + " · " + r.confidence + "%"), "fără riscuri identificate");
-  fill("gaps", t.gaps);
   $("recv").textContent = t.receivables?.statement || "sursă indisponibilă";
   renderInbox(t.needs_decision || []);
   renderBalances();
+  renderExtras();
 }
+async function renderExtras() {
+  const gs = await api("/api/ceo/google-status");
+  if (gs) {
+    $("gRedir") && ($("gRedir").textContent = location.origin + "/auth/google/callback");
+    $("gStatus").textContent = gs.configured ? "🟢 Conectat (" + gs.source + ")" : "🔴 " + gs.next_step;
+    $("gWizard").classList.toggle("hidden", gs.has_client || gs.configured);
+    $("gConnect").classList.toggle("hidden", !gs.has_client || gs.configured);
+  }
+  const bi = await api("/api/ceo/bank-intel");
+  if (bi && bi.totals) $("bankIntel").textContent =
+    bi.period.from + "→" + bi.period.to + ": in " + lei(bi.totals.inRON) + " / out " + lei(bi.totals.outRON) +
+    " · medie/zi out " + lei(bi.daily_avg.outRON) + " · " + bi.burn_rate_note + " · recurente: " +
+    (bi.recurring_out || []).slice(0, 3).map(r => r.key + " ~" + lei(r.avgRON)).join("; ");
+  const at = await api("/api/ceo/attribution");
+  if (at && at.chain) $("attr").innerHTML =
+    Object.entries(at.chain).map(([k, v]) => k + ": " + (v.status === "CONNECTED" ? "🟢" : v.status === "ATTRIBUTION_GAP" ? "🟠" : "🔴") + (v.count != null ? " " + v.count : v.last7_avg != null ? " ~" + v.last7_avg + "/zi" : "")).join(" → ") +
+    "<br><small>" + (at.findings || []).map(f => "• " + f.finding).join("<br>") + "</small>";
+  const dh = await api("/api/ceo/data-health");
+  if (dh) $("dataMap").innerHTML = dh.domains.map(d => {
+    const c = d.connected === "CONNECTED" ? "ok" : d.connected === "PARTIAL" ? "warn" : "bad";
+    return "<span class='pill " + c + "' title='" + (d.business_impact || "") + " | FIX: " + (d.how_to_fix || "") + "' style='margin:2px;cursor:help'>" + d.domain + "</span>";
+  }).join("");
+  const pr = await api("/api/ceo/proposals");
+  if (pr) fill("improve", Object.values(pr.improvements || {}).slice(0, 6).map(i => i.problem + " → " + i.proposed_change));
+}
+async function saveGoogle() {
+  const r = await api("/api/ceo/google-credentials", { method: "POST", body: JSON.stringify({ client_id: $("gcid").value.trim(), client_secret: $("gcsec").value.trim() }) });
+  $("gMsg").textContent = r?.ok ? "Salvat. Apasă CONNECT GOOGLE." : "Eroare.";
+  renderExtras();
+}
+function connectGoogle() { window.open("/auth/google?k=" + encodeURIComponent(key), "_blank"); }
 function renderInbox(list) {
   const el = $("inbox"); el.innerHTML = "";
   if (!list.length) { el.textContent = "Nimic în așteptare."; return; }

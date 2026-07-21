@@ -43,18 +43,22 @@ export function registerApi(app) {
   app.use(express.json({ limit: "100kb" }));
 
   // Setup unic OAuth Google (Gmail/Calendar/Drive). Gateat cu PIN-ul (?k=).
-  app.get("/auth/google", authLimiter, (req, res) => {
+  app.get("/auth/google", authLimiter, async (req, res) => {
     if (isLockedOut(req.ip)) return res.status(429).send("Prea multe incercari. Reincearca peste 15 minute.");
     if (req.query.k !== config.appSecret) {
       noteAuthFail(req.ip);
       return res.status(401).send("PIN gresit. Adauga ?k=PIN la link.");
     }
     clearAuthFail(req.ip);
-    if (!config.google.clientId || !config.google.clientSecret) {
-      return res.status(503).send("Lipsesc GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in Railway.");
+    // Wizard (Master Phase 3): credentialele pot veni si din jarvis_state.
+    const { getGoogleCreds } = await import("./google.js");
+    const creds = await getGoogleCreds().catch(() => null);
+    const hasClient = config.google.clientId || creds?.clientId;
+    if (!hasClient) {
+      return res.status(503).send("Lipsesc credentialele Google. Foloseste CONNECT GOOGLE din Command Center (/ceo.html).");
     }
     const redirectUri = `https://${req.get("host")}/auth/google/callback`;
-    res.redirect(buildAuthUrl(redirectUri));
+    res.redirect(await buildAuthUrl(redirectUri));
   });
 
   app.get("/auth/google/callback", authLimiter, async (req, res) => {
@@ -65,10 +69,29 @@ export function registerApi(app) {
       const tok = await exchangeCode(req.query.code, redirectUri);
       if (tok.refresh_token) {
         // S1: nu logam NICIODATA refresh token-ul (secret in logurile cloud).
-        console.log("[google] OAuth reusit — refresh token obtinut (nelogat, din motive de securitate).");
-        res.send("<h2 style='font-family:sans-serif'>✅ Google conectat.</h2><p>Poți închide fila. Pentru a seta <code>GOOGLE_REFRESH_TOKEN</code> în Railway, rulează local <code>node scripts/google-auth.js</code> (nu apare în loguri).</p>");
+        console.log("[google] OAuth reusit — refresh token obtinut (nelogat).");
+        // Wizard: salveaza in jarvis_state + propaga AUTOMAT in env Railway + redeploy.
+        try {
+          const { getState, setState } = await import("./state.js");
+          const prev = await getState("google:oauth", {}) || {};
+          await setState("google:oauth", { ...prev, refresh_token: tok.refresh_token, connected_at: new Date().toISOString() });
+          const { upsertVariables, redeployService, railwayApiAvailable } = await import("./connectors/railwayApi.js");
+          if (railwayApiAvailable() && prev.client_id && prev.client_secret) {
+            await upsertVariables({
+              GOOGLE_CLIENT_ID: prev.client_id,
+              GOOGLE_CLIENT_SECRET: prev.client_secret,
+              GOOGLE_REFRESH_TOKEN: tok.refresh_token,
+            });
+            await redeployService();
+            return res.send("<h2 style='font-family:sans-serif'>✅ Google conectat COMPLET.</h2><p>Variabilele au fost setate automat în Railway; serverul se redeployează (~2 min). Gmail + Calendar devin READ-ONLY active. Poți închide fila.</p>");
+          }
+          res.send("<h2 style='font-family:sans-serif'>✅ Google conectat (token salvat).</h2><p>Funcționează imediat din stare; propagarea în env se face la următorul deploy.</p>");
+        } catch (e) {
+          console.error("[google.persist]", e.message);
+          res.send("<h2 style='font-family:sans-serif'>✅ Token obținut, ⚠️ persistarea a eșuat: " + e.message + "</h2>");
+        }
       } else {
-        res.send("<h2 style='font-family:sans-serif'>⚠️ Fără refresh token.</h2><p>Revocă accesul aplicației în contul Google și reia /auth/google.</p>");
+        res.send("<h2 style='font-family:sans-serif'>⚠️ Fără refresh token.</h2><p>Revocă accesul aplicației în contul Google (myaccount.google.com/permissions) și reia CONNECT GOOGLE.</p>");
       }
     } catch (e) {
       console.error("[google.callback]", e.message);

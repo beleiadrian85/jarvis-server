@@ -5,7 +5,25 @@
 // degradare eleganta: sursa picata → null + marcaj, NU zero.
 import { opsQuery, hasOpsDb } from "../supervisor/opsdb.js";
 
-const safe = (fn) => hasOpsDb ? fn().catch((e) => { console.error("[opsdata]", e.message); return null; }) : Promise.resolve(null);
+// Telemetrie surse (9. Reliability): fiecare citire isi noteaza statusul,
+// latenta si AS_OF — CEO AI nu crede date vechi fara sa stie.
+const _health = new Map();
+export function getSourcesHealth() {
+  return Object.fromEntries([..._health.entries()].map(([k, v]) => [k, v]));
+}
+const safe = (fn, name = fn.name || "src") => {
+  if (!hasOpsDb) { _health.set(name, { status: "NOT_CONNECTED", as_of: null }); return Promise.resolve(null); }
+  const t0 = Date.now();
+  return fn().then((r) => {
+    _health.set(name, { status: "OK", latency_ms: Date.now() - t0, as_of: new Date().toISOString() });
+    return r;
+  }).catch((e) => {
+    const prev = _health.get(name) || {};
+    _health.set(name, { status: "ERROR", error: e.message.slice(0, 80), fails: (prev.fails || 0) + 1, as_of: prev.as_of || null });
+    console.error("[opsdata]", name, e.message);
+    return null;
+  });
+};
 
 /** Extrasele bancare: ultimul upload + rulaje (NU sold — extrasele ING n-au sold). */
 export function getBankStatementsSummary() {
@@ -94,4 +112,31 @@ export function getSupplierBacklog() {
       FROM supplier_due_items WHERE COALESCE(superseded,0)=0`);
     return agg || { total: 0, unconfirmed: 0, unconfirmed_amount: 0 };
   });
+}
+
+/** Rulajele bancare linie cu linie (pentru Bank Intelligence). */
+export function getBankLines(limit = 1000) {
+  return safe(async () => {
+    const rows = await opsQuery(`
+      SELECT op_date::text AS date, amount::float, direction, description, currency
+      FROM bank_statement_lines ORDER BY op_date DESC LIMIT $1`, [limit]);
+    return rows.map((r) => ({
+      date: r.date.slice(0, 10), amountRON: r.currency === "EUR" ? r.amount * 5.06 : r.amount,
+      direction: r.direction, description: (r.description || "").slice(0, 120), currency: r.currency,
+    }));
+  }, "bank_lines");
+}
+
+/** Numarul de inregistrari pe stagiile funnel din schema mkt_* (existenta, nefolosita inca). */
+export function getFunnelCounts() {
+  return safe(async () => {
+    const one = async (t) => { try { return (await opsQuery(`SELECT count(*)::int n FROM ${t}`))[0].n; } catch { return null; } };
+    return {
+      leads_site: await one("leads"),
+      mkt_leads: await one("mkt_leads"),
+      viewings: await one("mkt_viewings"),
+      reservations_mkt: await one("mkt_reservations"),
+      lead_events: await one("mkt_lead_events"),
+    };
+  }, "funnel_counts");
 }

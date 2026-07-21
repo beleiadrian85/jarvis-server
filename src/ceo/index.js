@@ -199,14 +199,29 @@ export async function runCeoShadow({ persist = true } = {}) {
     const improvements = improvementsFromGaps(gaps);
     await recordImprovements(improvements, { persist: true });
     // Information Request-urile devin propuneri SHADOW (netrimise).
-    const proposals = gaps.filter((g) => g.information_request).map((g) => buildActionProposal({
-      id: `prop:inforeq:${g.domain.toLowerCase()}`,
-      problem: g.data_gap, evidence: [`[data-map] ${g.domain}`, g.why],
-      recommendation: `Cere: ${g.information_request.ask}`,
-      assignee: g.information_request.to, deadline: g.information_request.cadence,
-      expected_result: "Data disponibila pentru CEO AI", verification_rule: "Domeniul trece pe CONNECTED in data map",
-      source: "data-gap-engine", severity: g.severity === "major" ? "high" : "medium",
-    }));
+    const proposals = gaps.filter((g) => g.information_request).map((g) => {
+      const p = buildActionProposal({
+        id: `prop:inforeq:${g.domain.toLowerCase()}`,
+        problem: g.data_gap, evidence: [`[data-map] ${g.domain}`, g.why],
+        recommendation: `Cere: ${g.information_request.ask}`,
+        assignee: g.information_request.to, deadline: g.information_request.cadence,
+        expected_result: "Data disponibila pentru CEO AI", verification_rule: "Domeniul trece pe CONNECTED in data map",
+        source: "data-gap-engine", severity: g.severity === "major" ? "high" : "medium",
+      });
+      // PRIMA ACTIUNE CONTROLATA (Master Phase 3): planul complet de livrare —
+      // gata, dar NETRIMIS. Dupa APPROVE, fluxul viitor executa pasii de mai jos.
+      if (g.domain === "CASH") {
+        p.readiness = "READY_FOR_FIRST_CONTROLLED_EXECUTION";
+        p.what_it_unlocks = "Lichiditate NETA, punctul minim de cash, ziua deficitului — instant.";
+        p.risk_if_nothing = "654k+ lei iesiri/30z fara vizibilitate pe acoperire.";
+        p.delivery_plan = {
+          steps: ["trimite cererea (Telegram, prin approvalGate)", "confirma livrarea", "asteapta soldurile (formular Command Center)",
+            "valideaza intrarile (balanceStore)", "recalculeaza cash + min/deficit", "inchide gap-ul CASH", "actualizeaza CEO Brief", "masoara outcome (closed loop)"],
+          sent: false, gated_by: "aprobarea explicita a lui Adrian + activarea livrarii (faza separata)",
+        };
+      }
+      return p;
+    });
     await recordProposals(proposals, { persist: true });
   }
   return answers;

@@ -6,7 +6,7 @@
 // autonom pe informatie / aprobare obligatorie.
 // MODUL PUR: functii deterministe peste argumente — ZERO IO, zero nume
 // hardcodate; oamenii si proiectele vin exclusiv prin argumente.
-import { idempotencyKey, taskClassFor, priorityToOperational, VERIFICATION_METHODS } from "./contract.js";
+import { idempotencyKey, taskClassFor, priorityToOperational, VERIFICATION_METHODS, DEADLINE_HINTS } from "./contract.js";
 
 // ── CONSTANTE INTERNE ───────────────────────────────────────────────────
 
@@ -69,13 +69,22 @@ function verificationFor(taskType) {
   return VERIFICATION_METHODS.includes(v) ? v : "USER_CONFIRMATION";
 }
 
-/** Deadline YYYY-MM-DD: asOf + urgency_days, minim asOf+1 zi. */
-function deadlineFrom(asOf, urgencyDays) {
+/** DEADLINE ENGINE (§10): ancora pe tipul de task (DEADLINE_HINTS — sold
+ *  dimineata, poze azi 15:00 etc.), altfel asOf + urgency_days (minim +1 zi
+ *  cand nu exista ancora de "azi"). Ora merge in nota, data in Operational. */
+function deadlineFrom(asOf, urgencyDays, taskType = null) {
   const base = asOf ? new Date(asOf) : new Date();
   const b = isNaN(base) ? new Date() : base;
+  const hint = taskType ? DEADLINE_HINTS[taskType] : null;
+  if (hint) {
+    return {
+      date: new Date(b.getTime() + Math.max(0, hint.days) * 86_400_000).toISOString().slice(0, 10),
+      time_note: hint.time_note || "",
+    };
+  }
   const u = Number(urgencyDays);
   const days = urgencyDays != null && Number.isFinite(u) ? Math.max(1, Math.ceil(u)) : DEFAULT_HORIZON_DAYS;
-  return new Date(b.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  return { date: new Date(b.getTime() + days * 86_400_000).toISOString().slice(0, 10), time_note: "" };
 }
 
 // ── CONSTRUCTIA TASK-ULUI CEO (§5, §6) ──────────────────────────────────
@@ -89,7 +98,9 @@ function deadlineFrom(asOf, urgencyDays) {
 export function buildCeoTask(need = {}, delegation = {}, { asOf = null, formUrl = "", episodeId = null, projects = [], defaultProject = "Altele", createdByUserId = null } = {}) {
   const idemKey = idempotencyKey(need);
   const autonomyClass = taskClassFor(need.task_type);
-  const deadline = deadlineFrom(asOf, need.urgency_days);
+  const dl = deadlineFrom(asOf, need.urgency_days, need.task_type);
+  const deadline = dl.date;
+  const deadlineNote = dl.time_note ? `${dl.date} (${dl.time_note})` : dl.date;
   const verificationMethod = verificationFor(need.task_type);
 
   // De ce: consecinta materiala + schimbarea asteptata (§4: NEED→ACTION→CHANGE).
@@ -131,10 +142,11 @@ export function buildCeoTask(need = {}, delegation = {}, { asOf = null, formUrl 
   };
 
   // Payload-ul MCP create_task real — singurul lucru care pleaca spre Operational.
+  // §7: omul vede simplu (de ce / rezultat / termen) + provenienta vizibila.
   const description =
-    `De ce: ${human.why}\nRezultat asteptat: ${human.expected_result}\nTermen: ${deadline}` +
+    `De ce: ${human.why}\nRezultat asteptat: ${human.expected_result}\nTermen: ${deadlineNote}` +
     (formUrl ? `\nFormular: ${formUrl}` : "") +
-    `\n\n[CEO AI] Nevoie: ${internal.ceo_need_id} · Trigger: ${trigger}`;
+    `\n\nCreat de: JARVIS · CEO AI\n[nevoie: ${internal.ceo_need_id} · trigger: ${trigger}]`;
 
   const operational_payload = {
     title: human.title,
@@ -160,17 +172,28 @@ export function buildCeoTask(need = {}, delegation = {}, { asOf = null, formUrl 
  *    si orice INFORMATION_TASK cat timp flagul autonom e stins.
  * Accepta atat rezultatul buildCeoTask cat si forma interna direct.
  */
-export function classifyForAutonomy(task, { mode = "shadow", autonomousInfoEnabled = false } = {}) {
+export function classifyForAutonomy(task, { mode = "shadow", autonomousInfoEnabled = false, autonomousOperationalEnabled = false } = {}) {
   const cls = task?.autonomy_class || task?.internal?.autonomy_class || taskClassFor(task?.task_type);
 
   if (mode !== "information") {
     return { lane: "SHADOW", why: `mod "${mode}": doar simulare, nicio scriere in Operational` };
   }
-  if (cls !== "INFORMATION_TASK") {
-    return { lane: "NEEDS_APPROVAL", why: `clasa ${cls} cere aprobare umana intotdeauna (§10)` };
+  // Gard de continut (§4-5): bani/contracte/juridic/extern NU sunt niciodata
+  // low-risk, indiferent de clasa — merg la aprobare.
+  const text = `${task?.human?.title || ""} ${task?.human?.expected_result || ""} ${task?.internal?.expected_result || ""}`;
+  const HIGH_RISK = /plat[ai]|achizit|comand[a].{0,20}(lei|eur|ron)|pret|discount|contract|juridic|avocat|notar|concedi|angaj|salari|credit|imprumut|email extern|furnizor nou/i;
+  if (HIGH_RISK.test(text)) {
+    return { lane: "NEEDS_APPROVAL", why: "continut cu risc (bani/contract/juridic/extern) → aprobare obligatorie (§5)" };
   }
-  if (!autonomousInfoEnabled) {
-    return { lane: "NEEDS_APPROVAL", why: "flag de autonomie pe informatie inactiv — cere aprobare" };
+  if (cls === "INFORMATION_TASK") {
+    return autonomousInfoEnabled
+      ? { lane: "AUTONOMOUS_OK", why: "INFORMATION_TASK autonom (faza B activata de fondator)" }
+      : { lane: "NEEDS_APPROVAL", why: "flag de autonomie pe informatie inactiv — cere aprobare" };
   }
-  return { lane: "AUTONOMOUS_OK", why: "INFORMATION_TASK in mod information cu flag activ" };
+  if (cls === "VERIFICATION_TASK" || cls === "LOW_RISK_OPERATIONAL_TASK") {
+    return autonomousOperationalEnabled
+      ? { lane: "AUTONOMOUS_OK", why: `${cls} autonom (faza C: verificari interne low-risk, reversibile)` }
+      : { lane: "NEEDS_APPROVAL", why: `${cls}: faza C inactiva — cere aprobare` };
+  }
+  return { lane: "NEEDS_APPROVAL", why: `clasa ${cls} cere aprobare umana intotdeauna (§10)` };
 }

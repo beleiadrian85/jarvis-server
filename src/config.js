@@ -126,9 +126,24 @@ export const config = {
   nervousSystem: ["on", "true"].includes(String(process.env.CEO_NERVOUS_SYSTEM_ENABLED || "").toLowerCase()),
   taskAutonomy: String(process.env.CEO_TASK_AUTONOMY || "shadow").toLowerCase() === "information" ? "information" : "shadow",
   autonomousInfoTasks: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_INFORMATION_TASKS_ENABLED || "").toLowerCase()),
-  nervousKill: ["on", "true"].includes(String(process.env.CEO_NERVOUS_KILL_SWITCH || "").toLowerCase()),
+  // Faza C — task-uri interne de VERIFICARE (low-risk, reversibile).
+  autonomousOperationalTasks: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_OPERATIONAL_TASKS_ENABLED || "").toLowerCase()),
+  // Kill switch UNIC (§20): oricare din cele doua nume opreste TOT (zero
+  // task-uri noi; nimic sters). Numele nou e canonic; cel vechi ramane alias.
+  nervousKill: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_TASKS_KILL_SWITCH || "").toLowerCase()) ||
+    ["on", "true"].includes(String(process.env.CEO_NERVOUS_KILL_SWITCH || "").toLowerCase()),
   nervousDailyLimit: Number(process.env.CEO_NERVOUS_DAILY_LIMIT || 0),
   nervousPerPersonLimit: Number(process.env.CEO_NERVOUS_PER_PERSON_LIMIT || 0),
+
+  // SELF-EVOLUTION V1 (§21-28) — detectia limitarilor proprii + capability
+  // requests. ENABLED implicit OFF; totul in shadow (zero build real, zero
+  // deploy). Politica de deploy NU e aici: e constanta inghetata in
+  // evolution/contract.js (PRODUCTION_DEPLOYMENT_REQUIRES_ADRIAN_APPROVAL).
+  selfEvolution: ["on", "true"].includes(String(process.env.CEO_SELF_EVOLUTION_ENABLED || "").toLowerCase()),
+  evolutionKill: ["on", "true"].includes(String(process.env.CEO_EVOLUTION_KILL_SWITCH || "").toLowerCase()),
+  evolutionMaxBuildsPerDay: Number(process.env.CEO_EVOLUTION_MAX_BUILDS_PER_DAY || 0),
+  evolutionMaxConcurrent: Number(process.env.CEO_EVOLUTION_MAX_CONCURRENT_BUILDS || 0),
+  evolutionMaxCostUsd: Number(process.env.CEO_EVOLUTION_MAX_COST_USD || 0),
 
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).

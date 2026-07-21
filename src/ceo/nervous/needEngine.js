@@ -519,6 +519,32 @@ export function buildNeeds({
       confidence: 95, // deadline depasit e un fapt, nu o interpretare
       reasoning: answerFifteen({ opsTasks: overdue, asOf, domain: "TASKS", domainOwners }),
     }));
+    // Politica de management activata de fondator: pentru cele mai vechi
+    // restante (max 3/ciclu), CEO cere CLARIFICAREA blocajului chiar
+    // ownerului task-ului — task concret, verificabil, legat de un NEED
+    // ("Clarifica blocajul task-ului X si spune ce lipseste"), nu "muncheste
+    // mai bine". Dedup/cooldown previn repetitia; limitele previn spamul.
+    const worst = [...overdue]
+      .sort((a, b) => (daysBetween(b.deadline, asOf) ?? 0) - (daysBetween(a.deadline, asOf) ?? 0))
+      .slice(0, 3);
+    for (const t of worst) {
+      const days = daysBetween(t.deadline, asOf) ?? 0;
+      if (days < 2) continue; // prima intarziere = doar overdue (§16), nu task
+      candidates.push(makeNeed({
+        domain: "TASKS",
+        type: "ACTION_NEED",
+        task_type: String(t?.status || "").toLowerCase() === "blocat" ? "BLOCKER_CLARIFY" : "DEADLINE_CONFIRM",
+        title: `Clarifica task-ul restant: ${titleOf(t)}`.slice(0, 90),
+        summary: `Task #${t?.id || "?"} e restant de ${days} zile (deadline ${t?.deadline}). Ce lipseste pentru finalizare / care e termenul real?`,
+        evidence: [`[operational] task #${t?.id || "?"}: ${titleOf(t)} — deadline ${t?.deadline}, status ${t?.status}`],
+        material_consequence: `task restant de ${days} zile fara clarificare — planificarea si dependentele raman incerte`,
+        expected_change: "termen real asumat sau blocaj identificat si adresat",
+        suggested_owner_hint: t?.assignee || null, // ownerul REAL al task-ului
+        urgency_days: 0,
+        confidence: 95,
+        reasoning: answerFifteen({ opsTasks: [t], asOf, domain: "TASKS", domainOwners }),
+      }));
+    }
   }
 
   // (g) SURSE INVECHITE → SYSTEM_NEED (imbunatatire de sistem, nu task uman).

@@ -10,10 +10,15 @@ export const COMPANY = {
   brand: "Bell Residence",
   founder: { name: "Adrian Belei", role: "Fondator si decident final" },
   people: [
-    { id: "adrian", name: "Adrian", role: "fondator", aliases: ["adi", "adrian belei"], telegram_env: "TELEGRAM_OWNER_CHAT_ID" },
-    { id: "dana", name: "Dana", role: "financiar/contabilitate", aliases: [] },
-    { id: "nelu", name: "Nelu", role: "executie/santier", aliases: [] },
-    { id: "mihaela", name: "Mihaela", role: "administrativ", aliases: [] },
+    // Politica fondatorului (task autonomy §2): Adrian NU e owner implicit —
+    // task catre el DOAR daca autoritatea fondatorului e obligatorie.
+    { id: "adrian", name: "Adrian", role: "fondator", aliases: ["adi", "adrian belei"], telegram_env: "TELEGRAM_OWNER_CHAT_ID",
+      founder_only_if: ["decizie de fondator", "strategie", "finantare materiala", "negociere majora", "risc juridic/reputational material", "angajament financiar important", "investitie", "contract major", "blocaj fara owner"] },
+    { id: "dana", name: "Dana", role: "financiar/contabilitate", aliases: [],
+      responsibilities: ["contabilitate", "situatii financiare", "solduri bancare", "extrase", "incasari", "facturi emise", "facturi primite", "SmartBill", "sold clienti", "solduri furnizori", "scadente", "obligatii de plata", "taxe", "documente contabile", "reconciliere cifre", "clarificari Operational/SmartBill/banca", "documente pentru banca", "situatii Excel financiar-contabile", "cifre Cash Intelligence"] },
+    { id: "nelu", name: "Nelu", role: "executie/santier", aliases: [],
+      responsibilities: ["executie santier", "progres fizic", "termene de executie", "materiale", "necesar materiale", "furnizori operationali", "livrari", "echipe de executie", "probleme tehnice", "verificari in teren", "fotografii progres", "blocaje de santier", "lucrari nefinalizate", "situatii de lucrari", "cantitati", "confirmari executie", "mentenanta operationala", "follow-up executanti/furnizori tehnici"] },
+    { id: "mihaela", name: "Mihaela", role: "administrativ", aliases: [], responsibilities: ["administrativ", "acte", "programari"] },
   ],
   timezone: "Europe/Bucharest",
   currency: "RON",
@@ -109,6 +114,23 @@ export const COMPANY = {
     implementation: "Modul connectors/smartbill.js read-only: facturi, scadente, incasari.",
     request: null,
   },
+},
+
+// SELF-EVOLUTION V1 §1 — capabilitatile EXISTENTE ale sistemelor instantei
+// (folosite de reuse-before-build; date de instanta, nu nucleu). Sursa:
+// auditul schemei Operational (attachments/file_blobs/rute) + connectorii vii.
+systemFeatures: {
+  task_attachments: { exists: true, evidence: "Operational: tabela attachments + file_blobs (BYTEA in DB) + upload UI max 10 fisiere/task" },
+  task_attachment_read: { exists: true, evidence: "opsdb read-only: SELECT din attachments JOIN file_blobs (FULL READ autorizat)" },
+  task_creation_mcp: { exists: true, evidence: "MCP create_task/update_task (folosit de operationalWrite)" },
+  smartbill_api: { exists: true, evidence: "connectors/smartbill.js (series, paymentstatus)" },
+  bank_statement_lines: { exists: true, evidence: "opsdb: bank_statements/bank_statement_lines (rulaje, fara sold)" },
+  site_traffic: { exists: true, evidence: "opsdb: site_visits (Spion)" },
+  balance_form: { exists: true, evidence: "Command Center: formular solduri + balanceStore" },
+  xlsx_parser: { exists: false, evidence: "jarvis-server: nicio biblioteca XLSX in dependencies" },
+  pdf_parser: { exists: false, evidence: "jarvis-server: niciun parser PDF" },
+  receivables_importer: { exists: false, evidence: "nu exista motor de import Situatie Clienti" },
+  gmail_read: { exists: false, evidence: "Google OAuth neconectat (wizard pregatit)" },
 },
 };
 

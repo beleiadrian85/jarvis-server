@@ -16,10 +16,18 @@ export const NEED_TYPES = ["OBSERVATION", "INFORMATION_NEED", "ACTION_NEED", "DE
 // ca literal in nucleu. FOUNDER/MANAGER/PERSON sunt roluri, nu nume.
 export const DELEGATION_TARGETS = ["SYSTEM", "FOUNDER", "MANAGER", "PERSON", "BOARD", "OTHER_ROLE", "NO_ACTION", "RESPONSIBILITY_UNKNOWN"];
 
-// ── Clasa de autonomie a unui task (§10). ───────────────────────────────
-// INFORMATION_TASK = candidat la creare autonoma (dupa flag + shadow validat).
+// ── Clasa de autonomie a unui task (§10 + politica ACTIVATA de fondator). ─
+// INFORMATION_TASK  = autonom cu CEO_AUTONOMOUS_INFORMATION_TASKS_ENABLED.
+// VERIFICATION_TASK = autonom cu CEO_AUTONOMOUS_OPERATIONAL_TASKS_ENABLED
+//                     (verificari interne: lucrare facuta? termen? livrare?).
+// LOW_RISK_OPERATIONAL_TASK = autonom DOAR daca intern+reversibil+fara bani/
+//                     juridic/extern (guard pe continut) + flagul operational.
 // ACTION_TASK / DECISION_TASK = intotdeauna prin aprobare, niciodata autonom.
-export const AUTONOMY_CLASS = ["INFORMATION_TASK", "ACTION_TASK", "DECISION_TASK"];
+export const AUTONOMY_CLASS = ["INFORMATION_TASK", "VERIFICATION_TASK", "LOW_RISK_OPERATIONAL_TASK", "ACTION_TASK", "DECISION_TASK"];
+
+// Guard de continut pentru low-risk (§4-5): daca titlul/rezultatul atinge
+// bani/contracte/juridic/extern → NU e low-risk, indiferent de clasificare.
+export const HIGH_RISK_CONTENT_RE = /plat[ai]|achizit|comand[a].{0,20}(lei|eur|ron)|pret|discount|contract|juridic|avocat|notar|concedi|angaj|salari|credit|imprumut|email extern|furnizor nou/i;
 
 // ── Ciclul de viata al unui task CEO (§13). Mapat peste statusurile reale
 // Operational, nu inventat pe deasupra lor. ─────────────────────────────
@@ -63,13 +71,20 @@ export const LOAD_STATES = ["OVERLOADED", "UNDERUTILIZED", "BLOCKED", "WRONG_OWN
 // ── Taxonomia tipurilor de task (generica; pe ea se face memoria org. si
 // delegation confidence per PERSON+TASK_TYPE, §21). ─────────────────────
 export const TASK_TYPES = {
-  // INFORMATION (candidati la autonomie dupa validare)
+  // INFORMATION (autonome cu flagul de information tasks)
   CASH_DATA: { class: "INFORMATION_TASK", label: "date de cash / solduri" },
   INVOICE_CLARIFICATION: { class: "INFORMATION_TASK", label: "clarificare factura" },
   PROGRESS_UPDATE: { class: "INFORMATION_TASK", label: "progres lucrare" },
   DEADLINE_CONFIRM: { class: "INFORMATION_TASK", label: "confirmare termen" },
   SUPPLIER_STATUS: { class: "INFORMATION_TASK", label: "status furnizor" },
   MISSING_INFO: { class: "INFORMATION_TASK", label: "informatie lipsa" },
+  DOCUMENT_REQUEST: { class: "INFORMATION_TASK", label: "cere document/atasament" },
+  PHOTO_REQUEST: { class: "INFORMATION_TASK", label: "cere poze progres" },
+  // VERIFICATION (autonome cu flagul operational — verificari interne)
+  WORK_VERIFY: { class: "VERIFICATION_TASK", label: "verifica lucrare executata" },
+  DELIVERY_VERIFY: { class: "VERIFICATION_TASK", label: "verifica livrare" },
+  STATUS_VERIFY: { class: "VERIFICATION_TASK", label: "verifica status operational" },
+  BLOCKER_CLARIFY: { class: "VERIFICATION_TASK", label: "clarifica blocajul unui task" },
   // ACTION (intotdeauna aprobare)
   CONTACT_SUPPLIER: { class: "ACTION_TASK", label: "contacteaza furnizor" },
   REQUEST_OFFER: { class: "ACTION_TASK", label: "cere oferta" },
@@ -150,11 +165,27 @@ export const STATE_KEYS = {
   respmap: "ceo:nervous:respmap",    // ultima harta de responsabilitati observata
 };
 
-// Limite implicite pentru activarea controlata (§34) — recomandari, override env.
+// Limite pentru activarea controlata (politica fondatorului: 10/zi, 4/persoana,
+// max 3 prioritati active/persoana) — override prin env.
 export const DEFAULT_LIMITS = {
-  daily_total: 5,
-  per_person: 2,
+  daily_total: 10,
+  per_person: 4,
+  max_active_priorities_per_person: 3,
   dedup_cooldown_hours: 20,   // nu cere aceeasi informatie de 2x intr-o zi de lucru
+};
+
+// DEADLINE ENGINE (§10) — termenul NU se inventeaza arbitrar: ancore pe tip.
+// Operational tine deadline ca data (YYYY-MM-DD); ora merge in titlu/descriere.
+export const DEADLINE_HINTS = {
+  CASH_DATA: { days: 0, time_note: "azi 09:00" },
+  PHOTO_REQUEST: { days: 0, time_note: "azi 15:00" },
+  STATUS_VERIFY: { days: 0, time_note: "azi 16:00" },
+  WORK_VERIFY: { days: 1, time_note: "" },
+  DELIVERY_VERIFY: { days: 1, time_note: "" },
+  BLOCKER_CLARIFY: { days: 0, time_note: "azi" },
+  DEADLINE_CONFIRM: { days: 1, time_note: "" },
+  INVOICE_CLARIFICATION: { days: 2, time_note: "" },
+  DOCUMENT_REQUEST: { days: 1, time_note: "" },
 };
 
 // ── Helperi PURI partajati ──────────────────────────────────────────────

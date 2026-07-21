@@ -11,7 +11,9 @@ import { getState, setState } from "../../state.js";
 import { STATE_KEYS, DEFAULT_LIMITS } from "./contract.js";
 
 // Whitelist-ul ABSOLUT de tool-uri MCP pe care nervous system le poate atinge.
-export const ALLOWED_WRITE_TOOLS = ["create_task", "update_task"];
+// add_observation scrie TOT in modulul Task-uri (observatii pe task) — folosit
+// exclusiv pentru reminder-ul automat unic (§11 politica de follow-up).
+export const ALLOWED_WRITE_TOOLS = ["create_task", "update_task", "add_observation"];
 // Tot ce e enumerabil ca modul Operational si NU se poate scrie (C-G din §28).
 export const BLOCKED_WRITE_KINDS = [
   "obligation", "payment", "invoice", "supplier", "sale", "reservation",
@@ -126,6 +128,28 @@ export async function opsWrite(kind, payload, opts = {}) {
   await store.set(STATE_KEYS.limits, lim.next);
   await audit("nervous_task_created", `${payload?.title} → ${payload?.assignee} (${operational_id || "?"})`, String(resultText || "").slice(0, 500)).catch(() => {});
   return { ok: true, operational_id, raw: resultText };
+}
+
+/**
+ * Reminder automat UNIC pe un task creat de CEO AI (§11): o observatie pe task
+ * prin mecanismul nativ Operational (add_observation → notificare in-app).
+ * Ramane in modulul Task-uri; maxim 1 per task (garda o tine apelantul).
+ */
+export async function opsTaskReminder(operationalId, text, opts = {}) {
+  const cfg = opts.cfg || config;
+  if (killSwitchOn(cfg)) return { ok: false, blocked: "KILL_SWITCH" };
+  const store = opts.store || { get: getState, set: setState };
+  const reg = (await store.get(STATE_KEYS.tasks, {})) || {};
+  const mine = Object.values(reg).some((t) => t.operational_id === operationalId);
+  if (!mine) return { ok: false, blocked: "NOT_CEO_TASK", error: "reminder doar pe task-urile create de CEO AI" };
+  const mcp = opts.mcp || (await import("../../mcp.js"));
+  try {
+    const out = await mcp.mcpCall("add_observation", { id: operationalId, text: String(text || "").slice(0, 500) });
+    await audit("nervous_task_reminder", `${operationalId}: reminder unic trimis`).catch(() => {});
+    return { ok: true, raw: out };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 /**

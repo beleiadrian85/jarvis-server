@@ -94,6 +94,10 @@ small{color:var(--dim)}
   <div id="orgBody" style="margin-top:8px"></div>
   <div class="row" style="margin-top:8px"><button class="ghost" onclick="runCycle()">Rulează un ciclu acum (shadow-safe)</button><span id="orgMsg" class="dim"></span></div>
 </div>
+<div class="card"><h2>EVOLUȚIE — capabilități (self-evolution, shadow)</h2>
+  <div id="evoStatus" class="dim">—</div>
+  <div id="evoList" style="margin-top:8px"></div>
+</div>
 <div class="card"><h2>Pulsul organismului (activity stream)</h2><pre id="orgStream" class="dim" style="white-space:pre-wrap;font-size:12px;margin:0">—</pre></div>
 <div class="card"><h2>Harta datelor (click = de ce + cum reparăm)</h2><div id="dataMap"></div></div>
 <div class="card"><h2>Îmbunătățiri propuse (backlog CEO)</h2><ul id="improve"></ul></div>
@@ -208,6 +212,30 @@ async function renderOrganism() {
     (o.verdict ? "<small class=dim>" + o.verdict + "</small>" : "");
   const s = await api("/api/ceo/activity-stream");
   if (s && s.text) $("orgStream").textContent = s.text;
+  renderEvolution();
+}
+async function renderEvolution() {
+  const c = await api("/api/ceo/capabilities");
+  if (!c) return;
+  const v = c.view || {};
+  $("evoStatus").innerHTML = v.at
+    ? "nivel activ: <b>" + (v.active_level ?? "?") + "</b> · propuse: " + (v.capabilities_proposed?.length ?? 0) +
+      " · în build: " + (v.capabilities_building?.length ?? 0) + " · așteaptă aprobare: " + (v.capabilities_waiting_approval?.length ?? 0) +
+      " · deploy-uri făcute de AI: <b class=ok>0</b>"
+    : (v.note || "—");
+  const rows = (c.requests || []).filter(r => !["REJECTED","DUPLICATE","COMPLETED"].includes(r.status));
+  $("evoList").innerHTML = rows.length ? rows.map(r =>
+    "<div class=prop><b>" + r.title + "</b> <span class=pill>" + r.status + "</span> <span class=dim>[" + (r.tier || "?") + " · ROI " + (r.roi ?? "?") + " · risc " + (r.risk || "?") + "]</span>" +
+    "<br><small class=dim>" + (r.why || r.problem || "") + "</small>" +
+    "<br><small>Politica: <b>deploy DOAR cu aprobarea ta</b> · rollback: " + (r.rollback || "—").slice(0, 80) + "</small>" +
+    "<div class=row><button class=ghost onclick=\"capDec('" + r.id + "','REJECT')\">Reject</button>" +
+    (r.status === "WAITING_APPROVAL" ? "<button onclick=\"capDec('" + r.id + "','APPROVE')\">Approve deploy</button>" : "<span class=dim>Approve activ doar după build+teste</span>") + "</div></div>"
+  ).join("") : "<span class=dim>niciun capability request activ</span>";
+}
+async function capDec(id, decision) {
+  if (decision === "APPROVE" && !confirm("Aprobi DEPLOY-ul acestei capabilități?")) return;
+  const r = await api("/api/ceo/capabilities/decision", { method: "POST", body: JSON.stringify({ capability_request_id: id, decision }) });
+  alert(r?.ok ? "Înregistrat." : "Eroare: " + (r?.error || "?")); renderEvolution();
 }
 async function runCycle() {
   $("orgMsg").textContent = "rulează…";

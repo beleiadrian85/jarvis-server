@@ -37,7 +37,7 @@ import { recordOutcome } from "./orgMemory.js";
 import { buildSelfEval } from "./selfEval.js";
 import { appendMany } from "./activityStream.js";
 import { assessNervousHealth } from "./organismHealth.js";
-import { opsWrite } from "./operationalWrite.js";
+import { opsWrite, opsTaskReminder } from "./operationalWrite.js";
 
 let _running = false; // lock: un singur ciclu o data (R din §28)
 
@@ -167,7 +167,7 @@ export async function runNervousCycle(opts = {}) {
         asOf, formUrl: need.task_type === "CASH_DATA" && host ? `${host}/ceo.html` : "",
         projects: OPERATIONAL_PROJECTS, defaultProject: "Altele", createdByUserId: founderId,
       });
-      const lane = classifyForAutonomy(task, { mode, autonomousInfoEnabled: cfg.autonomousInfoTasks === true });
+      const lane = classifyForAutonomy(task, { mode, autonomousInfoEnabled: cfg.autonomousInfoTasks === true, autonomousOperationalEnabled: cfg.autonomousOperationalTasks === true });
       const rec = {
         id: task.idempotency_key, idempotency_key: task.idempotency_key, need_id: need.need_id,
         task_type: need.task_type, autonomy_class: task.autonomy_class, owner: del.person_id,
@@ -256,6 +256,21 @@ export async function runNervousCycle(opts = {}) {
       if (ops && !OPERATIONAL_CLOSED_STATUSES.includes(ops.status) && !fuThrottled) {
         const fu = evaluateFollowUp({ task: rec, opsTask: ops, asOf, personLoad: loads.per_person[rec.owner] || null, priorHistory: rec.followups || [] });
         if (fu.action !== "NO_ACTION") {
+          // §11 — REMINDER automat UNIC pe task-urile create autonom (prin
+          // observatie pe task, mecanismul nativ Operational). Restul raman
+          // propuneri pentru fondator.
+          if (fu.action === "REMINDER" && rec.shadow === false && persist &&
+              !(rec.followups || []).some((f) => f.auto_sent) &&
+              (cfg.autonomousInfoTasks === true || cfg.autonomousOperationalTasks === true)) {
+            const rr = await opsTaskReminder(rec.operational_id,
+              `Reminder JARVIS: "${rec.human?.title}" e restant (termen ${rec.human?.deadline}). ${fu.why}. Daca e un blocaj, noteaza-l aici.`, { cfg });
+            if (rr.ok) {
+              rec.followups = [...(rec.followups || []), { at: nowISO, action: "REMINDER", why: fu.why, auto_sent: true }];
+              events.push({ at: nowISO, event: "follow_up_proposed", detail: `${rec.human?.title}: REMINDER automat unic trimis (observatie pe task)`, task_id: rec.id });
+              rec.updated_at = nowISO;
+              continue;
+            }
+          }
           rec.followups = [...(rec.followups || []), { at: nowISO, action: fu.action, why: fu.why }];
           // Lantul §17 avanseaza REAL: treptele deja propuse (memorate canonic
           // in escalation_steps) nu se mai repropun — urmatorul pas neincercat.
@@ -306,6 +321,10 @@ export async function runNervousCycle(opts = {}) {
       blocked: Object.values(registry).filter((r) => r.lifecycle === "BLOCKED").map((r) => r.human?.title),
       resolved: Object.values(registry).filter((r) => r.lifecycle === "COMPLETED").map((r) => r.human?.title),
       needs_founder: [...results.unknown_owner.map((u) => `Clarifica ownerul: ${u.need}`), ...followupProposals.filter((f) => f.escalation).map((f) => `Escaladare propusa: ${f.task}`)],
+      // §19 — TASKS CREATED BY JARVIS TODAY: audit complet, vizibil in 10 sec.
+      ceo_tasks_today: Object.values(registry)
+        .filter((r) => r.operational_id && String(r.created_at || "").slice(0, 10) === todayISO(nowMs))
+        .map((r) => ({ id: r.operational_id, who: r.owner, what: r.human?.title, why: r.human?.why, status: r.lifecycle, expected: r.human?.expected_result, verification: r.internal?.verification_method, value: r.internal?.confidence })),
       founder_label: founderLabel,
       system_health: { status: health.status, score: health.score, detections: health.detections },
       people_load: loads.detections,
@@ -324,6 +343,14 @@ export async function runNervousCycle(opts = {}) {
       await audit("nervous_cycle", `${kind}: ${needsOut.needs.length} nevoi, ${results.would_create.length} shadow, ${results.proposed.length} propuneri, ${results.created.length} create, ${results.duplicates.length} dubluri`, "", true).catch(() => {});
     }
     console.log(`[nervous] ciclu ${kind} in ${Date.now() - t0}ms: ${needsOut.needs.length} nevoi / ${results.would_create.length} shadow / ${results.duplicates.length} dubluri`);
+
+    // SELF-EVOLUTION V1 (§40): nevoile reale ale organismului alimenteaza
+    // Capability Gap Engine — best-effort, gated, zero build real.
+    if (cfg.selfEvolution && persist) {
+      import("../evolution/cycle.js")
+        .then((ev) => ev.runEvolutionScan({ needs: needsOut.needs, noAction: needsOut.no_action, persist: true, nowMs, cfg }))
+        .catch((e) => console.error("[evolution.hook]", e.message));
+    }
     return { ran: true, kind, organism, needs: needsOut, results, health, selfeval, respMap, loads };
   } catch (e) {
     console.error("[nervous]", e.message);

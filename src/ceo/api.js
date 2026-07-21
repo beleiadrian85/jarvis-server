@@ -268,7 +268,9 @@ export function registerCeoApi(app) {
       const last = await getState("ceo:nervous:last", null);
       const { config: cfg } = await import("../config.js");
       if (!last) return res.json({ status: cfg.nervousSystem ? "PORNIT — primul ciclu inca nu a rulat" : "DORMANT (CEO_NERVOUS_SYSTEM_ENABLED=off)", enabled: cfg.nervousSystem, mode: cfg.taskAutonomy });
-      res.json({ enabled: cfg.nervousSystem, mode: cfg.taskAutonomy, autonomous_info_tasks: cfg.autonomousInfoTasks, kill_switch: cfg.nervousKill, ...last });
+      // §24 — vederea SELF-EVOLUTION (ce nu pot inca / capabilitati propuse).
+      const evolution = cfg.selfEvolution ? await getState("ceo:evolution:last", null) : null;
+      res.json({ enabled: cfg.nervousSystem, mode: cfg.taskAutonomy, autonomous_info_tasks: cfg.autonomousInfoTasks, kill_switch: cfg.nervousKill, ...last, evolution });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -297,6 +299,42 @@ export function registerCeoApi(app) {
       const { runNervousCycle } = await import("./nervous/cycle.js");
       const r = await runNervousCycle({ kind: "manual", persist: true });
       res.json(r.error ? { ok: false, error: r.error } : { ok: true, skipped: r.skipped || null, organism: r.organism || null });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ── SELF-EVOLUTION V1 (§23-24) — capabilitati + decizia fondatorului ───
+  app.get("/api/ceo/capabilities", async (_req, res) => {
+    try {
+      const view = await getState("ceo:evolution:last", null);
+      const requests = await getState("ceo:evolution:requests", {}) || {};
+      res.json({
+        view: view || { note: "niciun scan inca" },
+        requests: Object.values(requests).map((r) => ({
+          id: r.capability_request_id, title: r.title, type: r.type, status: r.status,
+          tier: r.recommendation?.tier, roi: r.roi?.total, gap_confirmed: r.gap_confirmed,
+          why: r.why_it_matters, problem: r.problem, requested: r.requested_capability,
+          reuse_options: r.reuse_options, acceptance_tests: r.acceptance_tests,
+          rollback: r.rollback_plan, risk: r.risk_level, complexity: r.estimated_complexity,
+          deployment_policy: r.deployment_policy, founder_decision: r.founder_decision || null,
+        })),
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Decizia fondatorului: APPROVE (doar din WAITING_APPROVAL — dupa build+teste),
+  // REJECT, MODIFY. ZERO deploy aici — §22 politica inghetata.
+  app.post("/api/ceo/capabilities/decision", async (req, res) => {
+    try {
+      const { decideCapability } = await import("./evolution/cycle.js");
+      const r = await decideCapability({ ...req.body });
+      res.status(r.ok ? 200 : 400).json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Scan manual de evolutie (shadow-safe: zero build real).
+  app.post("/api/ceo/evolution-scan", async (req, res) => {
+    try {
+      const { runEvolutionScan } = await import("./evolution/cycle.js");
+      const r = await runEvolutionScan({ simulateBuild: req.body?.simulate_build || null });
+      res.json(r.error ? { ok: false, error: r.error } : { ok: true, skipped: r.skipped || null, view: r.view || null, buildSim: r.buildSim || null });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

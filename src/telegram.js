@@ -85,6 +85,16 @@ function deny(ctx) {
   // Constitutie: logam tentativa.
   console.warn(`[acces] tentativa de la chat ${ctx.chat?.id} (@${ctx.from?.username || "?"})`);
   audit("acces_refuzat", `chat ${ctx.chat?.id} @${ctx.from?.username || "?"}`, "telegram", false);
+  // MP5: candidat de identitate — Adrian confirma maparea in Command Center
+  // (niciodata auto-map pe nume; doar captura pentru confirmare explicita).
+  import("./state.js").then(async ({ getState, setState }) => {
+    const cands = await getState("people:telegram:candidates", {}).catch(() => ({}));
+    const id = String(ctx.chat?.id || "");
+    if (id && !cands[id]) {
+      cands[id] = { username: ctx.from?.username || null, name: [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || null, first_seen: new Date().toISOString() };
+      await setState("people:telegram:candidates", cands);
+    }
+  }).catch(() => {});
   return ctx.reply("Acces restrictionat.");
 }
 

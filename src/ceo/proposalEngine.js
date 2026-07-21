@@ -80,7 +80,14 @@ export async function decideProposal({ proposal_id, decision, note = "", decided
   if (!p) return { ok: false, error: "propunere inexistenta" };
   p.state = state;
   p.founder_decision = { decision: state, note, decided_by, at: new Date().toISOString() };
-  p.delivery = { sent: false, note: "Livrarea ramane gated (CEO_DELIVERY nu exista inca) — se activeaza intr-o faza separata." };
+  // §12: hash-ul contextului aprobat — livrarea refuza daca continutul s-a schimbat.
+  let h = 0; const s = `${p.problem}|${p.recommendation}`;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  p.approved_context_hash = String(h >>> 0);
+  // NU reseta livrarea la re-aprobare — idempotenta trimiterii depinde de ea.
+  if (!p.delivery?.status && p.delivery?.sent !== true) {
+    p.delivery = { sent: false, note: "netrimis — livrarea cere APPROVE & SEND explicit" };
+  }
   all[proposal_id] = p;
   await setState(PROPOSALS_KEY, all);
   await audit("ceo_proposal_decision", `${proposal_id} → ${state}${note ? ` (${note.slice(0, 80)})` : ""}`,

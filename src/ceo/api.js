@@ -93,7 +93,13 @@ export function registerCeoApi(app) {
         const { deliverApprovedRequest } = await import("./requestDelivery.js");
         const { pushToChat } = await import("../telegram.js");
         const formUrl = `https://${req.get("host")}/ceo.html`;
-        r.delivery = await deliverApprovedRequest(req.body.proposal_id, { send: pushToChat, formUrl });
+        // §12b: cash-request devine inutil daca soldul e deja FRESH (introdus).
+        const stillNeeded = async (p) => {
+          if (!/cash/.test(p.proposal_id)) return true;
+          const b = await getBalances().catch(() => null);
+          return !(b && !b.expired && b.freshness === "FRESH");
+        };
+        r.delivery = await deliverApprovedRequest(req.body.proposal_id, { send: pushToChat, formUrl, stillNeeded });
       }
       res.json(r);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -134,6 +140,32 @@ export function registerCeoApi(app) {
   });
 
   app.get("/api/ceo/smartbill-health", (_req, res) => res.json(smartbillHealth()));
+
+  // MP5: candidatii de identitate Telegram (capturati la mesaje non-owner).
+  app.get("/api/ceo/identity-candidates", async (_req, res) => {
+    try {
+      const [cands, map] = await Promise.all([
+        getState("people:telegram:candidates", {}), getState("people:telegram", {}),
+      ]);
+      res.json({ candidates: cands, mapped: map });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // MP5: Executive Action Queue — toate propunerile grupate pe stare/persoana.
+  app.get("/api/ceo/queue", async (_req, res) => {
+    try {
+      const props = Object.values(await listProposals());
+      const by = (f) => props.filter(f).map((p) => ({ id: p.proposal_id, problem: p.problem, assignee: p.task_proposal?.assignee, state: p.state, delivery: p.delivery?.status }));
+      res.json({
+        NEEDS_ADRIAN: by((p) => ["draft", "proposed"].includes(p.state)),
+        WAITING_FOR_APPROVAL: by((p) => p.state === "modified"),
+        WAITING_FOR_DATA: by((p) => ["AWAITING_RESPONSE", "SENT"].includes(p.delivery?.status)),
+        IN_PROGRESS: by((p) => p.state === "approved" && !p.delivery?.status),
+        COMPLETED: by((p) => p.delivery?.status === "COMPLETED" || p.state === "verified"),
+        BLOCKED: by((p) => ["DELIVERY_BLOCKED_NO_IDENTITY", "FAILED"].includes(p.delivery?.status)),
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 
   // ── Master Phase 3 — Nervous System ────────────────────────────────────
   app.get("/api/ceo/bank-intel", async (_req, res) => {

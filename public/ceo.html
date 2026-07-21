@@ -84,6 +84,11 @@ small{color:var(--dim)}
 <div class="card"><h2>Bancă — rulaje (fără sold)</h2><div id="bankIntel" class="dim">—</div></div>
 <div class="card"><h2>Vânzări — atribuție trafic → cash</h2><div id="attr" class="dim">—</div></div>
 
+<div class="card"><h2>Reconciliation Workbench (Operational ↔ SmartBill ↔ Bancă)</h2><div id="recon" class="dim">—</div></div>
+<div class="card"><h2>Coada executivă</h2><div id="queue" class="dim">—</div></div>
+<div class="card"><h2>Identități Telegram (mapare pentru livrări)</h2><div id="idents" class="dim">—</div>
+  <div class="row"><select id="mapPerson"><option value="dana">Dana</option><option value="nelu">Nelu</option><option value="mihaela">Mihaela</option></select><input id="mapChat" placeholder="chat id (din candidați)"><button onclick="saveMap()">Map</button></div>
+</div>
 <div class="card"><h2>Harta datelor (click = de ce + cum reparăm)</h2><div id="dataMap"></div></div>
 <div class="card"><h2>Îmbunătățiri propuse (backlog CEO)</h2><ul id="improve"></ul></div>
 </div>
@@ -128,6 +133,7 @@ async function boot() {
   renderInbox(t.needs_decision || []);
   renderBalances();
   renderExtras();
+  renderMp5();
 }
 async function renderExtras() {
   const gs = await api("/api/ceo/google-status");
@@ -158,8 +164,24 @@ async function saveGoogle() {
   const r = await api("/api/ceo/google-credentials", { method: "POST", body: JSON.stringify({ client_id: $("gcid").value.trim(), client_secret: $("gcsec").value.trim() }) });
   $("gMsg").textContent = r?.ok ? "Salvat. Apasă CONNECT GOOGLE." : "Eroare.";
   renderExtras();
+  renderMp5();
 }
 function connectGoogle() { window.open("/auth/google?k=" + encodeURIComponent(key), "_blank"); }
+async function renderMp5() {
+  const rc = await api("/api/ceo/reconciliation");
+  if (rc) $("recon").innerHTML = rc.status === "NOT_CONNECTED" ? "SmartBill neconectat" :
+    (rc.rows || []).map(r => "• " + r.ref + " (" + (r.client || "?") + "): Operational: " + r.operational_says + " | SmartBill: " + r.smartbill_says + " | Bancă: " + r.bank_says + (r.needs_human_review ? " <b class=bad>← review</b>" : "")).join("<br>") +
+    (rc.grouped_review_proposal ? "<br><small class=warn>Propunere grupată pentru Dana pregătită (" + rc.divergences + " divergențe) — vezi Inbox după reseed.</small>" : "");
+  const q = await api("/api/ceo/queue");
+  if (q) $("queue").innerHTML = Object.entries(q).filter(([, v]) => v.length).map(([k, v]) => "<b>" + k + "</b>: " + v.map(x => x.problem + (x.delivery ? " [" + x.delivery + "]" : "")).join("; ")).join("<br>") || "goală";
+  const idc = await api("/api/ceo/identity-candidates");
+  if (idc) $("idents").innerHTML = "Mapate: " + (Object.keys(idc.mapped || {}).join(", ") || "doar Adrian (env)") + "<br>Candidați: " +
+    (Object.entries(idc.candidates || {}).map(([id, c]) => id + " (" + (c.username || c.name || "?") + ")").join("; ") || "niciunul — persoana trimite orice mesaj botului @AdiJarviBot");
+}
+async function saveMap() {
+  const r = await api("/api/ceo/people-mapping", { method: "POST", body: JSON.stringify({ person_id: $("mapPerson").value, chat_id: $("mapChat").value.trim() }) });
+  alert(r?.ok ? "Mapat." : "Eroare: " + (r?.error || "")); renderMp5();
+}
 function renderInbox(list) {
   const el = $("inbox"); el.innerHTML = "";
   if (!list.length) { el.textContent = "Nimic în așteptare."; return; }

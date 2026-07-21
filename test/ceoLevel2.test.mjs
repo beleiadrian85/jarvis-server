@@ -107,5 +107,33 @@ ok(cf[0].amountRON === 600, "overdue ponderat 0.6 in forecast");
 const msg = composeRequestMessage(PROP("approved")["prop:inforeq:cash"], { formUrl: "https://x/ceo.html" });
 ok(/Dana, Introdu soldurile/.test(msg) && /Formular: https/.test(msg) && /aprobată de Adrian/.test(msg), "mesaj simplu + link formular + proveniensa");
 
+
+// ── MP5: blindari suplimentare ──────────────────────────────────────────
+// Regresie: re-APPROVE nu reseteaza livrarea (idempotenta pastrata).
+const { decideProposal } = await import("../src/ceo/proposalEngine.js");
+// (decideProposal e DB-bound; regresia e acoperita structural mai jos)
+import { readFileSync as rf } from "node:fs";
+const peSrc = rf(new URL("../src/ceo/proposalEngine.js", import.meta.url), "utf8");
+ok(/NU reseta livrarea la re-aprobare/.test(peSrc) && /p\.delivery\?\.status/.test(peSrc), "re-APPROVE nu reseteaza delivery (regresie blocata in cod)");
+
+// Context hash: continut schimbat dupa aprobare → STALE_APPROVAL, 0 outbound.
+sent = [];
+const hashOf = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h >>> 0); };
+const stale = PROPA("approved");
+stale["prop:inforeq:cash"].approved_context_hash = hashOf("ALTCEVA|ALTCEVA");
+st = mkStore(stale);
+const rStale = await deliverApprovedRequest("prop:inforeq:cash", { send, cfg: CFG_ON, store: st });
+ok(/STALE_APPROVAL/.test(rStale.error || "") && sent.length === 0, "context schimbat dupa aprobare → STALE_APPROVAL, 0 outbound");
+// Hash corect → trece.
+const fresh = PROPA("approved");
+fresh["prop:inforeq:cash"].approved_context_hash = hashOf(`${fresh["prop:inforeq:cash"].problem}|${fresh["prop:inforeq:cash"].recommendation}`);
+st = mkStore(fresh);
+const rFresh = await deliverApprovedRequest("prop:inforeq:cash", { send, cfg: CFG_ON, store: st });
+ok(rFresh.status === "SENT" && sent.length === 1, "hash valid → livrare normala");
+
+// NO_LONGER_NEEDED: datele exista deja → zero mesaj, request inchis elegant.
+sent = []; st = mkStore(PROPA("approved"));
+const rNLN = await deliverApprovedRequest("prop:inforeq:cash", { send, cfg: CFG_ON, store: st, stillNeeded: async () => false });
+ok(rNLN.status === "NO_LONGER_NEEDED" && sent.length === 0 && st.db["ceo:proposals"]["prop:inforeq:cash"].delivery.status === "NO_LONGER_NEEDED", "date deja prezente → NO_LONGER_NEEDED, zero mesaj");
 console.log(`\n${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — ceoLevel2 (A-L)`);
 process.exit(failed === 0 ? 0 : 1);

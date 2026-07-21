@@ -58,6 +58,21 @@ export async function deliverApprovedRequest(proposalId, { send, formUrl = "", c
     if (allowedLevelFor(p.source === "data-gap-engine" ? "information_request" : p.type || "task", cfg) < 2)
       return { status: "FAILED", error: "LEVEL 1: tipul nu se livreaza (doar information_request cu flag activ)" };
     if (p.state !== "approved") return { status: "FAILED", error: `stare ${p.state} — cere APPROVE intai` };
+    // §12a: aprobarea e legata de continut (context hash) — schimbat → blocat.
+    if (p.approved_context_hash) {
+      let h = 0; const s = `${p.problem}|${p.recommendation}`;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      if (String(h >>> 0) !== p.approved_context_hash)
+        return { status: "FAILED", error: "STALE_APPROVAL: continutul propunerii s-a schimbat dupa aprobare — re-aproba" };
+    }
+    // §12b: daca cererea a devenit inutila (ex. soldul e deja FRESH) → NU trimite.
+    const stillNeeded = arguments[1]?.stillNeeded;
+    if (typeof stillNeeded === "function" && !(await stillNeeded(p))) {
+      p.delivery = { status: "NO_LONGER_NEEDED", sent: false, at: new Date().toISOString() };
+      all[proposalId] = p; await S.set(PROPOSALS_KEY, all);
+      await audit("inforeq_no_longer_needed", `${proposalId}: data exista deja — zero mesaj`).catch(() => {});
+      return { status: "NO_LONGER_NEEDED", note: "datele exista deja — nu deranjam omul" };
+    }
     if (p.delivery?.status === "SENT" || p.delivery?.sent === true || p.delivery?.status === "AWAITING_RESPONSE")
       return { status: p.delivery.status, note: "deja trimis — idempotent, zero dubla trimitere" };
 

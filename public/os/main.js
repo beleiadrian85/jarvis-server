@@ -6,6 +6,7 @@ import { h, closeDrawer } from "./components/ui.js";
 
 const $ = (id) => document.getElementById(id);
 const REFRESH_MS = 2 * 60_000;
+let _wired = false; // listener-ele globale se leaga O SINGURA DATA (re-login la 401 nu le dubleaza)
 
 const ctx = {
   api,
@@ -77,15 +78,18 @@ function showGate(err) {
 async function enterApp() {
   $("gate").hidden = true;
   $("app").hidden = false;
-  window.addEventListener("hashchange", route);
+  if (!_wired) {
+    _wired = true;
+    window.addEventListener("hashchange", route);
+    setInterval(() => { if (!document.hidden) loadCore().then(renderShellState); }, REFRESH_MS);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) loadCore().then(renderShellState); });
+    // Traversarea pragului mobil/desktop re-randeaza ecranul curent.
+    matchMedia("(max-width: 760px)").addEventListener("change", () => route());
+  }
   renderShellState(); // schelet imediat, fara spinner total
   await loadCore();
   if (!location.hash) location.hash = "#/today";
   route();
-  setInterval(() => { if (!document.hidden) loadCore().then(renderShellState); }, REFRESH_MS);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadCore().then(renderShellState); });
-  // Traversarea pragului mobil/desktop re-randeaza ecranul curent.
-  matchMedia("(max-width: 760px)").addEventListener("change", () => route());
 }
 
 /* ───────── Store: incarcarea nucleului (paralel, tolerant la esec) ───────── */

@@ -86,6 +86,44 @@ export function buildLiquidityModel({
   };
 }
 
+/**
+ * Punctul minim de cash + ziua primului deficit pe 90 de zile. PUR.
+ * Ruleaza un registru zilnic: sold + incasari CERTE − iesiri certe, zi cu zi.
+ * Fara sold → totul UNKNOWN (nu se inventeaza).
+ */
+export function computeMinimumCash({ asOf, bankBalance = null, confirmedReceivables = null, obligations = [], days = 90 } = {}) {
+  if (bankBalance == null) {
+    return {
+      available_now: "UNKNOWN", minimum_cash: "UNKNOWN", minimum_cash_date: "UNKNOWN",
+      first_deficit_date: "UNKNOWN", surplus_deficit_90: "UNKNOWN",
+      why: "sold bancar necunoscut", how_to_fix: "introdu soldul (Command Center) sau conecteaza o sursa cu sold",
+    };
+  }
+  const byDay = new Map();
+  const addFlow = (dateStr, amt) => {
+    const d = daysBetween(asOf, dateStr);
+    const k = Math.max(0, Math.min(days, d)); // restantele lovesc azi
+    byDay.set(k, (byDay.get(k) || 0) + amt);
+  };
+  for (const o of obligations) if (o.dueDate && daysBetween(asOf, o.dueDate) <= days) addFlow(o.dueDate, -(o.amountRON || 0));
+  for (const r of confirmedReceivables || []) if (r.dueDate && daysBetween(asOf, r.dueDate) >= 0 && daysBetween(asOf, r.dueDate) <= days) addFlow(r.dueDate, r.amountRON || 0);
+
+  let bal = bankBalance, min = bankBalance, minDay = 0, firstDeficitDay = null;
+  for (let d = 0; d <= days; d++) {
+    bal += byDay.get(d) || 0;
+    if (bal < min) { min = bal; minDay = d; }
+    if (bal < 0 && firstDeficitDay === null) firstDeficitDay = d;
+  }
+  const dateOf = (d) => new Date(new Date(asOf).getTime() + d * 86_400_000).toISOString().slice(0, 10);
+  return {
+    available_now: bankBalance,
+    minimum_cash: Math.round(min), minimum_cash_date: dateOf(minDay),
+    first_deficit_date: firstDeficitDay === null ? "fara deficit in orizont" : dateOf(firstDeficitDay),
+    surplus_deficit_90: Math.round(bal),
+    confidence_note: (confirmedReceivables || []).length ? "cu incasari confirmate" : "DOAR iesiri (fara incasari confirmate inregistrate)",
+  };
+}
+
 /** Raport text al modelului. PUR. */
 export function formatLiquidity(model) {
   const lei = (n) => typeof n === "number" ? Math.round(n).toLocaleString("ro-RO") + " lei" : n;

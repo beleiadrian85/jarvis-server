@@ -50,6 +50,33 @@ export function improvementsFromGaps(gaps = []) {
   }));
 }
 
+// Scoring backlog (F): CEO propune, Adrian aproba, Claude Code dezvolta.
+export const IMPROVEMENT_SCORE_FIELDS = ["business_value_score", "data_value_score", "time_saved_score", "risk_reduction_score", "implementation_cost_score", "saas_reusability_score"];
+
+/** Scor 0-100 pe cele 6 dimensiuni (cost invers: mic = bine). PUR. */
+export function scoreImprovement(p) {
+  const s = {
+    business_value_score: p.business_value_score ?? 50,
+    data_value_score: p.data_value_score ?? 50,
+    time_saved_score: p.time_saved_score ?? 30,
+    risk_reduction_score: p.risk_reduction_score ?? 30,
+    implementation_cost_score: p.implementation_cost_score ?? 50, // 100 = ieftin
+    saas_reusability_score: p.saas_reusability_score ?? 50,
+  };
+  const total = Math.round(
+    s.business_value_score * 0.3 + s.data_value_score * 0.2 + s.time_saved_score * 0.1 +
+    s.risk_reduction_score * 0.15 + s.implementation_cost_score * 0.1 + s.saas_reusability_score * 0.15
+  );
+  return { ...s, total };
+}
+
+/** Backlog-ul ordonat CEO IMPROVEMENT OPPORTUNITIES. PUR. */
+export function rankBacklog(proposals = []) {
+  return proposals
+    .map((p) => ({ ...p, scoring: scoreImprovement(p) }))
+    .sort((a, b) => b.scoring.total - a.scoring.total);
+}
+
 export async function recordImprovements(proposals = [], { persist = true } = {}) {
   const valid = proposals.filter((p) => validateImprovement(p).valid);
   if (persist && valid.length) {

@@ -36,16 +36,19 @@ export function parseObligations(text) {
     const dueDate = parts[0];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) continue;
     const { amount, currency, amountRON } = parseAmount(parts[2]);
+    // Formatul MCP a primit coloana optionala "rămas X" dupa suma — o sarim,
+    // altfel categoria devine "rămas ..." si bucketing-ul (Credit/Salarii) pica.
+    const off = /^r[aă]mas\b/i.test(parts[3] || "") ? 1 : 0;
     out.push({
       dueDate,
       title: parts[1] || "",
       amount,
       currency,
       amountRON,
-      category: parts[3] || "Altele",
-      project: parts[4] || "General",
-      priority: parts[5] || "normala",
-      status: parts[6] || "neplatita",
+      category: parts[3 + off] || "Altele",
+      project: parts[4 + off] || "General",
+      priority: parts[5 + off] || "normala",
+      status: parts[6 + off] || "neplatita",
     });
   }
   return out;
@@ -66,7 +69,15 @@ export function parseCashReport(text) {
 
 // ── Apeluri live (rulează pe server, cu OPERATIONAL_MCP_URL setat) ──────
 export async function getObligations() {
-  return parseObligations(await mcpCall("list_payment_obligations", { only_open: true }));
+  // Retry o data la caderi tranzitorii (vazute live: goluri de ~30 min care
+  // faceau cash-ul invizibil). Esec dupa retry → propaga (caller marcheaza lipsa).
+  try {
+    return parseObligations(await mcpCall("list_payment_obligations", { only_open: true }));
+  } catch (e) {
+    console.warn("[financial] list_payment_obligations retry dupa:", e.message);
+    await new Promise((r) => setTimeout(r, 1500));
+    return parseObligations(await mcpCall("list_payment_obligations", { only_open: true }));
+  }
 }
 export async function getCashReport(days = 30) {
   return parseCashReport(await mcpCall("cash_report", { days }));

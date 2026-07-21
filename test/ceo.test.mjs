@@ -22,7 +22,8 @@ const ok = (c, m) => { console.log(`${c ? "✅" : "❌"} ${m}`); if (!c) failed+
 const map = buildDataMap({});
 ok(map.domains.length === 22, `22 domenii in harta (${map.domains.length})`);
 ok(map.healthScore >= 0 && map.healthScore <= 100, `health score 0-100 (${map.healthScore})`);
-ok(map.notConnected.includes("CASH") && map.notConnected.includes("BANK"), "CASH/BANK marcate NOT_CONNECTED (adevarul, nu simulare)");
+ok(map.partial.includes("CASH") && map.partial.includes("BANK"), "CASH/BANK = PARTIAL (extrase + input manual; soldul automat inca lipseste)");
+ok(map.notConnected.includes("EMAIL") && map.notConnected.includes("CALENDAR"), "EMAIL/CALENDAR = NOT_CONNECTED (OAuth neconfigurat — adevarul)");
 ok(map.domains.every((d) => d.owner && d.source), "fiecare domeniu are sursa + owner");
 // sursa picata LIVE degradeaza starea (ZERO ≠ NU AM DATE)
 const mapDown = buildDataMap({ world: { sourceMeta: { missing: ["obligatii de plata"] }, obligations: [], tasks: [], sales: null } });

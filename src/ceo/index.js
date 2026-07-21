@@ -5,7 +5,9 @@
 import { COMPANY } from "./companyConfig.js";
 import { buildDataMap, formatDataMap } from "./companyDataMap.js";
 import { buildDataGaps, formatDataGaps } from "./dataGapEngine.js";
-import { buildLiquidityModel, formatLiquidity } from "./cashIntelligence.js";
+import { buildLiquidityModel, formatLiquidity, computeMinimumCash } from "./cashIntelligence.js";
+import { buildReceivablesRegister, confirmedForCash } from "./receivablesEngine.js";
+import { topPriorities } from "./priorityEngine.js";
 import { buildFunnel, salesSnapshot } from "./salesIntelligence.js";
 import { buildTeamProfiles } from "./peopleIntelligence.js";
 import { buildActionProposal, recordProposals } from "./proposalEngine.js";
@@ -20,6 +22,16 @@ export { analyzeDecision, preflightDecision, validateDecisionAnalysis } from "./
 export { buildActionProposal, validateProposal, recordProposals, listProposals } from "./proposalEngine.js";
 export { buildImprovementProposal, improvementsFromGaps, recordImprovements } from "./improvementEngine.js";
 export { buildLoopRecord, recordLoop, closeLoop, adjustConfidence, strategyConfidence } from "./closedLoop.js";
+// Master Phase 2 — Data Loop + Management Loop.
+export { setBalance, getBalances, validateBalanceEntry } from "./balanceStore.js";
+export { computeMinimumCash } from "./cashIntelligence.js";
+export { buildReceivablesRegister, confirmedForCash } from "./receivablesEngine.js";
+export { buildFinancingRegister } from "./financingRegister.js";
+export { topPriorities, scorePriority } from "./priorityEngine.js";
+export { whoNeedsToDoWhat, forward30, NO_ACTION } from "./managementView.js";
+export { buildCapabilityManifest } from "./capabilityManifest.js";
+export { decideProposal } from "./proposalEngine.js";
+export { scoreImprovement, rankBacklog } from "./improvementEngine.js";
 
 /** Contextul complet al CEO-ului (world + episoade + gate), READ-ONLY. */
 export async function collectCeoContext() {
@@ -48,10 +60,39 @@ export async function collectCeoContext() {
   }
   const history = await getState("sales:history", []).catch(() => []);
 
-  return { world, observations: obs.observations || [], episodes: pipe.episodes || [], candidates: gate.candidates || [], salesHistory: history };
+  // Master Phase 2 — sursele noi (best-effort, read-only).
+  const { getBalances } = await import("./balanceStore.js");
+  const { getIncomeInvoices, getEstimatedInflows, getBankStatementsSummary, getSupplierBacklog } = await import("../connectors/opsdata.js");
+  const [balances, incomeInvoices, inflows, bankStatements, supplierBacklog] = await Promise.all([
+    getBalances().catch(() => null),
+    getIncomeInvoices().catch(() => null),
+    getEstimatedInflows().catch(() => null),
+    getBankStatementsSummary().catch(() => null),
+    getSupplierBacklog().catch(() => null),
+  ]);
+
+  return {
+    world, observations: obs.observations || [], episodes: pipe.episodes || [],
+    candidates: gate.candidates || [], salesHistory: history,
+    balances, incomeInvoices, inflows, bankStatements, supplierBacklog,
+  };
 }
 
 const lei = (n) => typeof n === "number" ? Math.round(n).toLocaleString("ro-RO") + " lei" : String(n);
+
+// Ajutoare sigure (ctx poate veni fara sursele noi — teste vechi raman valide).
+function buildReceivablesRegisterSafe(ctx) {
+  try {
+    if (ctx.incomeInvoices === undefined && ctx.inflows === undefined) return null;
+    return buildReceivablesRegister({
+      asOf: ctx.world.asOf, incomeInvoices: ctx.incomeInvoices ?? null,
+      estimatedInflows: ctx.inflows ?? null, sales: ctx.world.sales ?? null,
+    });
+  } catch { return null; }
+}
+function confirmedForCashSafe(register) {
+  try { return confirmedForCash(register); } catch { return null; }
+}
 
 /**
  * Cele 10 raspunsuri de CEO — DETERMINISTE, pe surse sau DATA GAP. PUR peste
@@ -61,9 +102,17 @@ export function ceoShadowAnswers(ctx) {
   const { world, observations = [], episodes = [], candidates = [], salesHistory = [] } = ctx;
   const map = buildDataMap({ world });
   const gaps = buildDataGaps(map);
+
+  // Master Phase 2: soldul din balanceStore (daca e proaspat) + incasarile
+  // confirmate din registrul de receivables intra in modelul de lichiditate.
+  const bankBalance = ctx.balances && !ctx.balances.expired && ctx.balances.totalRON != null
+    ? ctx.balances.totalRON : (world.openingBalance ?? null);
+  const receivables = buildReceivablesRegisterSafe(ctx);
+  const confirmedIn = receivables ? confirmedForCashSafe(receivables) : null;
+
   const liq = buildLiquidityModel({
-    asOf: world.asOf, bankBalance: world.openingBalance ?? null,
-    confirmedReceivables: null, probableReceivables: null,
+    asOf: world.asOf, bankBalance,
+    confirmedReceivables: confirmedIn, probableReceivables: null,
     obligations: world.obligations || [], projectCommitments: null,
   });
   const funnel = buildFunnel({ sales: world.sales, history: salesHistory });
@@ -106,10 +155,19 @@ export function ceoShadowAnswers(ctx) {
     "Rezervarile fara avans se pot anula fara cost — pipeline-ul de vanzari poate scadea silentios",
   ].slice(0, 5);
 
+  // Master Phase 2: punctul minim de cash + prioritatile + management view.
+  const minCash = computeMinimumCash({
+    asOf: world.asOf, bankBalance,
+    confirmedReceivables: confirmedIn, obligations: world.obligations || [],
+  });
+  const priorities = topPriorities({ observations, episodes, gaps, asOf: world.asOf });
+
   return {
     generated_at: world.now, company: COMPANY.name,
     q1_top5_probleme: topProblems.length ? topProblems.map((p) => `${p.text}${p.ev ? ` · ${p.ev}` : ""}`) : ["Fara probleme medium+ in datele curente."],
-    q2_cash: { rezumat: formatLiquidity(liq), ce_nu_stim: liq.data_gaps, incredere: liq.confidence },
+    q2_cash: { rezumat: formatLiquidity(liq), ce_nu_stim: liq.data_gaps, incredere: liq.confidence, minim: minCash },
+    receivables: receivables ? { statement: receivables.statement, totals: receivables.totals, gaps: receivables.data_gaps } : null,
+    priorities: priorities.priorities,
     q3_dana: dana.requests.length || dana.profile?.interventions.length
       ? [...dana.requests, ...(dana.profile?.interventions || []).map((i) => i.note)]
       : ["Nimic urgent fundamentat pe date pentru Dana azi."],

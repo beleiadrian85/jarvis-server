@@ -65,3 +65,25 @@ export async function recordProposals(proposals = [], { persist = true } = {}) {
 export async function listProposals() {
   return await getState(PROPOSALS_KEY, {}).catch(() => ({}));
 }
+
+/**
+ * Decizia fondatorului pe o propunere (Approval Inbox): APPROVE/MODIFY/REJECT.
+ * IMPORTANT: aprobarea NU trimite nimic — livrarea efectiva ramane in spatele
+ * fluxului approvalGate + flag de livrare (dezactivat in aceasta faza).
+ */
+export async function decideProposal({ proposal_id, decision, note = "", decided_by = "adrian" } = {}) {
+  const D = { APPROVE: "approved", MODIFY: "modified", REJECT: "rejected" };
+  const state = D[String(decision).toUpperCase()];
+  if (!state) return { ok: false, error: "decision: APPROVE|MODIFY|REJECT" };
+  const all = await getState(PROPOSALS_KEY, {}).catch(() => ({}));
+  const p = all[proposal_id];
+  if (!p) return { ok: false, error: "propunere inexistenta" };
+  p.state = state;
+  p.founder_decision = { decision: state, note, decided_by, at: new Date().toISOString() };
+  p.delivery = { sent: false, note: "Livrarea ramane gated (CEO_DELIVERY nu exista inca) — se activeaza intr-o faza separata." };
+  all[proposal_id] = p;
+  await setState(PROPOSALS_KEY, all);
+  await audit("ceo_proposal_decision", `${proposal_id} → ${state}${note ? ` (${note.slice(0, 80)})` : ""}`,
+    JSON.stringify(p.founder_decision)).catch(() => {});
+  return { ok: true, proposal: p };
+}

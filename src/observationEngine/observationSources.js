@@ -87,9 +87,14 @@ export async function collectWorld({ now } = {}) {
   const obsLast = await getState("observation:last", null).catch(() => null);
   if (obsLast?.at) jobs.push({ name: "observation_cycle", lastRunAt: obsLast.at, expectedHours: 2 });
 
-  // Trafic site (Spion) — sursa NECONECTATA inca la jarvis-server: ramane null.
-  // Lipsa datelor NU se interpreteaza drept trafic zero (detectorul tace).
-  const traffic = null;
+  // Trafic site (Spion) — CONECTAT (Master Phase 2): site_visits din opsdb.
+  // Sursa picata → null + marcaj (NU trafic zero); detectorii existenti decid.
+  let traffic = null;
+  try {
+    const { getSiteTraffic } = await import("../connectors/opsdata.js");
+    traffic = await getSiteTraffic(28);
+    if (!traffic) missing.push("trafic site (spion/opsdb)");
+  } catch { missing.push("trafic site (spion/opsdb)"); }
 
   return {
     now: nowIso, asOf,

@@ -92,6 +92,15 @@ export const config = {
   observationBoardEscalation: ["on", "true"].includes(String(process.env.OBSERVATION_BOARD_ESCALATION_ENABLED || "").toLowerCase()),
   observationIntervalMinutes: Math.max(30, Number(process.env.OBSERVATION_INTERVAL_MINUTES || 45) || 45),
 
+  // CODEX Faza 4.2 — PROACTIVE CEO PIPELINE (Observation → Triage → Episoade →
+  // Board preview → CEO Brief). ENABLED implicit OFF → pipeline-ul nu ruleaza.
+  // SHADOW implicit ON → doar audit/jarvis_state. Notificarile si convocarea
+  // LIVE a Boardului raman OFF (etape ulterioare, cu aprobare).
+  proactiveCeoPipeline: ["on", "true"].includes(String(process.env.PROACTIVE_CEO_PIPELINE_ENABLED || "").toLowerCase()),
+  proactiveCeoShadow: !["off", "false"].includes(String(process.env.PROACTIVE_CEO_SHADOW_MODE || "").toLowerCase()),
+  proactiveCeoNotifications: ["on", "true"].includes(String(process.env.PROACTIVE_CEO_NOTIFICATIONS_ENABLED || "").toLowerCase()),
+  proactiveCeoBoardExecution: ["on", "true"].includes(String(process.env.PROACTIVE_CEO_BOARD_EXECUTION_ENABLED || "").toLowerCase()),
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

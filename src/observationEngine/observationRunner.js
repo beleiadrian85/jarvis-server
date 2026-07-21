@@ -13,6 +13,8 @@ import { reconcile, MAX_PER_RUN } from "./observationDeduplicator.js";
 import { applyEscalation } from "./observationEscalation.js";
 import { summarizeObservations, deterministicSummary } from "./observationSummary.js";
 import { worldFingerprint, getCached, setCached } from "./observationCache.js";
+// CODEX Faza 4.2 — Proactive CEO Pipeline (GATED: implicit OFF → apelul e no-op).
+import { runProactivePipeline } from "../proactiveCeo/pipelineRunner.js";
 
 const DEDUP_STATE_KEY = "observation:dedup";
 const LAST_RUN_KEY = "observation:last";
@@ -101,6 +103,13 @@ export async function runObservationCycle(opts = {}) {
     if (!opts.noCache) setCached(fp, true);
 
     console.log(`[observation] ${kind}: ${emitted.length} emise (${rec.suppressed.length} suprimate, ${rejected.length} respinse)${summary.llmUsed ? " +sinteza LLM" : ""}`);
+
+    // 7) Proactive CEO Pipeline (Faza 4.2) — GATED, implicit OFF. Erorile lui
+    //    raman izolate si nu ating rularea de observatie.
+    if (config.proactiveCeoPipeline && emitted.length) {
+      await runProactivePipeline(emitted, { persist: opts.persist !== false })
+        .catch((e) => console.error("[proactive]", e.message));
+    }
     return {
       ran: true, kind,
       observations: emitted, suppressed: rec.suppressed, rejected,

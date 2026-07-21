@@ -9,6 +9,8 @@ import { triageAll } from "./signalTriage.js";
 import { groupIntoEpisodes, reconcileEpisodes } from "./executiveEpisodes.js";
 import { buildBoardPreview } from "./boardPreview.js";
 import { buildCeoBrief } from "./ceoBrief.js";
+// CODEX Faza 4.4 — Founder Attention Gate (GATED: implicit OFF → no-op).
+import { runFounderGate } from "../founderAttention/founderGateRunner.js";
 
 const EPISODE_STATE_KEY = "proactive:episodes";
 
@@ -77,6 +79,12 @@ export async function runProactivePipeline(observations = [], opts = {}) {
     }
     if (briefs.length || previews.length) {
       console.log(`[proactive] ${episodes.length} episoade → ${briefs.length} briefuri, ${previews.length} preview-uri Board (shadow=${flags.shadow})`);
+    }
+
+    // Faza 4.4 — Founder Attention Gate (GATED, implicit OFF; erori izolate).
+    if (config.founderAttentionGate && (rec.briefable.length || episodes.length)) {
+      await runFounderGate({ briefable: rec.briefable, allEpisodes: episodes }, { persist: opts.persist !== false })
+        .catch((e) => console.error("[founder-gate]", e.message));
     }
 
     return {

@@ -101,6 +101,13 @@ export const config = {
   proactiveCeoNotifications: ["on", "true"].includes(String(process.env.PROACTIVE_CEO_NOTIFICATIONS_ENABLED || "").toLowerCase()),
   proactiveCeoBoardExecution: ["on", "true"].includes(String(process.env.PROACTIVE_CEO_BOARD_EXECUTION_ENABLED || "").toLowerCase()),
 
+  // CODEX Faza 4.4 — FOUNDER ATTENTION GATE (ce merita atentia lui Adrian si
+  // cand). ENABLED implicit OFF; SHADOW implicit ON (doar audit/jarvis_state);
+  // notificarile reale raman OFF pana la aprobarea explicita a fondatorului.
+  founderAttentionGate: ["on", "true"].includes(String(process.env.FOUNDER_ATTENTION_GATE_ENABLED || "").toLowerCase()),
+  founderAttentionShadow: !["off", "false"].includes(String(process.env.FOUNDER_ATTENTION_SHADOW_MODE || "").toLowerCase()),
+  founderNotifications: ["on", "true"].includes(String(process.env.FOUNDER_NOTIFICATIONS_ENABLED || "").toLowerCase()),
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

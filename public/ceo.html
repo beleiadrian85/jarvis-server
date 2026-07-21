@@ -94,6 +94,7 @@ small{color:var(--dim)}
   <div id="orgBody" style="margin-top:8px"></div>
   <div class="row" style="margin-top:8px"><button class="ghost" onclick="runCycle()">Rulează un ciclu acum (shadow-safe)</button><span id="orgMsg" class="dim"></span></div>
 </div>
+<div class="card"><h2>PEOPLE — supervizare operațională + bucle deschise</h2><div id="peopleSup" class="dim">—</div></div>
 <div class="card"><h2>EVOLUȚIE — capabilități (self-evolution, shadow)</h2>
   <div id="evoStatus" class="dim">—</div>
   <div id="evoList" style="margin-top:8px"></div>
@@ -214,7 +215,19 @@ async function renderOrganism() {
   if (s && s.text) $("orgStream").textContent = s.text;
   renderEvolution();
 }
+async function renderPeople() {
+  const p = await api("/api/ceo/people"); if (!p) return;
+  const sup = p.supervision?.people || {};
+  const loops = (p.requests || []).filter(r => r.open_loop);
+  $("peopleSup").innerHTML =
+    Object.entries(sup).map(([id, pr]) =>
+      "<b>" + id + "</b>: " + (pr.active_tasks ?? "?") + " active · " + (pr.overdue ?? 0) + " overdue · CEO i-a cerut: " + (pr.ceo_requested ?? 0) +
+      (pr.workload ? " · " + pr.workload : "")).join("<br>") +
+    (p.supervision?.founder?.blockers?.length ? "<br><b class=warn>Așteaptă fondatorul:</b> " + p.supervision.founder.blockers.map(b => b.what).join("; ") : "") +
+    "<br><b>Bucle deschise (" + loops.length + "):</b> " + (loops.slice(0, 5).map(l => l.what + " → " + l.owner).join("; ") || "niciuna");
+}
 async function renderEvolution() {
+  renderPeople();
   const c = await api("/api/ceo/capabilities");
   if (!c) return;
   const v = c.view || {};

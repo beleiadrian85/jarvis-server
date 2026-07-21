@@ -172,7 +172,7 @@ export function buildCeoTask(need = {}, delegation = {}, { asOf = null, formUrl 
  *    si orice INFORMATION_TASK cat timp flagul autonom e stins.
  * Accepta atat rezultatul buildCeoTask cat si forma interna direct.
  */
-export function classifyForAutonomy(task, { mode = "shadow", autonomousInfoEnabled = false, autonomousOperationalEnabled = false } = {}) {
+export function classifyForAutonomy(task, { mode = "shadow", autonomousInfoEnabled = false, autonomousVerifEnabled = false, autonomousOperationalEnabled = false } = {}) {
   const cls = task?.autonomy_class || task?.internal?.autonomy_class || taskClassFor(task?.task_type);
 
   if (mode !== "information") {
@@ -190,10 +190,15 @@ export function classifyForAutonomy(task, { mode = "shadow", autonomousInfoEnabl
       ? { lane: "AUTONOMOUS_OK", why: "INFORMATION_TASK autonom (faza B activata de fondator)" }
       : { lane: "NEEDS_APPROVAL", why: "flag de autonomie pe informatie inactiv — cere aprobare" };
   }
-  if (cls === "VERIFICATION_TASK" || cls === "LOW_RISK_OPERATIONAL_TASK") {
+  if (cls === "VERIFICATION_TASK") {
+    return autonomousVerifEnabled
+      ? { lane: "AUTONOMOUS_OK", why: "VERIFICATION_TASK autonom (verificare interna, reversibila)" }
+      : { lane: "NEEDS_APPROVAL", why: "VERIFICATION_TASK: flag inactiv — cere aprobare" };
+  }
+  if (cls === "LOW_RISK_OPERATIONAL_TASK") {
     return autonomousOperationalEnabled
-      ? { lane: "AUTONOMOUS_OK", why: `${cls} autonom (faza C: verificari interne low-risk, reversibile)` }
-      : { lane: "NEEDS_APPROVAL", why: `${cls}: faza C inactiva — cere aprobare` };
+      ? { lane: "AUTONOMOUS_OK", why: "LOW_RISK_OPERATIONAL_TASK autonom (flag operational activ)" }
+      : { lane: "NEEDS_APPROVAL", why: "actiunile operationale raman pe aprobare (flag OFF)" };
   }
   return { lane: "NEEDS_APPROVAL", why: `clasa ${cls} cere aprobare umana intotdeauna (§10)` };
 }

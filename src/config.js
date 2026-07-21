@@ -126,7 +126,9 @@ export const config = {
   nervousSystem: ["on", "true"].includes(String(process.env.CEO_NERVOUS_SYSTEM_ENABLED || "").toLowerCase()),
   taskAutonomy: String(process.env.CEO_TASK_AUTONOMY || "shadow").toLowerCase() === "information" ? "information" : "shadow",
   autonomousInfoTasks: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_INFORMATION_TASKS_ENABLED || "").toLowerCase()),
-  // Faza C — task-uri interne de VERIFICARE (low-risk, reversibile).
+  // VERIFICATION_TASK autonome (politica fondatorului, flag separat).
+  autonomousVerifTasks: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_VERIFICATION_TASKS_ENABLED || "").toLowerCase()),
+  // Actiuni operationale low-risk — RAMANE OFF (nu se activeaza acum).
   autonomousOperationalTasks: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_OPERATIONAL_TASKS_ENABLED || "").toLowerCase()),
   // Kill switch UNIC (§20): oricare din cele doua nume opreste TOT (zero
   // task-uri noi; nimic sters). Numele nou e canonic; cel vechi ramane alias.

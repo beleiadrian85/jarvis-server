@@ -167,7 +167,7 @@ export async function runNervousCycle(opts = {}) {
         asOf, formUrl: need.task_type === "CASH_DATA" && host ? `${host}/ceo.html` : "",
         projects: OPERATIONAL_PROJECTS, defaultProject: "Altele", createdByUserId: founderId,
       });
-      const lane = classifyForAutonomy(task, { mode, autonomousInfoEnabled: cfg.autonomousInfoTasks === true, autonomousOperationalEnabled: cfg.autonomousOperationalTasks === true });
+      const lane = classifyForAutonomy(task, { mode, autonomousInfoEnabled: cfg.autonomousInfoTasks === true, autonomousVerifEnabled: cfg.autonomousVerifTasks === true, autonomousOperationalEnabled: cfg.autonomousOperationalTasks === true });
       const rec = {
         id: task.idempotency_key, idempotency_key: task.idempotency_key, need_id: need.need_id,
         task_type: need.task_type, autonomy_class: task.autonomy_class, owner: del.person_id,
@@ -261,7 +261,7 @@ export async function runNervousCycle(opts = {}) {
           // propuneri pentru fondator.
           if (fu.action === "REMINDER" && rec.shadow === false && persist &&
               !(rec.followups || []).some((f) => f.auto_sent) &&
-              (cfg.autonomousInfoTasks === true || cfg.autonomousOperationalTasks === true)) {
+              (cfg.autonomousInfoTasks === true || cfg.autonomousVerifTasks === true)) {
             const rr = await opsTaskReminder(rec.operational_id,
               `Reminder JARVIS: "${rec.human?.title}" e restant (termen ${rec.human?.deadline}). ${fu.why}. Daca e un blocaj, noteaza-l aici.`, { cfg });
             if (rr.ok) {
@@ -321,6 +321,14 @@ export async function runNervousCycle(opts = {}) {
       blocked: Object.values(registry).filter((r) => r.lifecycle === "BLOCKED").map((r) => r.human?.title),
       resolved: Object.values(registry).filter((r) => r.lifecycle === "COMPLETED").map((r) => r.human?.title),
       needs_founder: [...results.unknown_owner.map((u) => `Clarifica ownerul: ${u.need}`), ...followupProposals.filter((f) => f.escalation).map((f) => `Escaladare propusa: ${f.task}`)],
+      // EXTENSIE — memoria persistenta a cererilor + supervizarea oamenilor.
+      open_loops: (await import("./requestMemory.js")).openLoops(registry),
+      supervision: await (async () => {
+        const { buildOperationalProfile, founderSupervision } = await import("./peopleSupervision.js");
+        const per = {};
+        for (const p of COMPANY.people) per[p.id] = buildOperationalProfile({ person: p, registry, opsTasks: opsTasks || [], loads: loads.per_person[p.id] || null, memory, asOf });
+        return { people: per, founder: founderSupervision({ registry, proposals, founderId, asOf }) };
+      })(),
       // §19 — TASKS CREATED BY JARVIS TODAY: audit complet, vizibil in 10 sec.
       ceo_tasks_today: Object.values(registry)
         .filter((r) => r.operational_id && String(r.created_at || "").slice(0, 10) === todayISO(nowMs))
@@ -347,8 +355,13 @@ export async function runNervousCycle(opts = {}) {
     // SELF-EVOLUTION V1 (§40): nevoile reale ale organismului alimenteaza
     // Capability Gap Engine — best-effort, gated, zero build real.
     if (cfg.selfEvolution && persist) {
+      // §16 extensie: cererile REPETITIVE catre oameni = candidati de
+      // automatizare (root cause → system improvement, nu mai mult control).
+      const { answerSupervisionQuestions } = await import("./requestMemory.js");
+      const autoCand = (answerSupervisionQuestions(registry, {}).automation_candidates || [])
+        .map((c) => ({ reason: `cerere repetitiva (${c.task_type} x${c.count}) — rezolvarea e un conector de sistem, nu o intrebare catre o persoana`, signal: `repetitive:${c.task_type}` }));
       import("../evolution/cycle.js")
-        .then((ev) => ev.runEvolutionScan({ needs: needsOut.needs, noAction: needsOut.no_action, persist: true, nowMs, cfg }))
+        .then((ev) => ev.runEvolutionScan({ needs: needsOut.needs, noAction: [...needsOut.no_action, ...autoCand], persist: true, nowMs, cfg }))
         .catch((e) => console.error("[evolution.hook]", e.message));
     }
     return { ran: true, kind, organism, needs: needsOut, results, health, selfeval, respMap, loads };

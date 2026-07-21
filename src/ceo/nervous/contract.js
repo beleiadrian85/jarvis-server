@@ -168,8 +168,8 @@ export const STATE_KEYS = {
 // Limite pentru activarea controlata (politica fondatorului: 10/zi, 4/persoana,
 // max 3 prioritati active/persoana) — override prin env.
 export const DEFAULT_LIMITS = {
-  daily_total: 10,
-  per_person: 4,
+  daily_total: 8,
+  per_person: 3,
   max_active_priorities_per_person: 3,
   dedup_cooldown_hours: 20,   // nu cere aceeasi informatie de 2x intr-o zi de lucru
 };

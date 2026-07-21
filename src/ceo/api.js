@@ -329,6 +329,31 @@ export function registerCeoApi(app) {
       res.status(r.ok ? 200 : 400).json(r);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
+  // EXTENSIE — PEOPLE supervision + memoria cererilor (raspunsuri instante §13).
+  app.get("/api/ceo/people", async (req, res) => {
+    try {
+      const registry = await getState("ceo:nervous:tasks", {}) || {};
+      const stream = await getState("ceo:nervous:stream", []) || [];
+      const last = await getState("ceo:nervous:last", null);
+      const { requestMemoryView, answerSupervisionQuestions } = await import("./nervous/requestMemory.js");
+      const person = req.query.person || null;
+      const view = requestMemoryView(registry).filter((r) => !person || r.owner === person);
+      res.json({
+        supervision: last?.supervision || null,
+        requests: view.slice(-50),
+        questions: answerSupervisionQuestions(registry, { person_id: person }),
+        timeline: person ? stream.filter((e) => (e.detail || "").includes(person)).slice(-25) : [],
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.get("/api/ceo/open-loops", async (_req, res) => {
+    try {
+      const registry = await getState("ceo:nervous:tasks", {}) || {};
+      const { openLoops } = await import("./nervous/requestMemory.js");
+      res.json({ open_loops: openLoops(registry) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Scan manual de evolutie (shadow-safe: zero build real).
   app.post("/api/ceo/evolution-scan", async (req, res) => {
     try {

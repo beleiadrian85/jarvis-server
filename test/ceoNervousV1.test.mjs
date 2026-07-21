@@ -166,6 +166,12 @@ const laneShadow = classifyForAutonomy(task, { mode: "shadow", autonomousInfoEna
 ok(laneShadow.lane === "SHADOW", "§11. mode shadow → totul e simulare, chiar cu flag on");
 const laneInfo = classifyForAutonomy(task, { mode: "information", autonomousInfoEnabled: true });
 ok(laneInfo.lane === "AUTONOMOUS_OK", "§10A. information task + flag → autonom (dupa decizia lui Adrian)");
+const verifTask = { ...task, autonomy_class: "VERIFICATION_TASK" };
+ok(classifyForAutonomy(verifTask, { mode: "information", autonomousVerifEnabled: true }).lane === "AUTONOMOUS_OK", "VERIFICATION_TASK autonom cu flagul dedicat");
+ok(classifyForAutonomy(verifTask, { mode: "information", autonomousInfoEnabled: true }).lane === "NEEDS_APPROVAL", "VERIFICATION fara flagul lui → aprobare");
+ok(classifyForAutonomy({ ...task, autonomy_class: "LOW_RISK_OPERATIONAL_TASK" }, { mode: "information", autonomousVerifEnabled: true }).lane === "NEEDS_APPROVAL", "actiunile operationale raman pe aprobare (flag OFF)");
+const riskyTask = { ...task, human: { ...task.human, title: "Comanda materiale 150.000 lei" } };
+ok(classifyForAutonomy(riskyTask, { mode: "information", autonomousInfoEnabled: true }).lane === "NEEDS_APPROVAL", "continut financiar → aprobare indiferent de clasa (§5)");
 const actionTask = { ...task, autonomy_class: "ACTION_TASK" };
 ok(classifyForAutonomy(actionTask, { mode: "information", autonomousInfoEnabled: true }).lane === "NEEDS_APPROVAL", "X. ACTION_TASK → intotdeauna aprobare");
 const decTask = { ...task, autonomy_class: "DECISION_TASK" };

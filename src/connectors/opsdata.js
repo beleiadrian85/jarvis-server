@@ -32,7 +32,7 @@ export function getEstimatedInflows() {
   return safe(async () => {
     const rows = await opsQuery(`
       SELECT label, amount::float, currency, for_date, project, created_by
-      FROM estimated_cash_inflows WHERE for_date >= CURRENT_DATE - 7 ORDER BY for_date`);
+      FROM estimated_cash_inflows WHERE for_date::date >= CURRENT_DATE - 7 ORDER BY for_date::date`);
     return rows.map((r) => ({
       label: r.label, amountRON: r.currency === "EUR" ? r.amount * 5.06 : r.amount,
       currency: r.currency, dueDate: String(r.for_date).slice(0, 10), project: r.project, by: r.created_by,
@@ -86,11 +86,12 @@ export function getLeads() {
 /** Backlog-ul de facturi furnizori (neconfirmate → nu intra in necesarul oficial). */
 export function getSupplierBacklog() {
   return safe(async () => {
+    // Coloanele confirmed/paid/superseded sunt INTEGER (0/1) in opsdb, nu boolean.
     const [agg] = await opsQuery(`
       SELECT count(*)::int AS total,
-             count(*) FILTER (WHERE confirmed IS NOT TRUE AND paid IS NOT TRUE)::int AS unconfirmed,
-             sum(due_amount) FILTER (WHERE confirmed IS NOT TRUE AND paid IS NOT TRUE)::float AS unconfirmed_amount
-      FROM supplier_due_items WHERE superseded IS NOT TRUE`);
+             count(*) FILTER (WHERE COALESCE(confirmed,0)=0 AND COALESCE(paid,0)=0)::int AS unconfirmed,
+             sum(due_amount) FILTER (WHERE COALESCE(confirmed,0)=0 AND COALESCE(paid,0)=0)::float AS unconfirmed_amount
+      FROM supplier_due_items WHERE COALESCE(superseded,0)=0`);
     return agg || { total: 0, unconfirmed: 0, unconfirmed_amount: 0 };
   });
 }

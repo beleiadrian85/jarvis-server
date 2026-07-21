@@ -8,11 +8,11 @@ import * as A from "../adapters.js";
 export async function render(root, ctx) {
   const { store } = ctx;
   const today = store.today, organism = store.organism;
-  const cs = A.companyState(today);
+  const cs = A.companyState(today, store.dataHealth);
   const js = A.jarvisState({ organism, stream: store.stream });
   const eps = A.attentionEpisodes(today);
   const needs = A.needsYou(today);
-  const now = A.jarvisNow({ organism, queue: store.queue });
+  const now = A.jarvisNow({ organism, queue: store.queue, today });
   const nodes = A.orbitNodes({ dataHealth: store.dataHealth, today });
   const links = A.orbitLinks({ today, organism });
 
@@ -20,7 +20,7 @@ export async function render(root, ctx) {
 
   const onEpisodeAction = (action, ep) => {
     if (action === "evidence") openDrawer("Dovezi — " + ep.conclusion, evidenceBody(ep));
-    else if (action === "board") ctx.ask("Consiliu: " + ep.conclusion);
+    else if (action === "board") ctx.board(ep.conclusion);
     else ctx.ask("Analizează: " + ep.conclusion);
   };
 
@@ -69,7 +69,7 @@ export async function render(root, ctx) {
                   h("span", {}, i.text))))
             : h("div", { class: "faint" }, js.dormantNote || "Observ pasiv — nicio acțiune în curs."),
           h("div", { class: "jnow-foot" },
-            now.ceoStatus ? A.relTime(js.lastCycleAt) ? `${now.ceoStatus}` : now.ceoStatus : "Sistemul nervos în mod " + (js.mode || "shadow"))))));
+            now.ceoStatus || js.dormantNote || "JARVIS observă și propune — nu trimite nimic fără aprobarea ta.")))));
 }
 
 /* ─ Mobil: ORBITAL JARVIS ─ */
@@ -108,7 +108,8 @@ export async function renderList(root, ctx) {
     card("CE CONTEAZĂ ACUM",
       eps.length ? h("div", {}, eps.map((ep, i) => episodeCard(ep, { rank: i + 1, onAction: (a, e) => {
         if (a === "evidence") openDrawer("Dovezi", evidenceBody(e));
-        else ctx.ask((a === "board" ? "Consiliu: " : "Analizează: ") + e.conclusion);
+        else if (a === "board") ctx.board(e.conclusion);
+        else ctx.ask("Analizează: " + e.conclusion);
       } }))) : emptyCalm("Nimic material acum")),
     card("NEEDS YOU",
       needs.length ? h("div", {}, needs.map((n) => needsItem(n, {
@@ -128,8 +129,10 @@ async function decideProposal(ctx, item, decision, send) {
   let note = "";
   if (decision === "MODIFY") { note = prompt("Ce modifici la propunere?") || ""; if (!note) return; }
   if (send && !confirm("Trimit cererea REALĂ către persoana responsabilă (Telegram)?")) return;
-  const r = await ctx.api.post("/api/ceo/proposals/decision", { proposal_id: item.proposalId, decision, note, send: !!send });
-  if (r?.error || r?.ok === false) alert("Eroare: " + (r.error || JSON.stringify(r.errors || r)));
-  else if (r?.delivery) alert("Livrare: " + r.delivery.status + (r.delivery.fix ? " — " + r.delivery.fix : ""));
+  try {
+    const r = await ctx.api.post("/api/ceo/proposals/decision", { proposal_id: item.proposalId, decision, note, send: !!send });
+    if (r?.error || r?.ok === false) alert("Eroare: " + (r.error || JSON.stringify(r.errors || r)));
+    else if (r?.delivery) alert("Livrare: " + r.delivery.status + (r.delivery.fix ? " — " + r.delivery.fix : ""));
+  } catch (e) { alert("Nu am putut trimite decizia: " + e.message); return; }
   await ctx.refresh();
 }

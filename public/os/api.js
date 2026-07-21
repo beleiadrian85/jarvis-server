@@ -39,7 +39,13 @@ export async function get(path, { fresh = false } = {}) {
 }
 
 export async function post(path, body) {
-  if (DEMO) return { ok: false, error: "MOD DEMO — actiunile reale sunt dezactivate." };
+  if (DEMO) {
+    // POST-urile read-only (ex. Board — o „ședință" calculată) au fixture și se
+    // randează în demo; scrierile reale (fără fixture) rămân blocate.
+    const { fixtures } = await import("./mock/fixtures.js");
+    if (Object.keys(fixtures).some((p) => path === p || path.startsWith(p + "?"))) return demoFixture(path);
+    return { ok: false, error: "MOD DEMO — acțiunile reale sunt dezactivate." };
+  }
   const r = await fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json", "x-jarvis-key": key },

@@ -13,10 +13,12 @@ const TABS = [
 
 export async function render(root, ctx, sub) {
   const tab = TABS.some(([k]) => k === sub) ? sub : "needs";
+  const token = ctx.navToken;
   const [queue, decisions] = await Promise.all([
     ctx.api.get("/api/ceo/queue").catch(() => null),
     ctx.api.get("/api/ceo/decisions").catch(() => null),
   ]);
+  if (!ctx.isCurrent(token)) return; // o navigare mai nouă a câștigat
   const needs = A.needsYou(ctx.store.today);
   const counts = {
     needs: needs.length,
@@ -45,9 +47,11 @@ async function needsTab(ctx, { needs }) {
         let note = "";
         if (decision === "MODIFY") { note = prompt("Ce modifici la propunere?") || ""; if (!note) return; }
         if (send && !confirm("Trimit cererea REALĂ către persoana responsabilă (Telegram)?")) return;
-        const r = await ctx.api.post("/api/ceo/proposals/decision", { proposal_id: item.proposalId, decision, note, send: !!send });
-        if (r?.error || r?.ok === false) alert("Eroare: " + (r?.error || JSON.stringify(r?.errors || "")));
-        else if (r?.delivery) alert("Livrare: " + r.delivery.status + (r.delivery.fix ? " — " + r.delivery.fix : ""));
+        try {
+          const r = await ctx.api.post("/api/ceo/proposals/decision", { proposal_id: item.proposalId, decision, note, send: !!send });
+          if (r?.error || r?.ok === false) alert("Eroare: " + (r?.error || JSON.stringify(r?.errors || "")));
+          else if (r?.delivery) alert("Livrare: " + r.delivery.status + (r.delivery.fix ? " — " + r.delivery.fix : ""));
+        } catch (e) { alert("Nu am putut trimite decizia: " + e.message); return; }
         await ctx.refresh(); ctx.goto("#/work/needs", true);
       },
       onEvidence: (item) => openDrawer("Dovezi — " + item.title,
@@ -92,23 +96,30 @@ async function peopleTab(ctx, { queue }) {
   ].filter(Boolean);
 }
 
-/* ─ HISTORY: rezultate VERIFICATE + memoria deciziilor ─ */
+/* ─ HISTORY: rezultate VERIFICATE ≠ doar finalizate + memoria deciziilor ─ */
 async function historyTab(ctx, { queue, decisions }) {
   const org = ctx.store.organism;
   const mem = decisions?.decision_memory || [];
+  // VERIFICAT = buclă închisă (org.resolved) sau item cu state 'verified'.
+  // „Finalizat" (COMPLETED, bifat) NU e același lucru — merge separat.
+  const verified = [
+    ...(org?.resolved || []),
+    ...(queue?.COMPLETED || []).filter((c) => c.state === "verified").map((c) => c.problem),
+  ];
+  const doneUnverified = (queue?.COMPLETED || []).filter((c) => c.state !== "verified");
   return [
     card("REZULTATE VERIFICATE",
-      (org?.resolved || []).length || (queue?.COMPLETED || []).length
-        ? h("ul", { class: "dim", style: "padding-left:18px;font-size:var(--fs-sm)" }, [
-            ...(org?.resolved || []).map((r) => h("li", {}, "✓ " + r)),
-            ...(queue?.COMPLETED || []).map((c) => h("li", {}, "✓ " + c.problem)),
-          ])
-        : h("p", { class: "faint" }, "Încă niciun rezultat verificat — bifat nu înseamnă rezolvat; aici apar doar buclele închise.")),
+      verified.length
+        ? h("ul", { class: "dim", style: "padding-left:18px;font-size:var(--fs-sm)" }, verified.map((r) => h("li", {}, "✓ " + r)))
+        : h("p", { class: "faint" }, "Încă niciun rezultat verificat — bifat nu înseamnă rezolvat; aici apar doar buclele închise, cu dovadă.")),
+    doneUnverified.length ? card("FINALIZATE (neverificate)",
+      h("ul", { class: "dim", style: "padding-left:18px;font-size:var(--fs-sm)" },
+        doneUnverified.map((c) => h("li", {}, "• " + c.problem + " — marcat gata, fără dovadă verificată")))) : null,
     card("MEMORIA DECIZIILOR",
       mem.length
         ? h("ul", { class: "dim", style: "padding-left:18px;font-size:var(--fs-sm)" },
             mem.slice(-12).reverse().map((d) => h("li", {},
               `${d.decision || d.title || "?"}${d.decided_at ? " · " + String(d.decided_at).slice(0, 10) : ""}${d.outcome ? " → " + d.outcome : ""}${d.lesson ? " · lecție: " + d.lesson : ""}`)))
         : h("p", { class: "faint" }, "Registrul de decizii se populează pe măsură ce decizi prin JARVIS.")),
-  ];
+  ].filter(Boolean);
 }

@@ -25,19 +25,26 @@ const cap = (s, n = 160) => {
 
 /* ───────────── CompanyState — verdictul de 10 secunde ───────────── */
 // tone: ok | warn | bad;   status: text scurt;   summary: o propozitie.
-export function companyState(today) {
+export function companyState(today, dataHealth) {
   if (!today || today.error) {
     return { tone: "warn", status: "DATE INDISPONIBILE", summary: "Serverul JARVIS nu a putut genera imaginea companiei. Ultima stare cunoscută rămâne valabilă până revine sursa.", confidence: null };
   }
-  const prios = today.priorities || [];
+  // Prioritățile de plumbing (sănătatea JARVIS/Operational) NU sunt probleme de
+  // business ale fondatorului — le tratăm separat, nu le lăsăm să declanșeze tonul.
+  const prios = (today.priorities || []).filter((p) => !isSystemPriority(p));
   const needs = today.needs_decision || [];
   const min = today.cash?.minim || {};
   const deficit = typeof min.first_deficit_date === "string" && min.first_deficit_date !== "UNKNOWN";
   const highPrio = prios.filter((p) => (p.score ?? 0) >= 70).length;
+  // „JARVIS vede compania?" — separat de „compania e sănătoasă?". O pană de
+  // sistem/conector nu e o deteriorare a afacerii, dar nu poate fi verde.
+  const sysFailing = (today.system_health?.failing || []).length;
+  // Sursa unică a scorului de date: endpointul dedicat, altfel today.
+  const confidence = dataHealth?.healthScore ?? today.data_health?.score ?? null;
 
   let tone = "ok", status = "SUB CONTROL";
   if (deficit || highPrio > 0) { tone = "bad"; status = "NECESITĂ ACȚIUNE"; }
-  else if (prios.length || needs.length || (today.data_health?.score ?? 100) < 60) { tone = "warn"; status = "ATENȚIE"; }
+  else if (prios.length || needs.length || (confidence ?? 100) < 60 || sysFailing > 0) { tone = "warn"; status = "ATENȚIE"; }
 
   const bits = [];
   if (typeof min.available_now === "number") bits.push(`cash disponibil ${lei(min.available_now)}`);
@@ -45,14 +52,26 @@ export function companyState(today) {
   if (deficit) bits.push(`primul deficit probabil: ${min.first_deficit_date}`);
   if (prios.length) bits.push(`${prios.length} ${prios.length === 1 ? "prioritate" : "priorități"} de atenție`);
   if (needs.length) bits.push(`${needs.length} ${needs.length === 1 ? "decizie" : "decizii"} la tine`);
-  if (!prios.length && !needs.length) bits.push("nicio intervenție de fondator cerută de date");
+  if (!prios.length && !needs.length && !sysFailing) bits.push("nicio intervenție de fondator cerută de date");
+  if (sysFailing) bits.push(`JARVIS are vizibilitate redusă — ${sysFailing} ${sysFailing === 1 ? "sistem" : "sisteme"} de reconectat (nu afectează afacerea)`);
 
   return {
     tone, status,
     summary: bits.join(" · "),
-    confidence: today.data_health?.score ?? null,
+    confidence,
+    systemDegraded: sysFailing > 0,
     generatedAt: today.generated_at || null,
   };
+}
+
+/** O prioritate despre plumbing-ul propriu (nu despre business). */
+export function isSystemPriority(p) {
+  return /s[ăa]n[ăa]tatea sistem|jarvis\/operational|conector|reconect|observation|pipeline/i.test(p?.title || "");
+}
+/** Un domeniu din orbită se potrivește textului unei priorități? */
+function domainMatches(key, text) {
+  const rx = { CASH: /cash|sold|lichid|plat|incas|încas/, SALES: /v[âa]nz|rezerv|lead|avans/, PROJECTS: /proiect|[șs]antier|furnizor|c[123]/, PEOPLE: /dana|nelu|mihaela|oameni|task/, MARKETING: /market|trafic|campan/, FINANCING: /finan[țt]|credit|leasing/, OPERATIONS: /email|calendar|legal|deciz/ }[key];
+  return rx ? rx.test(String(text || "").toLowerCase()) : false;
 }
 
 /* ───────────── JarvisState — OBSERVING/THINKING/ACTING/WAITING/LEARNING ───────────── */
@@ -63,8 +82,9 @@ export function jarvisState({ organism, stream } = {}) {
   const recent = (ev, mins) => entries.some((e) =>
     e.event === ev && Date.now() - new Date(e.at).getTime() < mins * 60000);
 
+  const dormant = organism?.enabled === false || (organism && !organism.at && /dormant/i.test(organism.status || ""));
   let state = "OBSERVING";
-  if (organism && !organism.at) state = "OBSERVING"; // sistem dormant → observa pasiv
+  if (dormant) state = "OBSERVING"; // motor oprit — observă pasiv, nu execută
   else if (recent("task_created", 90) || recent("task_proposed", 90)) state = "ACTING";
   else if ((organism?.waiting || []).length || (organism?.what_i_asked || []).length) state = "WAITING";
   else if (recent("loop_closed", 240) || recent("task_verified", 240)) state = "LEARNING";
@@ -89,11 +109,14 @@ export function jarvisState({ organism, stream } = {}) {
 
   return {
     state,
-    stateLabel: { OBSERVING: "OBSERVĂ", THINKING: "GÂNDEȘTE", ACTING: "ACȚIONEAZĂ", WAITING: "AȘTEAPTĂ", LEARNING: "ÎNVAȚĂ" }[state],
+    // Când motorul e oprit, nu pretindem că „observă activ".
+    stateLabel: dormant ? "ÎN PAUZĂ" : { OBSERVING: "OBSERVĂ", THINKING: "GÂNDEȘTE", ACTING: "ACȚIONEAZĂ", WAITING: "AȘTEAPTĂ", LEARNING: "ÎNVAȚĂ" }[state],
     activity: activity ? `${activity}${last?.detail ? ": " + cap(last.detail, 80) : ""}` : null,
     lastCycleAt: lastAt,
     enabled: organism?.enabled !== false,
-    dormantNote: organism && !organism.at ? organism.status || null : null,
+    dormant,
+    // Niciodată numele brut al flag-ului de mediu — o propoziție umană.
+    dormantNote: dormant ? "JARVIS e în pauză — observă, nu execută autonom (activarea o decizi tu)" : null,
     mode: organism?.mode || null,
   };
 }
@@ -106,19 +129,22 @@ export function attentionEpisodes(today) {
 
   for (const p of (today.priorities || []).slice(0, 3)) {
     const sev = (p.score ?? 0) >= 70 ? "bad" : "warn";
-    // Un data-gap pe care JARVIS il gestioneaza singur nu cere fondatorul.
+    // Plumbing propriu (sistem/conector) → JARVIS/IT rezolvă, nu fondatorul.
+    const isSystem = isSystemPriority(p);
+    // Un data-gap pe care JARVIS îl gestionează singur nu cere fondatorul.
     const isGap = /lips|necunoscut|neconectat|gap|sold/i.test(p.title || "");
+    const handled = isSystem || isGap;
     eps.push({
       id: "prio:" + (p.rank ?? eps.length),
-      tone: sev,
-      type: isGap ? "DATA GAP" : "RISC",
+      tone: isSystem ? "sys" : sev,
+      type: isSystem ? "SISTEM" : isGap ? "DATA GAP" : "RISC",
       conclusion: cap(p.title, 140),
       why: p.why || p.evidence || null,
       impact: p.impact || null,
       confidence: p.confidence ?? null,
-      jarvisAction: isGap ? "JARVIS a cerut/așteaptă informația de la responsabil" : null,
-      founderAction: isGap ? null : "Analizează și decide",
-      noActionRequired: isGap,
+      jarvisAction: isSystem ? "JARVIS/IT remediază — reconectare în curs" : isGap ? "JARVIS a cerut/așteaptă informația de la responsabil" : null,
+      founderAction: handled ? null : "Analizează și decide",
+      noActionRequired: handled,
       evidence: [p.evidence, p.why].filter(Boolean),
       score: p.score ?? 0,
     });
@@ -174,7 +200,7 @@ export function needsYou(today) {
 }
 
 /* ───────────── JarvisActivity — „JARVIS NOW", nu loguri ───────────── */
-export function jarvisNow({ organism, queue } = {}) {
+export function jarvisNow({ organism, queue, today } = {}) {
   const items = [];
   for (const a of organism?.what_i_asked || []) {
     items.push({ kind: "active", text: `${a.title || "Task"} → ${a.owner || "?"}${a.shadow ? " (shadow)" : ""}` });
@@ -186,6 +212,17 @@ export function jarvisNow({ organism, queue } = {}) {
   for (const q of wfd) {
     if (!items.some((i) => i.text.includes(cap(q.problem, 40)))) {
       items.push({ kind: "waiting", text: `Aștept date: ${cap(q.problem, 80)}${q.assignee ? " (" + q.assignee + ")" : ""}` });
+    }
+  }
+  // Când motorul e dormant/gol, cererile deschise trăiesc în who.* — le arătăm
+  // ca „aștept de la <persoană>", ca TODAY să nu pară inactiv când nu e.
+  if (!items.length) {
+    for (const [person, tasks] of Object.entries(today?.who || {})) {
+      if (person === "ADRIAN" || person === "SYSTEM") continue;
+      for (const t of (tasks || [])) {
+        if (/^NO EXECUTIVE/.test(t)) continue;
+        items.push({ kind: "waiting", text: `Aștept de la ${person[0] + person.slice(1).toLowerCase()}: ${cap(t, 70)}` });
+      }
     }
   }
   const active = items.filter((i) => i.kind === "active").length;
@@ -207,23 +244,22 @@ const ORBIT_MAP = {
 export function orbitNodes({ dataHealth, today } = {}) {
   const domains = dataHealth?.domains || [];
   const byName = Object.fromEntries(domains.map((d) => [d.domain, d]));
-  const prioText = (today?.priorities || []).map((p) => (p.title || "").toLowerCase()).join(" ");
-  const attentionFor = (key) => {
-    const words = { CASH: /cash|sold|lichid|plat|incas/, SALES: /vanz|rezerv|lead|avans/, PROJECTS: /proiect|santier|furnizor|c[123]/, PEOPLE: /dana|nelu|task|oameni/, MARKETING: /market|trafic|campan/, FINANCING: /finant|credit|leasing/, OPERATIONS: /email|calendar|legal|deciz/ }[key];
-    return words ? words.test(prioText) : false;
-  };
+  const prios = (today?.priorities || []).filter((p) => !isSystemPriority(p));
   return Object.entries(ORBIT_MAP).map(([key, subs]) => {
     const states = subs.map((s) => byName[s]?.connected).filter(Boolean);
     const connected = states.filter((s) => s === "CONNECTED").length;
     const none = states.length === 0 || states.every((s) => s === "NOT_CONNECTED");
-    const hot = attentionFor(key);
+    const noneFullyConnected = states.length > 0 && connected === 0; // ex. tot PARTIAL
+    // O prioritate reală (de business) care privește ACEST domeniu îl încălzește.
+    const hotPrio = prios.find((p) => domainMatches(key, p.title));
     let tone = "ok";
-    if (none) tone = "off";
-    else if (hot) tone = (today?.priorities || []).some((p) => (p.score ?? 0) >= 70 && attentionFor(key)) ? "bad" : "warn";
-    else if (connected < states.length) tone = "ok"; // partial dar linistit: nu tipam
+    if (none) tone = "off";                                   // niciun conector proiectat
+    else if (hotPrio) tone = (hotPrio.score ?? 0) >= 70 ? "bad" : "warn";
+    else if (noneFullyConnected) tone = "warn";              // surse există dar niciuna completă → atenție, nu „OK"
+    // parțial-dar-cu-cel-puțin-o-sursă-completă rămâne calm (nu țipăm)
     return {
       key, label: { CASH: "CASH", SALES: "VÂNZĂRI", PROJECTS: "PROIECTE", PEOPLE: "OAMENI", MARKETING: "MARKETING", FINANCING: "FINANȚARE", OPERATIONS: "OPERAȚIUNI" }[key],
-      tone, coverage: states.length ? `${connected}/${states.length} surse` : "neconectat",
+      tone, coverage: states.length ? `${connected}/${states.length} surse complete` : "neconectat",
       route: "#/company/" + key.toLowerCase(),
     };
   });
@@ -257,8 +293,8 @@ export function dataGaps(gapsApi) {
     owner: g.information_request?.to || null,
     ask: g.information_request?.ask || null,
     sourcesChecked: g.sources_checked || null,
-    temporary: g.temporary || null,
-    permanent: g.permanent || null,
+    temporary: g.temporary_solution || g.temporary || null,
+    permanent: g.permanent_solution || g.permanent || null,
   }));
 }
 

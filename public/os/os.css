@@ -389,6 +389,38 @@ input, select, textarea { font: inherit; }
 .lc-step.now { border-color: var(--sys); color: var(--sys); background: var(--sys-soft); font-weight: 700; }
 .lc-arrow { color: var(--tx-faint); font-size: 10px; }
 
+/* ───────────────────────── BOARD 6+1 ───────────────────────── */
+.board-verdict { border: 1px solid var(--line-strong);
+  background: radial-gradient(600px 200px at 20% 0%, var(--sys-soft) 0%, transparent 70%), var(--bg-elev); }
+.board-verdict[data-tone="ok"]   { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.board-verdict[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.board-verdict[data-tone="bad"]  { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.bv-label { font-size: var(--fs-xs); letter-spacing: .16em; color: var(--tx-dim); font-weight: 700; }
+.bv-rec { font-size: var(--fs-2xl); font-weight: 700; margin: 4px 0 var(--sp-3); }
+.board-verdict[data-tone="ok"] .bv-rec { color: var(--ok); }
+.board-verdict[data-tone="warn"] .bv-rec { color: var(--warn); }
+.board-verdict[data-tone="bad"] .bv-rec { color: var(--bad); }
+.bv-meta { display: flex; flex-wrap: wrap; gap: var(--sp-5); }
+.bv-metric b { display: block; font-size: var(--fs-lg); font-weight: 650; }
+.bv-metric span { color: var(--tx-faint); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; }
+.bv-warn { color: var(--warn); font-size: var(--fs-sm); margin-top: var(--sp-3); }
+.bv-foot { color: var(--tx-faint); font-size: var(--fs-sm); margin-top: var(--sp-3); border-top: 1px solid var(--line); padding-top: var(--sp-2); }
+
+.board-args { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin: var(--sp-3) 0; }
+@media (max-width: 760px) { .board-args { grid-template-columns: 1fr; } }
+.board-arg { border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--sp-4); border-left: 3px solid var(--neutral); }
+.board-arg[data-tone="ok"] { border-left-color: var(--ok); }
+.board-arg[data-tone="bad"] { border-left-color: var(--bad); }
+.ba-title { font-size: var(--fs-xs); letter-spacing: .12em; font-weight: 700; color: var(--tx-dim); margin-bottom: 6px; }
+
+.persp-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.persp { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3); border-top: 2px solid var(--neutral); }
+.persp[data-tone="ok"] { border-top-color: var(--ok); }
+.persp[data-tone="warn"] { border-top-color: var(--warn); }
+.persp[data-tone="bad"] { border-top-color: var(--bad); }
+.persp-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.persp-head b { font-size: var(--fs-sm); flex: 1; min-width: 120px; }
+
 /* ───────────────────────── DRAWER ───────────────────────── */
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 60;
@@ -431,6 +463,12 @@ input, select, textarea { font: inherit; }
   .topbar-state .st-activity { display: none; }
   .today { grid-template-columns: 1fr; grid-template-areas: "hud" "attention" "side"; }
   .msg { max-width: 100%; }
+  /* Ținte de atingere confortabile pentru degete (≥44px). */
+  .ask-bar button { width: 44px; height: 44px; }
+  .ask-bar input { padding: 11px 16px; }
+  .icon-btn { padding: 8px 10px; }
+  /* Pastilele lungi nu împing lățimea pe ecrane înguste. */
+  .pill { white-space: normal; }
 }
 
 /* Scrollbars discrete */

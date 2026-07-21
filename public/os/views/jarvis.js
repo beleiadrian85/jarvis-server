@@ -23,7 +23,7 @@ function fastPrompts(manifest) {
 let logEl = null;
 
 export async function render(root, ctx) {
-  const cs = A.companyState(ctx.store.today);
+  const cs = A.companyState(ctx.store.today, ctx.store.dataHealth);
   logEl = h("div", { class: "chat-log", role: "log", "aria-live": "polite" });
 
   const context = h("div", { class: "chat-context" },
@@ -77,7 +77,16 @@ export async function send(ctx, text) {
 
 async function confirmAction(ctx, confirmId, yes, node) {
   node.querySelectorAll("button").forEach((b) => (b.disabled = true));
-  const r = await ctx.api.post("/api/confirm", { confirmId, yes });
+  let r;
+  try {
+    r = await ctx.api.post("/api/confirm", { confirmId, yes });
+  } catch (e) {
+    // Nu lăsăm butoanele blocate pe eroare de rețea — reactivăm + semnalăm.
+    node.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    addMsg("jarvis", "Nu am putut confirma: " + e.message);
+    scrollEnd();
+    return;
+  }
   node.remove();
   addMsg("jarvis", r?.reply || r?.error || "—");
   scrollEnd();

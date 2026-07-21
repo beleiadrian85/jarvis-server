@@ -5,12 +5,14 @@ import { h, card, pill, emptyCalm, disclosure, dataUnavailable, lifecycleBar, op
 import * as A from "../adapters.js";
 
 export async function render(root, ctx, sub) {
+  const token = ctx.navToken;
   const [gapsApi, nervHealth, proposals, manifest] = await Promise.all([
     ctx.api.get("/api/ceo/gaps").catch(() => null),
     ctx.api.get("/api/ceo/nervous-health").catch(() => null),
     ctx.api.get("/api/ceo/proposals").catch(() => null),
     ctx.api.get("/api/ceo/manifest").catch(() => null),
   ]);
+  if (!ctx.isCurrent(token)) return; // o navigare mai nouă a câștigat
   const org = ctx.store.organism || {};
   const dh = ctx.store.dataHealth;
   const gaps = A.dataGaps(gapsApi);
@@ -56,12 +58,15 @@ export async function render(root, ctx, sub) {
   /* ÎNVĂȚ */
   const selfeval = nervHealth?.selfeval || org.selfeval || null;
   const memory = nervHealth?.memory || null;
+  // memory = summarizeMemory(): { pairs, strongest, weakest } cu
+  // { person_id, task_type, confidence, total }. Formatăm doar perechile cu istoric.
+  const strongest = (memory?.strongest || []).filter((p) => p.total > 0);
   const learnItems = [
     ...(org.resolved || []).map((r) => "Buclă închisă, rezultat verificat: " + r),
     selfeval ? "Autoevaluare: " + Object.entries(selfeval).slice(0, 4).map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`).join(" · ") : null,
     org.verdict || null,
-    memory && typeof memory === "object" && Object.keys(memory).length
-      ? "Memorie organizațională: " + (memory.summary || Object.entries(memory).slice(0, 3).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v).slice(0, 60) : v}`).join(" · "))
+    strongest.length
+      ? "Am învățat cine rezolvă ce: " + strongest.slice(0, 3).map((p) => `${p.person_id}/${p.task_type} (încredere ${Math.round((p.confidence || 0) * (p.confidence <= 1 ? 100 : 1))}%)`).join(" · ")
       : null,
   ].filter(Boolean);
 

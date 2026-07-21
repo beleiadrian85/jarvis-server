@@ -19,7 +19,13 @@ const ctx = {
     ctx.pendingAsk = question;
     if (location.hash.startsWith("#/jarvis")) route(); else location.hash = "#/jarvis";
   },
+  board(question, force = false) {
+    ctx.boardQuestion = question;
+    if (location.hash === "#/board" || force) route(); else location.hash = "#/board";
+  },
   refresh: loadCore,
+  navToken: 0,
+  isCurrent(token) { return token === undefined || token === ctx.navToken; },
   isMobile: () => matchMedia("(max-width: 760px)").matches,
   motionOK: () => !matchMedia("(prefers-reduced-motion: reduce)").matches,
 };
@@ -102,7 +108,7 @@ function renderShellState() {
   const { manifest, today, organism, stream } = ctx.store;
   // Instanta companiei vine din API — nucleul UI nu hardcodeaza compania.
   $("company-name").textContent = manifest?.company?.name || "JARVIS";
-  const cs = A.companyState(today);
+  const cs = A.companyState(today, ctx.store.dataHealth);
   $("brand-dot").dataset.tone = cs.tone;
   const js = A.jarvisState({ organism, stream });
   const badge = $("jarvis-state-badge");
@@ -124,6 +130,7 @@ const routes = {
   company: () => import("./views/company.js"),
   work: () => import("./views/work.js"),
   organism: () => import("./views/organism.js"),
+  board: () => import("./views/board.js"),
 };
 
 let routeSeq = 0;
@@ -136,11 +143,15 @@ async function route() {
 
   const view = $("view");
   const seq = ++routeSeq;
+  ctx.navToken = seq; // view-urile async verifica ctx.isCurrent(token) inainte de scrierea finala
   try {
     const mod = await routes[section]();
-    if (seq !== routeSeq) return; // navigare mai noua a castigat
+    if (seq !== routeSeq) return; // navigare mai noua a castigat (dupa import)
     if (section === "today" && sub === "list" && mod.renderList) await mod.renderList(view, ctx);
     else await mod.render(view, ctx, sub);
+    // Re-verificare DUPA render: view-urile async pot termina dupa o navigare
+    // mai noua; nu resetam scroll/focus si nu lasam continut invechit sa castige.
+    if (seq !== routeSeq) return;
     view.focus({ preventScroll: true });
     view.scrollTop = 0;
   } catch (e) {

@@ -118,6 +118,18 @@ export const config = {
   inforeqDelivery: ["on", "true"].includes(String(process.env.CEO_INFOREQUEST_DELIVERY_ENABLED || "").toLowerCase()),
   founderInterruptiveAlerts: ["on", "true"].includes(String(process.env.FOUNDER_INTERRUPTIVE_ALERTS_ENABLED || "").toLowerCase()),
 
+  // NERVOUS SYSTEM V1 (§11, §34) — organismul managerial. ENABLED implicit OFF.
+  // TASK_AUTONOMY: "shadow" (implicit — simuleaza, NU creeaza task real) sau
+  // "information" (doar cu AUTONOMOUS_INFORMATION_TASKS=true, decis de Adrian).
+  // AUTONOMOUS_INFORMATION_TASKS implicit FALSE — nu se activeaza fara Adrian.
+  // KILL_SWITCH: CEO_NERVOUS_KILL_SWITCH=on opreste instant orice scriere.
+  nervousSystem: ["on", "true"].includes(String(process.env.CEO_NERVOUS_SYSTEM_ENABLED || "").toLowerCase()),
+  taskAutonomy: String(process.env.CEO_TASK_AUTONOMY || "shadow").toLowerCase() === "information" ? "information" : "shadow",
+  autonomousInfoTasks: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_INFORMATION_TASKS_ENABLED || "").toLowerCase()),
+  nervousKill: ["on", "true"].includes(String(process.env.CEO_NERVOUS_KILL_SWITCH || "").toLowerCase()),
+  nervousDailyLimit: Number(process.env.CEO_NERVOUS_DAILY_LIMIT || 0),
+  nervousPerPersonLimit: Number(process.env.CEO_NERVOUS_PER_PERSON_LIMIT || 0),
+
   // OBSIDIAN VAULT (firma-vault) — sursa morning briefing.
   // Local daca JARVIS e pe acelasi PC; altfel repo GitHub privat (Railway).
   vault: {

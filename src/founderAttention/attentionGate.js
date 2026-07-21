@@ -42,8 +42,9 @@ export function gateEpisode(episode) {
   const realDecision = episode.requires_board_review && options.length >= 2 &&
     episode.status !== "resolved" && (urgent || worsening || rank >= 4);
   if (realDecision) {
-    const essentialMissing = dataPoor ||
-      (episode.unknowns.length > 0 && episode.combined_confidence < 50);
+    // Orice data esentiala DECLARATA lipsa (unknowns) blocheaza decizia finala:
+    // intai datele, apoi decizia — indiferent de confidence (ex. sold bancar).
+    const essentialMissing = dataPoor || episode.unknowns.length > 0;
     if (essentialMissing) {
       reasons.push("decizie reala, dar lipsesc date esentiale — intai datele");
       return { level: "DATA_REQUIRED_BEFORE_DECISION", reasons, interruptive_blocked: null };

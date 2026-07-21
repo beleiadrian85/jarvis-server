@@ -46,6 +46,9 @@ const g5 = gateEpisode(decEp);
 ok(g5.level === "FOUNDER_DECISION_REQUIRED", "5. decizie reala (board + 3 optiuni + termen) → DECISION_REQUIRED");
 const g6 = gateEpisode(EP({ requires_board_review: true, combined_severity: "high", _minUrgencyDays: 2, combined_confidence: 40, unknowns: ["Sold bancar neconectat."] }));
 ok(g6.level === "DATA_REQUIRED_BEFORE_DECISION", "6. date esentiale lipsa → DATA_REQUIRED (nu decision)");
+// Cazul canonic Bell Residence: sold lipsa + confidence MARE → tot DATA_REQUIRED.
+const g6b = gateEpisode(EP({ requires_board_review: true, combined_severity: "high", _minUrgencyDays: 1, combined_confidence: 85, unknowns: ["Soldul bancar curent nu este conectat."] }));
+ok(g6b.level === "DATA_REQUIRED_BEFORE_DECISION", "6b. unknown esential declarat → NICIODATA decizie finala, indiferent de confidence");
 ok(gateEpisode(EP({ requires_board_review: true, _decisions: "Analiza suplimentara" })).level !== "FOUNDER_DECISION_REQUIRED", "o singura optiune → nu e decizie reala");
 
 // ── Candidatul: structura + safe_to_send ────────────────────────────────

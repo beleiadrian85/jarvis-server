@@ -20,12 +20,18 @@ export function buildDailyDigest({ episodes = [], candidates = [] }) {
 
   // 1) Atentia ta: alerte/decizii (inclusiv cele retrogradate din quiet hours).
   //    DATA_REQUIRED se afiseaza EXPLICIT ca cerere de date, nu ca decizie.
+  const shownMissing = new Set(); // sectiunea 5 nu repeta ce e deja cerut aici
   for (const c of candidates.filter((x) =>
     ["INTERRUPTIVE_ALERT", "FOUNDER_DECISION_REQUIRED", "DATA_REQUIRED_BEFORE_DECISION"].includes(x.attention_level) || x.quiet_deferred)) {
-    const prefix = c.attention_level === "DATA_REQUIRED_BEFORE_DECISION"
-      ? `Întâi avem nevoie de date: ${(c.missing_data[0] || "date esențiale").replace(/\.$/, "")} → apoi decizia „${c.title}”`
-      : `${c.title}${c.deadline ? ` (${c.deadline})` : ""} — ${c.why_now.slice(0, 110)}`;
-    add("CE NECESITĂ ATENȚIA TA", prefix);
+    let line;
+    if (c.attention_level === "DATA_REQUIRED_BEFORE_DECISION") {
+      const need = c.missing_data[0] || "date esențiale";
+      shownMissing.add(need);
+      line = `Întâi avem nevoie de date: ${need.replace(/\.$/, "")} → apoi decizia „${c.title}”`;
+    } else {
+      line = `${c.title}${c.deadline ? ` (${c.deadline})` : ""} — ${c.why_now.slice(0, 110)}`;
+    }
+    add("CE NECESITĂ ATENȚIA TA", line);
   }
 
   // 2) Agravari.
@@ -40,8 +46,11 @@ export function buildDailyDigest({ episodes = [], candidates = [] }) {
   for (const e of eps.filter((x) => x._minUrgencyDays != null && x._minUrgencyDays <= 7 && x.status !== "resolved"))
     add("CE DECIZII SE APROPIE", `${e.title} — in ${e._minUrgencyDays} zile`);
 
-  // 5) Date lipsa (agregat).
-  const missing = [...new Set(eps.flatMap((e) => e.unknowns || []))].slice(0, 2);
+  // 5) Date lipsa (agregat) — FARA duplicate: ce e deja cerut in sectiunea 1
+  //    („Intai avem nevoie de date”) nu se repeta aici.
+  const missing = [...new Set(eps.flatMap((e) => e.unknowns || []))]
+    .filter((m) => !shownMissing.has(m))
+    .slice(0, 2);
   for (const m of missing) add("CE DATE LIPSESC", m);
 
   const bySection = {};

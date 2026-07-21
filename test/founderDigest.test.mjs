@@ -95,6 +95,10 @@ ok(!/(create_task|proposeAction|runBoardMeeting|createDraft)/.test(fa), "11. zer
 // eroare izolata
 const r9 = await deliverDailyDigest({ ...BASE, material: "corupt", send });
 ok(r9.sent === false, "eroare de material → izolata, fara exceptie");
+// 5b. regresie live: soldul cerut in sectiunea 1 NU se repeta in sectiunea 5.
+const dgDedup = buildDailyDigest(MATERIAL);
+const missCount = (JSON.stringify(dgDedup.sections).match(/Soldul bancar curent nu este conectat/g) || []).length;
+ok(missCount === 1, `5b. informatia lipsa apare O SINGURA data in digest (${missCount})`);
 // determinism compunere
 ok(composeDigestMessage({ digest: buildDailyDigest(MATERIAL), ...MATERIAL }) === composeDigestMessage({ digest: buildDailyDigest(MATERIAL), ...MATERIAL }), "compunere determinista");
 ok(priorityOfDay({ candidates: [], episodes: [] }).includes("construiește"), "prioritate implicita sigura");

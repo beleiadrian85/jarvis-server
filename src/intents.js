@@ -104,6 +104,18 @@ export function countQuestions(text) {
   return Math.max(marks, numbered, wordSignals);
 }
 
+/** Intrebare de OWNERSHIP: "cine se ocupa de X / cine e Y / cine detine". */
+export function isOwnershipQuestion(text) {
+  const n = norm(text);
+  return /\bcine\b.*(se ocupa|raspunde|detine|e (director|manager|sef|responsabil|owner)|face|gestioneaza)|cine (e|este) (directorul|managerul|responsabilul|owner)/.test(n);
+}
+
+/** Intrebare FOUNDER-ACTIONS: "ce am eu de facut / ce trebuie sa decid/fac". */
+export function isFounderActionsQuestion(text) {
+  const n = norm(text);
+  return /(ce am (eu )?de facut|ce trebuie sa (decid|fac)|ce am pe (azi|maine|lista)|ce e (de facut|treaba mea|pe capul meu)|actiunile mele)/.test(n);
+}
+
 export function guessCategory(text) {
   const n = norm(text);
   if (/(credit|banca|tva|factur|plat[ai]|incasar|cash|eur|ron|lei)/.test(n)) return "Financiar";

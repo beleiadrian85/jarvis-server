@@ -29,8 +29,9 @@ import { splitQuestions, multiQuestionInstruction, completenessGap, tokenBudgetF
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
   extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
-  isStrongStrategic, isPredictionTopic,
+  isStrongStrategic, isPredictionTopic, isOwnershipQuestion, isFounderActionsQuestion,
 } from "./intents.js";
+import { asksAboutRequests } from "./ceo/actionLedger.js";
 // P2 — Prediction Engine (determinist, GATED pe config.predictionEngine).
 import { predict } from "./predictionEngine.js";
 import { buildPredictionState } from "./predictionState.js";
@@ -146,8 +147,18 @@ export async function handleMessage(channel, text) {
     return { reply: rep };
   }
 
+  // Intent fidelity (Partea IV/XVI): intrebarile de OWNERSHIP / REQUEST-HISTORY /
+  // FOUNDER-ACTIONS / multi-intrebare NU se lasa interceptate de rapoartele canned
+  // — merg la chat-ul grounded (cu Evidence Packet), altfel raspund la alt intent.
+  const wantsGrounded = (() => {
+    try {
+      return isOwnershipQuestion(text) || isFounderActionsQuestion(text) ||
+        asksAboutRequests(text).about || splitQuestions(text).length >= 2;
+    } catch { return false; }
+  })();
+
   // 1.5) Financial Brain — cash forecast / necesar de plati (determinist).
-  if (hasOperational && isCashForecastTopic(text)) {
+  if (!wantsGrounded && hasOperational && isCashForecastTopic(text)) {
     const rep = await cashForecastReport({ openingBalance: extractBalance(text) });
     await audit("cash_forecast", "prognoza cash generata", "operational:list_payment_obligations");
     remember(channel, text, rep);
@@ -155,7 +166,7 @@ export async function handleMessage(channel, text) {
   }
 
   // 1.6) CEO Home — starea firmei intr-un ecran + Health Score.
-  if (hasOperational && isCeoHomeTopic(text)) {
+  if (!wantsGrounded && hasOperational && isCeoHomeTopic(text)) {
     const rep = await ceoHomeReport({ openingBalance: extractBalance(text) });
     await audit("ceo_home", "CEO Home generat", "operational:cash+sales+tasks");
     remember(channel, text, rep);
@@ -163,7 +174,7 @@ export async function handleMessage(channel, text) {
   }
 
   // 1.7) Risk Engine — riscuri prioritizate.
-  if (hasOperational && isRiskTopic(text)) {
+  if (!wantsGrounded && hasOperational && isRiskTopic(text)) {
     const rep = await riskReport();
     await audit("risk_engine", "riscuri evaluate", "operational:cash+tasks+sales");
     remember(channel, text, rep);
@@ -392,9 +403,18 @@ async function generalChat(channel, text) {
   // §4/§24 — "ce i-ai cerut Danei/Nelu?" → raspuns FAPTUAL din ledger, nu din
   // memoria LLM. Injectam cererile reale ca sa nu se inventeze/reconstruiasca.
   try {
-    const { asksAboutRequests, buildActionLedger, ledgerForPrompt } = await import("./ceo/actionLedger.js");
+    const { buildActionLedger, ledgerForPrompt } = await import("./ceo/actionLedger.js");
     const aq = asksAboutRequests(text);
     if (aq.about) system += "\n\n" + ledgerForPrompt(await buildActionLedger({ personId: aq.person }));
+  } catch { /* best-effort */ }
+  // CEO EVIDENCE PACKET (Partea III-V): context determinist per intent, ca
+  // raspunsul managerial sa porneasca din aceeasi realitate (un singur adevar).
+  try {
+    const { detectIntents, buildEvidencePacket, packetForPrompt } = await import("./ceo/evidencePacket.js");
+    const intents = detectIntents(text);
+    if (intents.some((i) => ["FOUNDER_ACTIONS", "OWNERSHIP", "CASH", "PEOPLE", "TASKS", "RISK"].includes(i))) {
+      system += "\n\n" + packetForPrompt(await buildEvidencePacket({ text, intents }));
+    }
   } catch { /* best-effort */ }
   if (ctx.summary) system += `\n\nSUMARUL CONVERSATIEI DE PANA ACUM:\n${ctx.summary}`;
   if (memories.length) {

@@ -31,8 +31,8 @@ ok(typeof gate.proposeAction === "function" && typeof gate.confirmActionById ===
 {
   const b = SRC("brain.js");
   const ceoImports = [...b.matchAll(/from\s+["']\.\/ceo\/([^"']+)["']/g), ...b.matchAll(/import\(\s*["']\.\/ceo\/([^"']+)["']/g)].map((m) => m[1]);
-  const allowed = new Set(["sourceTruth.js", "actionLedger.js"]);
-  ok(ceoImports.every((p) => allowed.has(p)), `brain.js importa din ceo/ DOAR grounding read-only (sourceTruth/actionLedger) — are: ${ceoImports.join(",") || "nimic"}`);
+  const allowed = new Set(["sourceTruth.js", "actionLedger.js", "evidencePacket.js"]);
+  ok(ceoImports.every((p) => allowed.has(p)), `brain.js importa din ceo/ DOAR grounding read-only (sourceTruth/actionLedger/evidencePacket) — are: ${ceoImports.join(",") || "nimic"}`);
 }
 
 // API read-only (Command Center foundation).

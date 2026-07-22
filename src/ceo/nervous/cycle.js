@@ -164,7 +164,7 @@ export async function runNervousCycle(opts = {}) {
         // Daca task-ul original s-a inchis intre timp → nevoia nu mai exista.
         const orig = (opsTasks || []).find((t) => t.id === origId);
         if (orig && OPERATIONAL_CLOSED_STATUSES.includes(String(orig.status || "").toLowerCase())) {
-          registry[rid] = { ...prior, id: rid, need_id: rid, original_task_id: origId, owner: del.person_id, lifecycle: "NO_LONGER_NEEDED", updated_at: nowISO, clarifies_original: origId };
+          registry[rid] = { ...prior, id: rid, need_id: rid, original_task_id: origId, owner: (need.suggested_owner_hint || null), lifecycle: "NO_LONGER_NEEDED", updated_at: nowISO, clarifies_original: origId };
           events.push({ at: nowISO, event: "need_no_action", detail: `Original #${origId} inchis (${orig.status}) — clarificarea nu mai e necesara`, need_id: rid });
           continue;
         }
@@ -174,8 +174,8 @@ export async function runNervousCycle(opts = {}) {
         if (canSend) {
           const rr = await opsObservation(origId, need.observation_text || `JARVIS: clarificare pe "${need.title}".`, { cfg });
           if (rr.ok) {
-            registry[rid] = { ...prior, id: rid, need_id: rid, original_task_id: origId, owner: del.person_id, lifecycle: "AWAITING_RESPONSE", clarifies_original: origId, human: { title: need.title }, created_at: prior.created_at || nowISO, updated_at: nowISO, last_observation_at: nowISO, followups: [...(prior.followups || []), { at: nowISO, action: "CLARIFY_ON_ORIGINAL", auto_sent: true }] };
-            results.created.push({ title: `clarificare pe #${origId}`, owner: del.person_id, operational_id: origId, via: "observation_on_original" });
+            registry[rid] = { ...prior, id: rid, need_id: rid, original_task_id: origId, owner: (need.suggested_owner_hint || null), lifecycle: "AWAITING_RESPONSE", clarifies_original: origId, human: { title: need.title }, created_at: prior.created_at || nowISO, updated_at: nowISO, last_observation_at: nowISO, followups: [...(prior.followups || []), { at: nowISO, action: "CLARIFY_ON_ORIGINAL", auto_sent: true }] };
+            results.created.push({ title: `clarificare pe #${origId}`, owner: (need.suggested_owner_hint || null), operational_id: origId, via: "observation_on_original" });
             events.push({ at: nowISO, event: "clarification_on_original", detail: `Clarificare pusa pe task-ul original #${origId} (${need.title}) — ZERO task nou`, need_id: rid, task_id: origId });
             cooldowns = noteCooldown(cooldowns, need, nowISO, DEFAULT_LIMITS.dedup_cooldown_hours);
             continue;
@@ -183,8 +183,8 @@ export async function runNervousCycle(opts = {}) {
           events.push({ at: nowISO, event: "clarification_failed", detail: `${origId}: ${rr.error || rr.blocked}`, need_id: rid });
         }
         // Shadow / flag off → doar propunere (ce AR pune pe original), zero task nou.
-        registry[rid] = { ...prior, id: rid, need_id: rid, original_task_id: origId, owner: del.person_id, lifecycle: prior.lifecycle || "PROPOSED", clarifies_original: origId, human: { title: need.title }, created_at: prior.created_at || nowISO, updated_at: nowISO };
-        results.would_create.push({ title: `clarificare pe #${origId} (${need.title})`, owner: del.person_id, deadline: "-", why: "observatie pe task-ul original, nu task nou" });
+        registry[rid] = { ...prior, id: rid, need_id: rid, original_task_id: origId, owner: (need.suggested_owner_hint || null), lifecycle: prior.lifecycle || "PROPOSED", clarifies_original: origId, human: { title: need.title }, created_at: prior.created_at || nowISO, updated_at: nowISO };
+        results.would_create.push({ title: `clarificare pe #${origId} (${need.title})`, owner: (need.suggested_owner_hint || null), deadline: "-", why: "observatie pe task-ul original, nu task nou" });
         events.push({ at: nowISO, event: "clarification_shadow", detail: `AS PUNE clarificare pe task-ul original #${origId} — ${need.title}`, need_id: rid });
         continue;
       }

@@ -36,8 +36,13 @@ const good2 = level3ReadinessScore({
   selfEval: { TASKS_CREATED: 6, TASKS_USEFUL: 6, WRONG_OWNER: 0, TASKS_DUPLICATE_PREVENTED: 4, TASKS_REJECTED: 10, UNNECESSARY_ESCALATIONS: 0, data_health: 85 },
   registry: reg, days_observed: 3,
 });
-ok(good2.recommendation.startsWith("READY_FOR_LEVEL_3"), "6 task-uri verificate / 3 zile / metrici bune → READY (recomandare)");
+ok(good2.recommendation.startsWith("READY_FOR_FOUNDER_REVIEW"), "6 bucle inchise / 3 zile / metrici bune → READY_FOR_FOUNDER_REVIEW (recomandare)");
+ok(good2.closed_loops === 6 && good2.evidence_gate.closed_loops === true, "readiness cere bucle reale INCHISE (§14 dovezi, nu timp)");
 ok(/aproba/.test(good2.note), "readiness = recomandare, fondatorul aproba (scris in nota)");
+// Task-uri create dar ZERO inchise → NU ready (regula de fond: inchide bucle).
+const openOnly = {}; for (let i = 0; i < 6; i++) openOnly[`o${i}`] = { operational_id: `X${i}`, lifecycle: "IN_PROGRESS" };
+const noClosed = level3ReadinessScore({ selfEval: { TASKS_CREATED: 6, TASKS_USEFUL: 6, WRONG_OWNER: 0, TASKS_DUPLICATE_PREVENTED: 4, TASKS_REJECTED: 10, data_health: 85 }, registry: openOnly, days_observed: 5 });
+ok(noClosed.recommendation.startsWith("NOT_ENOUGH_EVIDENCE") && noClosed.blockers.some((b) => /closed_loops/.test(b)), "6 create dar 0 inchise → NOT_ENOUGH_EVIDENCE (bucle neinchise)");
 
 // ── Boundary: ingest runner NU scrie NICIODATA in Operational ───────────
 const ingestSrc = readFileSync(new URL("../src/ceo/documentIngestRunner.js", import.meta.url), "utf8");

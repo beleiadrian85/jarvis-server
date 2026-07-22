@@ -72,25 +72,43 @@ export function level3ReadinessScore({ selfEval = {}, registry = {}, overrides =
 
   const measured = Object.values(dims).filter((v) => typeof v === "number");
   const avg = measured.length ? Math.round(measured.reduce((a, b) => a + b, 0) / measured.length) : null;
+  // Praguri de PROMOVARE pe DOVEZI (§14), nu pe timp calendaristic:
   const THRESH = 75, MIN_MEASURED = 6, MIN_DAYS = 3;
-  const allPass = measured.length >= MIN_MEASURED && measured.every((v) => v >= THRESH);
-  const enoughHistory = days_observed >= MIN_DAYS && createdN >= 5;
+  const MIN_CLOSED_LOOPS = 3;   // minimum bucle reale INCHISE (nu doar create)
+  const MIN_CREATED = 5;
+  const closedLoops = created.filter((r) => ["COMPLETED", "FAILED", "EXPIRED", "NO_LONGER_NEEDED"].includes(r.lifecycle)).length;
+  const unauthorized = selfEval.unauthorized_writes ?? 0;
 
+  // Criteriul de fond: task-uri utile, owner corect, rezultate verificate,
+  // ZERO scrieri neautorizate SI minimum de bucle reale inchise.
+  const evidenceGate = {
+    closed_loops: closedLoops >= MIN_CLOSED_LOOPS,
+    tasks_created: createdN >= MIN_CREATED,
+    days_observed: days_observed >= MIN_DAYS,
+    dimensions_measured: measured.length >= MIN_MEASURED,
+    unauthorized_zero: unauthorized === 0,
+  };
+  const allPass = measured.length >= MIN_MEASURED && measured.every((v) => v >= THRESH);
+  const enoughEvidence = Object.values(evidenceGate).every(Boolean);
+
+  const missingEvidence = Object.entries(evidenceGate).filter(([, v]) => !v).map(([k]) => k);
   return {
     active_level: null, // completat de apelant din config
     target_level: 3,
     dimensions: dims,
     measured_count: measured.length,
     overall: avg,
-    days_observed, tasks_created: createdN,
-    recommendation: (allPass && enoughHistory)
-      ? "READY_FOR_LEVEL_3 (recomandare — fondatorul aproba)"
-      : measured.length < MIN_MEASURED || !enoughHistory
-        ? "NOT_ENOUGH_EVIDENCE (mai multe cicluri reale necesare)"
+    days_observed, tasks_created: createdN, closed_loops: closedLoops,
+    evidence_gate: evidenceGate,
+    thresholds: { closed_loops: MIN_CLOSED_LOOPS, tasks_created: MIN_CREATED, days_observed: MIN_DAYS, dimension_min: THRESH, unauthorized_writes: 0 },
+    recommendation: (allPass && enoughEvidence)
+      ? "READY_FOR_FOUNDER_REVIEW (recomandare pe dovezi — fondatorul aproba activarea Level 3)"
+      : !enoughEvidence
+        ? "NOT_ENOUGH_EVIDENCE (dovezi insuficiente: " + missingEvidence.join(", ") + ")"
         : "NOT_READY (dimensiuni sub prag)",
-    blockers: measured.length >= MIN_MEASURED
-      ? Object.entries(dims).filter(([, v]) => typeof v === "number" && v < THRESH).map(([k, v]) => `${k}=${v} (<${THRESH})`)
-      : ["dovezi insuficiente — organismul are nevoie de mai multe cicluri reale"],
-    note: "Nivelul se ridica DOAR cu aprobarea explicita a fondatorului; scorul e o recomandare pe dovezi, nu o decizie.",
+    blockers: !enoughEvidence
+      ? missingEvidence.map((k) => `dovada lipsa: ${k}`)
+      : Object.entries(dims).filter(([, v]) => typeof v === "number" && v < THRESH).map(([k, v]) => `${k}=${v} (<${THRESH})`),
+    note: "Nivelul se ridica DOAR cu aprobarea explicita a fondatorului; scorul e o recomandare pe dovezi (minimum bucle reale inchise), nu o decizie.",
   };
 }

@@ -230,8 +230,17 @@ async function renderOrganismUnified() {
     "<br>JARVIS azi: <b>" + (o.created_today ?? 0) + "</b> task-uri · bucle deschise: <b>" + (o.open_management_loops ?? 0) + "</b>" +
     " · gap-uri date: " + (o.data_gaps ?? 0) + " · gap-uri capabilitate: " + (o.capability_gaps?.length ?? 0) +
     "<br>Pregătire Level 3: <b class=" + (String(rd.recommendation).startsWith("READY") ? "ok" : "dim") + ">" + (rd.recommendation || "?") + "</b>" +
-    (rd.overall != null ? " (scor " + rd.overall + "/100, " + rd.measured_count + " dimensiuni măsurate)" : "") +
+    (rd.overall != null ? " (scor " + rd.overall + "/100, bucle închise " + (rd.closed_loops ?? 0) + "/" + (rd.thresholds?.closed_loops ?? 3) + ")" : "") +
     (rd.blockers?.length ? "<br><small class=dim>blocaje: " + rd.blockers.join(", ") + "</small>" : "");
+  const eff = o.effectiveness || {};
+  const oh = o.organism_health || {};
+  $("orgUnified").innerHTML +=
+    "<br><b>Eficacitate:</b> nevoi " + (eff.NEEDS_DETECTED ?? "?") + " · create " + (eff.TASKS_CREATED ?? 0) +
+    " · bucle închise " + (eff.LOOPS_CLOSED ?? 0) + " · verificate " + (eff.TASKS_VERIFIED ?? 0) +
+    " · dubluri prevenite " + (eff.DUPLICATES_PREVENTED ?? 0) + " · zgomot respins " + (eff.NOISE_REJECTED ?? 0) +
+    " · rată rezolvare " + (eff.RESOLUTION_RATE ?? "?") + (typeof eff.RESOLUTION_RATE === "number" ? "%" : "") +
+    (o.loops_closed_today?.length ? "<br><b class=ok>ÎNCHIS AZI:</b> " + o.loops_closed_today.map(l => l.task + " (" + l.owner + ")").join("; ") : "") +
+    (oh.symptoms?.length ? "<br><small class=" + (oh.status === "DEGRADED" ? "bad" : "warn") + ">sănătate " + oh.status + ": " + oh.symptoms.map(s => s.detail).join(" · ") + "</small>" : "<br><small class=ok>sănătate organism: OK</small>");
   const docs = await api("/api/ceo/documents");
   const list = docs?.documents || [];
   $("docList").innerHTML = list.length

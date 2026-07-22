@@ -9,6 +9,7 @@
 import { config } from "../config.js";
 import { getState } from "../state.js";
 import { activeAutonomyLevel, level3ReadinessScore, AUTONOMY_LADDER } from "./autonomyLadder.js";
+import { buildEffectiveness, assessOrganismHealth } from "./nervous/effectiveness.js";
 import { STATE_KEYS as NERVOUS_KEYS } from "./nervous/contract.js";
 
 const EVO_LAST = "ceo:evolution:last";
@@ -81,11 +82,18 @@ export async function organismStatus({ nowMs = Date.now() } = {}) {
   readiness.active_level = activeLevel;
 
   const created = Object.values(registry).filter((r) => r.operational_id);
+  const closedToday = created.filter((r) => ["COMPLETED", "FAILED", "EXPIRED", "NO_LONGER_NEEDED"].includes(r.lifecycle) && r.updated_at && String(r.updated_at).slice(0, 10) === new Date(nowMs).toISOString().slice(0, 10));
   const openLoops = Object.values(registry).filter((r) => r.operational_id && !["COMPLETED", "FAILED", "EXPIRED", "NO_LONGER_NEEDED"].includes(r.lifecycle));
+
+  // §22-23 — eficacitate + sanatatea organismului.
+  const effectiveness = buildEffectiveness({ registry, selfEval: nervousLast?.selfeval || {}, nowMs });
+  const organismHealth = assessOrganismHealth({ registry, effectiveness, peopleLoad: nervousLast?.people_load || [], nowMs });
 
   return {
     at: new Date(nowMs).toISOString(),
     phase: organismPhase(nervousLast, nowMs),
+    effectiveness, organism_health: organismHealth,
+    loops_closed_today: closedToday.map((r) => ({ task: r.human?.title || r.task_title, owner: r.owner, outcome: r.outcome || r.lifecycle })),
     autonomy: { active_level: activeLevel, name: AUTONOMY_LADDER[activeLevel]?.name, ladder: AUTONOMY_LADDER, kill_switch: config.nervousKill },
     what_jarvis_did_today: nervousLast?.ceo_tasks_today || [],
     what_team_owes_jarvis: openLoops.map((r) => ({ task: r.human?.title || r.task_title, owner: r.owner, since: r.created_at, status: r.lifecycle })),

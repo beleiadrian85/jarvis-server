@@ -1,5 +1,7 @@
 # OPERATIONALIZATION MATRIX — JARVIS (jarvis-server)
 
+> **Actualizare 22 iul 2026 (checkpoint maturitate operațională):** de la auditul inițial au devenit **ACTIVE**: Cognitive Orchestrator (`/organism-status`), Document Intake + XLSX parser + Document Type Registry, Effectiveness metrics + Organism Health, Autonomy Ladder (Level 3 readiness pe dovezi, cu prag de bucle închise). Reparat: `/source-health` raportează nivelul real (nu Level 1 hardcodat). În construcție (capability build real): Receivables Importer. Bucle reale închise încă: **0** (task-urile autonome sunt WAITING pe răspunsul oamenilor — corect, nu se fabrică succes). Level 3: **NU** activat (readiness NOT_ENOUGH_EVIDENCE — cere minimum 3 bucle închise). `NOT_OPERATIONALIZED` = module al căror output nu e consumat de nimeni (vezi CONSOLIDATION_PLAN).
+
 > Audit read-only, 22 iul 2026. Sursa: codul din `src/` + starea live declarată de fondator (flag-urile ON/OFF nu au putut fi interogate pe Railway — luate ca dată).
 > Legendă STATUS: **DORMANT** = cod există, flag OFF, zero rulări · **SHADOW** = rulează, scrie doar audit/jarvis_state · **ACTIVE** = rulează cu efect real · **ACTIVE_CONTROLLED** = rulează cu efect real sub gate explicit (aprobare/limite) · **BLOCKED** = gata dar oprit de o dependență · **PARTIAL** = doar o parte din modul e consumată · **OBSOLETE** = nefolosit de nimeni.
 

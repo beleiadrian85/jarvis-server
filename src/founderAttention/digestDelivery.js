@@ -44,6 +44,10 @@ export function composeDigestMessage({ digest, candidates, episodes, extras = {}
     `PRIORITATEA ZILEI:\n${priorityOfDay({ candidates, episodes })}`,
     extras.main_risk ? `RISC PRINCIPAL:\n${extras.main_risk}` : "",
     extras.main_opportunity ? `OPORTUNITATE:\n${extras.main_opportunity}` : "",
+    // §20 — rezultate reale de management (ce a REZOLVAT, nu doar observat).
+    // Max 2 puncte; apare doar cand exista bucle inchise cu rezultat.
+    (extras.resolved && extras.resolved.length)
+      ? `CE A REZOLVAT JARVIS:\n${extras.resolved.slice(0, 2).map((r) => `• ${r}`).join("\n")}` : "",
   ].filter(Boolean).join("\n\n");
   return `DAILY CEO BRIEF\n\n${numbered}\n\n${tail}`;
 }
@@ -128,9 +132,20 @@ async function liveMaterial() {
     const ceo = await import("../ceo/index.js");
     const ctx = await ceo.collectCeoContext();
     const a = ceo.ceoShadowAnswers(ctx);
+    // §20 — bucle inchise azi (rezultate reale de management) din registrul CEO.
+    let resolved = [];
+    try {
+      const { getState } = await import("../state.js");
+      const reg = (await getState("ceo:nervous:tasks", {})) || {};
+      const today = String(ctx.world.now || "").slice(0, 10);
+      resolved = Object.values(reg)
+        .filter((r) => r.operational_id && r.lifecycle === "COMPLETED" && r.gap_closed && r.updated_at && String(r.updated_at).slice(0, 10) === today)
+        .map((r) => `${r.human?.title || r.task_title} → ${r.owner} a livrat, verificat`);
+    } catch { resolved = []; }
     extras = {
       main_risk: (a.q10_riscuri_30_zile || [])[0] || "",
       main_opportunity: ((a.q9_top3_oportunitati || [])[0] || "").split(" · ")[0],
+      resolved,
     };
     await ss("ceo:context", {
       at: ctx.world.now,

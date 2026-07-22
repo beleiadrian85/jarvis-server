@@ -389,6 +389,13 @@ async function generalChat(channel, text) {
     const { buildSourceTruth, sourceTruthForPrompt } = await import("./ceo/sourceTruth.js");
     system += "\n\n" + sourceTruthForPrompt(await buildSourceTruth({}));
   } catch { /* daca esueaza, chat-ul continua fara harta */ }
+  // §4/§24 — "ce i-ai cerut Danei/Nelu?" → raspuns FAPTUAL din ledger, nu din
+  // memoria LLM. Injectam cererile reale ca sa nu se inventeze/reconstruiasca.
+  try {
+    const { asksAboutRequests, buildActionLedger, ledgerForPrompt } = await import("./ceo/actionLedger.js");
+    const aq = asksAboutRequests(text);
+    if (aq.about) system += "\n\n" + ledgerForPrompt(await buildActionLedger({ personId: aq.person }));
+  } catch { /* best-effort */ }
   if (ctx.summary) system += `\n\nSUMARUL CONVERSATIEI DE PANA ACUM:\n${ctx.summary}`;
   if (memories.length) {
     system +=

@@ -253,7 +253,9 @@ export function answerFifteen(inputs = {}) {
 function makeNeed(fields) {
   const domain = normDomain(fields.domain);
   const need = {
-    need_id: `need:${domain}:${slug(fields.title || fields.summary || "", 40)}`,
+    // need_id STABIL cand e furnizat explicit (ex. pe ID-ul task-ului original)
+    // — dedup real, imun la schimbari de titlu.
+    need_id: fields.need_id_override || `need:${domain}:${slug(fields.title || fields.summary || "", 40)}`,
     type: fields.type,
     title: fields.title || "",
     summary: fields.summary || "",
@@ -274,6 +276,11 @@ function makeNeed(fields) {
     // (referinta la sursa/task-ul original), fara sa devina eseu.
     context: fields.context ?? null,
     project_hint: fields.project_hint ?? null,
+    // REGULA "un task = o responsabilitate": clarificarea unui restant se pune
+    // ca OBSERVATIE pe task-ul original, nu ca task nou.
+    deliver_as: fields.deliver_as ?? null,
+    original_task_id: fields.original_task_id ?? null,
+    observation_text: fields.observation_text ?? null,
   };
   need.value = scoreTaskValue(need);
   return need;
@@ -523,11 +530,10 @@ export function buildNeeds({
       confidence: 95, // deadline depasit e un fapt, nu o interpretare
       reasoning: answerFifteen({ opsTasks: overdue, asOf, domain: "TASKS", domainOwners }),
     }));
-    // Politica de management activata de fondator: pentru cele mai vechi
-    // restante (max 3/ciclu), CEO cere CLARIFICAREA blocajului chiar
-    // ownerului task-ului — task concret, verificabil, legat de un NEED
-    // ("Clarifica blocajul task-ului X si spune ce lipseste"), nu "muncheste
-    // mai bine". Dedup/cooldown previn repetitia; limitele previn spamul.
+    // REGULA "UN TASK = O RESPONSABILITATE" (fondator): NU cream "task despre
+    // task". Clarificarea unui restant se pune ca OBSERVATIE pe task-ul ORIGINAL
+    // (deliver_as: observation_on_original), nu ca task nou. Dedup pe ID-ul
+    // task-ului original (nu pe titlu) → doua formulari nu mai produc dubluri.
     const worst = [...overdue]
       .sort((a, b) => (daysBetween(b.deadline, asOf) ?? 0) - (daysBetween(a.deadline, asOf) ?? 0))
       .slice(0, 3);
@@ -535,18 +541,23 @@ export function buildNeeds({
       const days = daysBetween(t.deadline, asOf) ?? 0;
       if (days < 2) continue; // prima intarziere = doar overdue (§16), nu task
       const origTitle = titleOf(t);
+      const origId = t?.id || "?";
       candidates.push(makeNeed({
         domain: "TASKS",
         type: "ACTION_NEED",
         task_type: String(t?.status || "").toLowerCase() === "blocat" ? "BLOCKER_CLARIFY" : "DEADLINE_CONFIRM",
-        // §11 — titlu care spune ACTIUNEA + obiectul, nu doar numele task-ului.
-        title: `Ce blocheaza finalizarea: "${origTitle}"`.slice(0, 90),
-        summary: `Task-ul "${origTitle}" (#${t?.id || "?"}) e restant de ${days} zile (termen ${t?.deadline}, status ${t?.status}). Spune ce lipseste pentru finalizare sau care e termenul real.`,
-        evidence: [`[operational] task #${t?.id || "?"}: ${origTitle} — deadline ${t?.deadline}, status ${t?.status}, owner ${t?.assigneeName || t?.assignee || "?"}`],
+        // need_id STABIL pe ID-ul task-ului original (nu pe titlu) — dedup real.
+        need_id_override: `need:clarify:${origId}`,
+        // Livrare ca OBSERVATIE pe task-ul original — zero task nou.
+        deliver_as: "observation_on_original",
+        original_task_id: origId,
+        title: `Clarificare pe task-ul restant #${origId}: ${origTitle}`.slice(0, 90),
+        summary: `Task-ul "${origTitle}" (#${origId}) e restant de ${days} zile (termen ${t?.deadline}, status ${t?.status}). Cer clarificare DIRECT pe task, nu prin task nou.`,
+        evidence: [`[operational] task #${origId}: ${origTitle} — deadline ${t?.deadline}, status ${t?.status}, owner ${t?.assigneeName || t?.assignee || "?"}`],
         material_consequence: `task-ul "${origTitle}" restant de ${days} zile fara clarificare — planificarea si dependentele raman incerte`,
         expected_change: "termen real asumat sau blocaj identificat si adresat",
-        // §11 — context auto-suficient pentru omul care primeste task-ul.
-        context: `Se refera la task-ul Operational #${t?.id || "?"} "${origTitle}" (termen ${t?.deadline || "?"}, status ${t?.status || "?"}), restant de ${days} zile. Deschide-l in Operational si spune ce lipseste sau confirma un termen real.`,
+        // Mesajul care se pune ca observatie pe task-ul original.
+        observation_text: `JARVIS: "${origTitle}" e restant de ${days} zile (termen ${t?.deadline}). Te rog actualizeaza direct aici: FINALIZAT / BLOCAT + motiv / TERMEN NOU. Daca ai un document, ataseaza-l — il procesez eu.`,
         project_hint: t?.project || null,
         suggested_owner_hint: t?.assignee || null, // ownerul REAL al task-ului
         urgency_days: 0,

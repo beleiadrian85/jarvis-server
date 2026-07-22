@@ -153,6 +153,27 @@ export async function opsTaskReminder(operationalId, text, opts = {}) {
 }
 
 /**
+ * Observatie de CLARIFICARE pe un task ORIGINAL (creat de om) — regula
+ * fondatorului "un task = o responsabilitate": nu cream "task despre task",
+ * ci intrebam DIRECT pe firul principal. add_observation ramane in modulul
+ * Task-uri (TASKS-ONLY WRITE). Gated de kill switch. Idempotenta o tine
+ * apelantul (o singura clarificare per task per fereastra).
+ */
+export async function opsObservation(operationalId, text, opts = {}) {
+  const cfg = opts.cfg || config;
+  if (killSwitchOn(cfg)) return { ok: false, blocked: "KILL_SWITCH" };
+  if (!operationalId) return { ok: false, error: "lipseste id-ul task-ului original" };
+  const mcp = opts.mcp || (await import("../../mcp.js"));
+  try {
+    const out = await mcp.mcpCall("add_observation", { id: operationalId, text: String(text || "").slice(0, 500) });
+    await audit("nervous_clarification_on_original", `${operationalId}: clarificare pusa pe task-ul original`, String(text || "").slice(0, 300)).catch(() => {});
+    return { ok: true, raw: out };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
  * Update pe un task creat DE CEO AI (§1: "actualiza statusul task-urilor create
  * de CEO AI"). Refuza update pe task-uri care nu sunt in registrul CEO.
  */

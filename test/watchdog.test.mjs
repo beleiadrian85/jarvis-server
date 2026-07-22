@@ -52,5 +52,19 @@ ok(/FINALIZAT \/ BLOCAT \+ motiv \/ TERMEN NOU/.test(cycleSrc), "§4 — follow-
 const cfgSrc = readFileSync(new URL("../src/config.js", import.meta.url), "utf8");
 ok(/autonomousFollowup:.*CEO_AUTONOMOUS_FOLLOWUP_ENABLED/.test(cfgSrc), "flag CEO_AUTONOMOUS_FOLLOWUP_ENABLED definit");
 
+// ── REGULA "un task = o responsabilitate": clarificare pe ORIGINAL, nu task nou ─
+const { buildNeeds } = await import("../src/ceo/nervous/needEngine.js");
+const overdue = [{ id: "7HYZDH", title: "Contract Horotan", status: "in_lucru", assignee: "nelu", deadline: "2026-07-03", creator: "adrian" }];
+const out = buildNeeds({ asOf: "2026-07-23", opsTasks: overdue, domainOwners: { TASKS: "adrian" } });
+const clar = out.needs.find((n) => n.original_task_id === "7HYZDH");
+ok(clar && clar.deliver_as === "observation_on_original", "clarificarea unui restant → OBSERVATIE pe original (nu task nou)");
+ok(clar && clar.need_id === "need:clarify:7HYZDH", "need_id STABIL pe ID-ul task-ului (dedup imun la titlu)");
+ok(clar && /FINALIZAT \/ BLOCAT \+ motiv \/ TERMEN NOU/.test(clar.observation_text || ""), "observatia cere raspuns structurat");
+// Doua formulari ale aceluiasi restant → acelasi need_id (fara dublura).
+const out2 = buildNeeds({ asOf: "2026-07-24", opsTasks: overdue, domainOwners: { TASKS: "adrian" } });
+ok(out2.needs.find((n) => n.original_task_id === "7HYZDH")?.need_id === clar.need_id, "acelasi task original → acelasi need_id la orice rulare (zero task-despre-task duplicat)");
+const nSrc = readFileSync(new URL("../src/ceo/nervous/operationalWrite.js", import.meta.url), "utf8");
+ok(/export async function opsObservation/.test(nSrc) && /add_observation/.test(nSrc), "opsObservation: clarificare pe orice task prin add_observation (TASKS-ONLY)");
+
 console.log(`\n${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — watchdog`);
 process.exit(failed === 0 ? 0 : 1);

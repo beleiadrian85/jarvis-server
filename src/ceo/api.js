@@ -373,11 +373,11 @@ export function registerCeoApi(app) {
       res.json(await organismStatus({}));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
-  // Documentele ingestate (staging JARVIS — zero write Operational).
+  // Documentele ingestate + creantele staging (JARVIS — zero write Operational).
   app.get("/api/ceo/documents", async (_req, res) => {
     try {
-      const { documentsView } = await import("./documentIngestRunner.js");
-      res.json({ documents: await documentsView() });
+      const { documentsView, receivablesStaging } = await import("./documentIngestRunner.js");
+      res.json({ documents: await documentsView(), receivables_staging: await receivablesStaging() });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // Ciclu cognitiv manual (INGEST → management). Reactiv/validare.

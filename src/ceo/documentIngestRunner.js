@@ -12,6 +12,7 @@ import { STATE_KEYS as NERVOUS_KEYS } from "./nervous/contract.js";
 
 const DOCS_KEY = "ceo:documents";           // stratul propriu (staging + memorie doc)
 const INGESTED_KEY = "ceo:documents:seen";   // hash-uri deja procesate (idempotent)
+const RECV_KEY = "ceo:receivables:staging";  // creantele importate (staging JARVIS, zero Operational)
 
 /** Atasamentele pe task-urile create de CEO (read-only, best-effort). */
 async function readCeoAttachments(taskIds) {
@@ -43,16 +44,17 @@ function docHash(a) {
  * Ingesteaza documentele noi atasate task-urilor CEO. persist=false → dry-run.
  * Returneaza { ran, ingested: [...], summary }. Nu arunca niciodata.
  */
-export async function ingestPendingDocuments({ persist = true, nowISO = null } = {}) {
+export async function ingestPendingDocuments({ persist = true, nowISO = null, attachments: injAtt = null, store = null, registry: injReg = null } = {}) {
   try {
+    const S = store || { get: getState, set: setState };
     const now = nowISO || new Date().toISOString();
-    const registry = (await getState(NERVOUS_KEYS.tasks, {})) || {};
+    const registry = injReg || (await S.get(NERVOUS_KEYS.tasks, {})) || {};
     const ceoTaskIds = Object.values(registry).map((r) => r.operational_id).filter(Boolean);
-    const attachments = await readCeoAttachments(ceoTaskIds);
+    const attachments = injAtt || await readCeoAttachments(ceoTaskIds);
     if (!attachments.length) return { ran: true, ingested: [], summary: "0 documente pe task-urile CEO" };
 
-    const seen = (await getState(INGESTED_KEY, {})) || {};
-    const docs = (await getState(DOCS_KEY, {})) || {};
+    const seen = (await S.get(INGESTED_KEY, {})) || {};
+    const docs = (await S.get(DOCS_KEY, {})) || {};
     const { runIntake } = await import("./evolution/documentIntake.js");
     let classify = null, validate = null, freshness = null;
     try {
@@ -79,6 +81,25 @@ export async function ingestPendingDocuments({ persist = true, nowISO = null } =
         }
       } catch (e) { intake = { blocked: e.message }; }
 
+      // RECEIVABLES_IMPORTER (§4): un document de tip CUSTOMER_RECEIVABLES
+      // devine dataset canonic de creante + reconciliere — STAGING JARVIS only.
+      let receivables = null;
+      if (classification?.doc_type === "CUSTOMER_RECEIVABLES" && Array.isArray(intake?.dataset?.records) && intake.dataset.records.length) {
+        try {
+          const { importReceivables, reconcileReceivables } = await import("./evolution/receivablesImporter.js");
+          const imp = importReceivables({ records: intake.dataset.records, docType: "CUSTOMER_RECEIVABLES", documentDate: a.created_at || null, source: "operational_attachment" });
+          // Reconciliere read-only fata de facturile din Operational (zero corectie).
+          let opsInv = [];
+          try { const { getIncomeInvoices } = await import("../connectors/opsdata.js"); opsInv = (await getIncomeInvoices()) || []; } catch { opsInv = []; }
+          const rec2 = reconcileReceivables({ imported: imp.receivables, operationalInvoices: opsInv.map((i) => ({ ref: i.ref, client: i.client, amountRON: i.amountRON })) });
+          receivables = { imported_count: imp.receivables.length, trust: rec2.trust_after || imp.trust, reconciliation: rec2.summary, reconciliation_need: rec2.reconciliation_need, data_quality: imp.data_quality };
+          // Persistam datasetul de creante in stratul propriu (nu Operational).
+          const stg = (await S.get(RECV_KEY, {})) || {};
+          stg[hash] = { document_id: hash, as_of: imp.as_of, receivables: imp.receivables, trust: receivables.trust, reconciliation: rec2.summary, at: now };
+          if (persist) await S.set(RECV_KEY, stg).catch(() => {});
+        } catch (e) { receivables = { error: e.message }; }
+      }
+
       const entry = {
         document_id: hash, task_id: a.task_id, need_id: rec.need_id || null,
         source: "operational_attachment", uploaded_by: a.uploaded_by, uploaded_at: a.created_at,
@@ -86,10 +107,10 @@ export async function ingestPendingDocuments({ persist = true, nowISO = null } =
         doc_type: classification?.doc_type || "UNKNOWN_DOCUMENT", classification_confidence: classification?.confidence ?? null,
         parser_stages: intake?.stages || null, blocked: intake?.blocked || null,
         records_count: intake?.dataset?.records_count ?? 0,
-        trust: validation?.valid ? validation.trust : (intake?.dataset?.trust || "UNVALIDATED"),
+        trust: receivables?.trust || (validation?.valid ? validation.trust : (intake?.dataset?.trust || "UNVALIDATED")),
         validation_issues: validation?.issues || [], freshness: fresh || null,
         needs_human_mapping: intake?.mapping?.human_mapping_required === true,
-        at: now,
+        receivables, at: now,
       };
       docs[hash] = entry;
       seen[hash] = { at: now, task_id: a.task_id };
@@ -97,8 +118,8 @@ export async function ingestPendingDocuments({ persist = true, nowISO = null } =
     }
 
     if (persist && ingested.length) {
-      await setState(DOCS_KEY, docs).catch(() => {});
-      await setState(INGESTED_KEY, seen).catch(() => {});
+      await S.set(DOCS_KEY, docs).catch(() => {});
+      await S.set(INGESTED_KEY, seen).catch(() => {});
       await audit("document_ingest", `${ingested.length} documente noi din task-uri CEO (staging, zero write Operational)`, ingested.map((d) => `${d.filename}→${d.doc_type}[${d.trust}]`).join("; ").slice(0, 400), true).catch(() => {});
     }
     return {
@@ -114,4 +135,11 @@ export async function ingestPendingDocuments({ persist = true, nowISO = null } =
 export async function documentsView() {
   const docs = (await getState(DOCS_KEY, {})) || {};
   return Object.values(docs).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 30);
+}
+
+/** Creantele importate din documente (staging JARVIS). Consumate de Cash
+ *  Intelligence DOAR daca trust in DECISION_GRADE_TRUST — read-only. */
+export async function receivablesStaging() {
+  const stg = (await getState(RECV_KEY, {})) || {};
+  return Object.values(stg).sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }

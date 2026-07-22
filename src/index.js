@@ -12,6 +12,7 @@ import { startMonitor } from "./monitor.js";
 import { startObservationEngine } from "./observationEngine/index.js";
 import { startDigestSchedule } from "./founderAttention/index.js";
 import { registerCeoApi } from "./ceo/api.js";
+import { registerBoardApi } from "./boardApi.js";
 import { expireOldActions } from "./approvalGate.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,10 @@ app.get("/health", (_req, res) => {
 registerApi(app);
 // CEO Command Center (Master Phase) — READ-ONLY, sub acelasi PIN /api.
 registerCeoApi(app);
+// CEO OS — Executive Board 6+1 (read-only). Wire-uit la nivelul de compozitie,
+// NU in CEO core (respecta granita testata in ceo.wiring): expune
+// runBoardMeeting existent catre interfata, sub acelasi middleware PIN.
+registerBoardApi(app);
 
 // HUD-ul (PWA) — servit static de pe radacina.
 app.use(express.static(path.join(__dirname, "..", "public")));

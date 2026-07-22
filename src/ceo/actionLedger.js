@@ -61,10 +61,12 @@ export function ledgerForPrompt(ledger) {
       `NU reconstrui din conversatie.`
     );
   }
+  // Partea VIII — fara coduri interne (#XXXXXX) in textul catre om.
+  const clean = (s) => String(s || "").replace(/\s*#[A-Z0-9]{5,6}\b:?/g, "").replace(/\s+/g, " ").trim();
   const lines = ledger.requests.map((r, i) =>
-    `${i + 1}. "${r.what}" → ${r.owner} · cerut: ${(r.asked_at || "?").slice(0, 16)} · termen: ${r.deadline || "-"} · ` +
+    `${i + 1}. "${clean(r.what)}" → ${r.owner} · cerut: ${(r.asked_at || "?").slice(0, 16)} · termen: ${r.deadline || "-"} · ` +
     `stare: ${r.status}${r.responded ? " · A RASPUNS" : " · FARA raspuns inca"}${r.verified ? " · verificat" : ""}` +
-    `${r.blocker ? " · blocaj: " + (r.blocker.blocker_type || r.blocker) : ""}${r.clarifies_original ? ` · (clarificare pe task-ul original #${r.clarifies_original})` : ""}`
+    `${r.blocker ? " · blocaj: " + (r.blocker.blocker_type || r.blocker) : ""}${r.clarifies_original ? " · (clarificare pe task-ul original)" : ""}`
   );
   return (
     `LEDGER FAPTUAL — CE A CERUT JARVIS ${who} (din scrieri reale, NU din conversatie):\n` +

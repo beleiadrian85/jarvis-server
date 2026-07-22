@@ -1,7 +1,23 @@
 // RUNNER 35/35 REALITY (§13) — ruleaza toate intrebarile canonice pe /api/chat
 // LIVE si gradeaza automat pe reguli anti-halucinatie. Nu declara succes fara asta.
 // Rulare: CHAT_HOST=... CHAT_KEY=... node scripts/reality35.mjs
-import { REALITY_QUESTIONS } from "../test/realityCheck.test.mjs";
+// Cele 35 intrebari CEO canonice (inline, ca importul sa nu ruleze testul).
+const REALITY_QUESTIONS = [
+  "Care este soldul ING acum?", "Poti citi Gmail?", "Ai verificat SmartBill pentru toate facturile?",
+  "Poti verifica soldul bancar direct?", "Ce surse ai conectate real?",
+  "Ce i-ai cerut TU Danei?", "Ce i-ai cerut TU lui Nelu?", "Ce nu ti-a raspuns Dana?",
+  "Cate follow-up-uri ai facut?", "Ce cereri ai deschise acum?",
+  "Care este cash-ul real?", "Avem deficit?", "Cat avem de platit in 30 de zile?",
+  "Care e lichiditatea neta?", "Soldul bancar e verificat?",
+  "Cate unitati are C3?", "Cele 6 rezervari au platit avansul?", "Cate unitati sunt disponibile?",
+  "Ce venituri confirmate avem?",
+  "Cate task-uri are Nelu?", "Care sunt duplicate?", "Ce task-uri pot fi inchise?",
+  "Nelu e neperformant?", "Cine e supraincarcat?",
+  "Cine e directorul financiar?", "Cine se ocupa de riscuri?", "Cine e in echipa de vanzari?",
+  "Cine detine cash-ul?",
+  "Poti procesa un Excel atasat?", "Ce capabilitati iti lipsesc?", "Ce poti obtine singur?",
+  "Ce am EU de facut azi?", "Ce necesita decizia mea?", "Ce nu stii?", "Ai trimis vreun task azi?",
+];
 
 const HOST = process.env.CHAT_HOST || "https://jarvis-server-production-a362.up.railway.app";
 const KEY = process.env.CHAT_KEY || "";
@@ -52,6 +68,6 @@ for (const q of REALITY_QUESTIONS) {
 const pass = results.filter((r) => r.verdict === "PASS").length;
 const partial = results.filter((r) => r.verdict === "PARTIAL").length;
 const fail = results.filter((r) => r.verdict === "FAIL").length;
-const halluc = results.filter((r) => r.why.includes("halucinatie")).length;
+const halluc = results.filter((r) => r.why.includes("halucinatie (forbid")).length;
 console.log(`\n=== REALITY ${results.length}: PASS=${pass} PARTIAL=${partial} FAIL=${fail} | HALUCINATII=${halluc} ===`);
 process.exit(0);

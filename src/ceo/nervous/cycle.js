@@ -289,7 +289,10 @@ export async function runNervousCycle(opts = {}) {
       if (ops) {
         rec.ops_status = ops.status; rec.sync_ok = true;
         const phase = mapOperationalStatus(ops.status);
-        if (phase !== rec.lifecycle && !["COMPLETED", "FAILED"].includes(rec.lifecycle)) rec.lifecycle = phase;
+        // NU resuscita bucle inchise INTENTIONAT: o bucla terminala (inclusiv
+        // NO_LONGER_NEEDED / EXPIRED — ex. duplicat inchis) ramane inchisa chiar
+        // daca task-ul Operational apare "rezolvat" (bug real: sync o baga in VERIFY).
+        if (phase !== rec.lifecycle && !["COMPLETED", "FAILED", "NO_LONGER_NEEDED", "EXPIRED"].includes(rec.lifecycle)) rec.lifecycle = phase;
         // §4-5 — clasifica raspunsul uman (raport/status) si intelege blocajul.
         if (String(ops.report || "").trim() || String(ops.status || "").toLowerCase() === "blocat") {
           try {

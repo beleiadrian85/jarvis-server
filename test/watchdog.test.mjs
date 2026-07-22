@@ -72,5 +72,14 @@ await opsObservation("ABC123", "x", { mcp: mockMcp });
 ok(cap && "note" in cap && !("text" in cap), "add_observation foloseste campul 'note' (nu 'text') — bug real reparat");
 ok((nSrc.match(/add_observation.*note:/g) || []).length === 2 && !/add_observation.*text:/.test(nSrc), "ambele apeluri add_observation folosesc 'note'");
 
+// Bug real (gasit live): sincronizarea de status NU trebuie sa resusciteze
+// buclele inchise intentionat (NO_LONGER_NEEDED/EXPIRED) cand task-ul Operational
+// apare "rezolvat" — un duplicat inchis nu se mai baga in VERIFY.
+ok(/!\["COMPLETED", "FAILED", "NO_LONGER_NEEDED", "EXPIRED"\]\.includes\(rec\.lifecycle\)/.test(cycleSrc),
+  "sync-ul de lifecycle respecta starile terminale (nu resusciteaza bucle inchise)");
+// Watchdog: o bucla NO_LONGER_NEEDED nu mai apare in urmarire (e inchisa).
+const regClosed = { z: { operational_id: "Z1", lifecycle: "NO_LONGER_NEEDED" } };
+ok(runWatchdog({ registry: regClosed, nowMs: NOW, resolveCtx: () => ({}) }).length === 0, "bucla NO_LONGER_NEEDED nu mai e urmarita de watchdog");
+
 console.log(`\n${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — watchdog`);
 process.exit(failed === 0 ? 0 : 1);

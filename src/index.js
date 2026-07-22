@@ -41,6 +41,11 @@ registerCeoApi(app);
 // runBoardMeeting existent catre interfata, sub acelasi middleware PIN.
 registerBoardApi(app);
 
+// CEO OS e noul UI implicit: radacina (start_url "/" al PWA instalat) duce la
+// /os.html. UI-ul vechi ramane accesibil direct la /index.html si /ceo.html
+// (nimic sters — revenirea = stergerea acestui redirect). 302 = necache-uit dur.
+app.get("/", (_req, res) => res.redirect(302, "/os.html"));
+
 // HUD-ul (PWA) — servit static de pe radacina.
 app.use(express.static(path.join(__dirname, "..", "public")));
 

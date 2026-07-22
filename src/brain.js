@@ -27,7 +27,7 @@ import { norm } from "./lib/text.js";
 import { PERSONA } from "./persona.js";
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
-  extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
+  extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory, countQuestions,
   isStrongStrategic, isPredictionTopic,
 } from "./intents.js";
 // P2 — Prediction Engine (determinist, GATED pe config.predictionEngine).
@@ -399,6 +399,11 @@ async function generalChat(channel, text) {
   const useOperational = hasOperational && isOperationalTopic(text);
   const useWeb = needsWeb(text);
 
+  // MAI MULTE INTREBARI: cand mesajul are mai multe intrebari/cereri distincte,
+  // dam mai mult buget de tokeni ca raspunsurile punctuale sa nu fie taiate.
+  const nQ = countQuestions(text);
+  const multi = nQ >= 2;
+
   const tc = Date.now();
   let reply, providerUsed = "claude";
   if (config.pipeline && router.provider === "chatgpt" && hasStrategy && modes.canSend) {
@@ -434,11 +439,12 @@ async function generalChat(channel, text) {
       mcpServers: useOperational
         ? [{ name: "operational", url: config.operationalMcpUrl, allowedTools: OPERATIONAL_READ_TOOLS }]
         : [],
-      maxTokens: 1400,
+      // buget mai mare cand sunt mai multe intrebari (raspuns punctual la fiecare)
+      maxTokens: multi ? 2600 : 1400,
     });
   } else {
-    // Cale rapida: fara tool-uri.
-    reply = await callClaude({ model: CHAT_MODEL, system, messages, maxTokens: 800 });
+    // Cale rapida: fara tool-uri. Multi-intrebare → buget mai mare, nu taia.
+    reply = await callClaude({ model: CHAT_MODEL, system, messages, maxTokens: multi ? 2000 : 800 });
   }
   T.claude = Date.now() - tc;
   reply = reply || "…";

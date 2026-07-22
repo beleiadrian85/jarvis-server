@@ -84,6 +84,26 @@ export function needsWeb(text) {
   return /(cauta|caut[aă]|pe net|pe internet|google|cat costa|c[aâ]t cost|pret|preturi|curs|euro|dolar|vreme|vremea|meteo|stiri|noutati|adresa|telefon|program(ul)? de|deschis|cota|bursa|legea|reglementar|impozit|tva azi|astazi|acum pe piata)/.test(n);
 }
 
+/**
+ * Numara intrebarile/cererile DISTINCTE dintr-un mesaj — ca sa raspundem
+ * punctual la fiecare (nu combinat). Semne de intrebare + intrebari fara semn
+ * (cuvinte interogative pe linii/segmente separate) + imperative de raspuns.
+ */
+export function countQuestions(text) {
+  const t = String(text || "");
+  // 1) semne de intrebare explicite
+  const marks = (t.match(/\?/g) || []).length;
+  // 2) markeri de lista numerotata (1. 2) 3- ...)
+  const numbered = (t.match(/(?:^|\s)\d+[.)]\s/g) || []).length;
+  // 3) cuvinte interogative + imperative de raspuns (global, cu limita de cuvant)
+  const qWords = (t.match(/\b(ce|cine|cum|c[aâ]nd|cand|unde|c[aâ]t|cat|c[aâ]ti|cati|c[aâ]te|cate|care|oare)\b/gi) || []).length;
+  const deCe = (t.match(/\bde ce\b/gi) || []).length;
+  const imper = (t.match(/\b(verifica|verifici|arata|arati|listeaza|explica|explici|afla|spune-?mi|zi-?mi|imi spui|imi zici|calculeaza|compara|rezuma)\b/gi) || []).length;
+  const wordSignals = qWords + deCe + imper;
+  // Rezultatul: cate cereri distincte, aproximat prudent.
+  return Math.max(marks, numbered, wordSignals);
+}
+
 export function guessCategory(text) {
   const n = norm(text);
   if (/(credit|banca|tva|factur|plat[ai]|incasar|cash|eur|ron|lei)/.test(n)) return "Financiar";

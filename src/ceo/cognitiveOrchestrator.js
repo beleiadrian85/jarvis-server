@@ -64,12 +64,19 @@ export async function organismStatus({ nowMs = Date.now() } = {}) {
   const evoLast = config.selfEvolution ? await getState(EVO_LAST, null) : null;
   const evoReq = config.selfEvolution ? (await getState(EVO_REQ, {})) || {} : {};
   const registry = (await getState(NERVOUS_KEYS.tasks, {})) || {};
-  const memory = (await getState(NERVOUS_KEYS.memory, {})) || {};
 
   const activeLevel = activeAutonomyLevel(config);
+  // days_observed REAL: zile calendaristice distincte in care organismul a
+  // gestionat efectiv (created_at/updated_at ale task-urilor CEO). 0/1 fix
+  // facea recomandarea Level 3 permanent inaccesibila.
+  const dayset = new Set();
+  for (const r of Object.values(registry)) {
+    for (const ts of [r.created_at, r.updated_at]) {
+      if (ts) { const d = String(ts).slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dayset.add(d); }
+    }
+  }
   const readiness = level3ReadinessScore({
-    selfEval: nervousLast?.selfeval || {}, registry,
-    days_observed: Object.keys(memory.by_person || memory || {}).length ? 1 : 0,
+    selfEval: nervousLast?.selfeval || {}, registry, days_observed: dayset.size,
   });
   readiness.active_level = activeLevel;
 

@@ -54,6 +54,13 @@ function readZipEntries(buf) {
   if (entryCount === 0xffff || cdOffset === 0xffffffff) throw new Error("ZIP64 nesuportat");
   if (cdOffset >= buf.length) throw new Error("ZIP_INVALID: offset Central Directory in afara fisierului");
 
+  // Bugetul cumulativ de decompresie (anti zip-bomb): niciodata mai mult decat
+  // acest total pe intreaga arhiva, indiferent ce declara intrarile. DEFLATE
+  // atinge ~1000:1, deci un fisier mic poate produce GB — fara plafon procesul
+  // ar fi OOM-killed (SIGKILL nu se prinde in try/catch).
+  const MAX_TOTAL_UNCOMP = 64 * 1024 * 1024; // 64MB decomprimat total
+  let uncompBudget = MAX_TOTAL_UNCOMP;
+
   const entries = new Map();
   let p = cdOffset;
   for (let n = 0; n < entryCount; n++) {
@@ -83,11 +90,21 @@ function readZipEntries(buf) {
     if (dataStart + compSize > buf.length) {
       throw new Error(`ZIP_INVALID: date trunchiate pentru '${name}'`);
     }
+    // Sarim intrarile de care parserul nu are nevoie — nu decomprimam eager tot
+    // (o bomba dintr-o intrare nefolosita nu mai poate ucide procesul).
+    if (!/\.(xml|rels)$/i.test(name)) { entries.set(name, null); continue; }
+    // Raport de compresie implauzibil (uncompSize declarat imens fata de compSize)
+    // → refuz inainte de a atinge inflate.
+    if (uncompSize > uncompBudget) throw new Error(`ZIP_BOMB: '${name}' declara ${uncompSize} octeti decomprimati (peste buget)`);
     const raw = buf.subarray(dataStart, dataStart + compSize);
     let data;
-    if (method === 8) data = inflateRawSync(raw); // DEFLATE
-    else if (method === 0) data = Buffer.from(raw); // STORE (copie raw)
+    if (method === 8) {
+      try { data = inflateRawSync(raw, { maxOutputLength: uncompBudget }); } // DEFLATE plafonat
+      catch (e) { throw new Error(`ZIP_INFLATE: '${name}' — ${e.message}`); }
+    } else if (method === 0) data = Buffer.from(raw); // STORE (copie raw)
     else throw new Error(`ZIP_METHOD: metoda de compresie ${method} nesuportata pentru '${name}'`);
+    uncompBudget -= data.length;
+    if (uncompBudget <= 0) throw new Error("ZIP_BOMB: buget de decompresie depasit pe total arhiva");
     entries.set(name, data);
   }
   return entries;
@@ -219,30 +236,42 @@ function parseSheetCells(xml, { sharedStrings, styleDateFlags, warnings }) {
   const dateCols = new Set();
   let cells = 0;
   let truncated = false;
-  let autoRow = 0; // fallback cand atributul r lipseste
-  let autoCol = 0;
 
-  // atentie: <c .../> self-closing SAU <c ...>...</c> — atribute in orice ordine
-  const re = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
-  let m;
-  while ((m = re.exec(xml)) !== null) {
+  // Iteram pe RANDURI intai (<row r="N">...</row>) ca sa NU prabusim celulele
+  // fara atribut 'r' din randuri diferite pe acelasi rand. Randul da indexul;
+  // in interiorul lui, coloana vine din 'r'-ul celulei sau, in lipsa, secvential.
+  const rowRe = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g;
+  const cellRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  let rowIdxAuto = 0;
+  let rm;
+  while ((rm = rowRe.exec(xml)) !== null) {
+    const rowAttrs = rm[1];
+    const rowInner = rm[2] || "";
+    const rowR = attrOf(rowAttrs, "r");
+    const rowNum = rowR != null && /^\d+$/.test(rowR) ? Number(rowR) - 1 : rowIdxAuto;
+    rowIdxAuto = rowNum + 1;
+    if (rowNum >= XLSX_MAX_ROWS) { truncated = true; continue; }
+
+    let autoCol = 0; // se reseteaza la fiecare rand
+    let m;
+    cellRe.lastIndex = 0;
+    while ((m = cellRe.exec(rowInner)) !== null) {
     const attrs = m[1];
     const inner = m[2] || "";
     const ref = attrOf(attrs, "r");
-    let pos = ref ? cellRefToIndex(ref) : null;
-    if (!pos) {
-      // fara referinta valida: avanseaza determinist pe ultimul rand cunoscut
-      pos = { row: autoRow, col: autoCol };
-      if (ref) warnings.push(`CELL_REF_INVALID: referinta '${ref}' ignorata (pozitionare secventiala)`);
-    }
-    autoRow = pos.row;
-    autoCol = pos.col + 1;
-
-    if (pos.row >= XLSX_MAX_ROWS) { truncated = true; continue; }
+    const refPos = ref ? cellRefToIndex(ref) : null;
+    // coloana din referinta (daca valida) sau secvential in cadrul randului
+    const col = refPos ? refPos.col : autoCol;
+    if (ref && !refPos) warnings.push(`CELL_REF_INVALID: referinta '${ref}' ignorata (pozitionare secventiala)`);
+    autoCol = col + 1;
+    const pos = { row: rowNum, col };
 
     const t = attrOf(attrs, "t");
     const vMatch = /<v\b[^>]*>([\s\S]*?)<\/v>/.exec(inner);
-    const vRaw = vMatch ? vMatch[1] : null;
+    // <v></v> gol sau doar spatii = valoare LIPSA (missing != zero); NU 0 si
+    // NU sharedStrings[0]. Doar continut real conteaza ca valoare.
+    const vRawRaw = vMatch ? vMatch[1] : null;
+    const vRaw = vRawRaw != null && vRawRaw.trim() !== "" ? vRawRaw : null;
 
     let value = null;
     if (t === "s") {
@@ -276,6 +305,7 @@ function parseSheetCells(xml, { sharedStrings, styleDateFlags, warnings }) {
     if (!sparse[pos.row]) sparse[pos.row] = [];
     sparse[pos.row][pos.col] = value;
     cells++;
+    }
   }
 
   // sparse → dens: golurile (celule/randuri lipsa) devin null, NU 0

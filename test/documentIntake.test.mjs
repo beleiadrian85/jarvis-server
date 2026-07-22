@@ -29,8 +29,11 @@ ok(r.blocked === null, "pipeline necolmatat");
 // Clasificarea + validarea (stratul de tip document peste intake).
 const cls = classifyDocument({ filename: "Situatie clienti incasari.csv", schema: r.schema, mapping: r.mapping });
 ok(cls.doc_type === "CUSTOMER_RECEIVABLES", `clasificat CUSTOMER_RECEIVABLES (a fost ${cls.doc_type})`);
+// #2 (review): runIntake expune records REALE, nu []; validarea vede datele.
+ok(Array.isArray(r.dataset?.records) && r.dataset.records.length === 2, "#2. dataset expune records reale (nu doar count)");
 const val = validateDataset({ doc_type: cls.doc_type, records: r.dataset?.records || [], schema: r.schema });
 ok(["VALIDATED", "UNVALIDATED"].includes(val.trust), "validarea produce un nivel de incredere explicit");
+ok(!(val.issues || []).some((i) => /zero inregistrari|records_present/.test(i.rule + i.detail)), "#2. validarea NU mai raporteaza fals 'zero inregistrari' pe date reale");
 
 // Securitate: executabil respins inainte de orice parsare.
 const bad = runIntake({ file: { filename: "virus.exe", mime: "application/x-msdownload", size: 100, data: Buffer.from("MZ") } });

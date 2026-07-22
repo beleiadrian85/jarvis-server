@@ -216,7 +216,9 @@ export function runIntake({ file = {}, parsers = null, targetFields = [], asOf =
   let trust = "UNVALIDATED";
   if (DATA_TRUST_LEVELS.includes(ds?.trust)) trust = ds.trust;
   else if (reconOk) trust = "VALIDATED";
-  result.dataset = { records_count: recordsCount, trust };
+  // Expunem si records (nu doar count) — stratul de validare pe tip de document
+  // (documentTypeRegistry.validateDataset) are nevoie de ele; fara asta primea [].
+  result.dataset = { records_count: recordsCount, records: Array.isArray(ds?.records) ? ds.records : [], trust };
   pushStage(stages, "DATASET", true, `${recordsCount} inregistrari, trust=${trust}`);
   result.document_memory.validation.status = trust;
   return result;

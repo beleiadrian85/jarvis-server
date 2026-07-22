@@ -203,6 +203,52 @@ ok(mClient && mClient.column_index === 0 && mClient.confidence >= 60, `29. mapar
 ok(mAmount && mAmount.column_index === 2 && mAmount.confidence >= 60, `30. mapare amount → coloana 2 'Suma' (conf ${mAmount ? mAmount.confidence : "?"})`);
 ok(human_mapping_required === false, "31. campurile obligatorii mapate cu incredere → fara om in bucla");
 
+// ── REGRESII din review-ul adversarial (6 constatari) ───────────────────
+// #4: celule fara atribut 'r' din randuri DIFERITE nu se prabusesc pe rand 0.
+const sheetNoRef = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+<row r="1"><c t="s"><v>0</v></c><c t="s"><v>1</v></c></row>
+<row r="2"><c t="s"><v>5</v></c><c><v>1200.5</v></c></row>
+</sheetData></worksheet>`;
+const bufNoRef = makeZip([
+  { name: "[Content_Types].xml", text: contentTypesXml }, { name: "xl/workbook.xml", text: workbookXml },
+  { name: "xl/_rels/workbook.xml.rels", text: relsXml }, { name: "xl/sharedStrings.xml", text: sharedStringsXml },
+  { name: "xl/worksheets/sheet1.xml", text: sheetNoRef },
+]);
+const pNoRef = parseXlsx(bufNoRef);
+ok(pNoRef.ok && pNoRef.rows.length === 2, `#4. randuri fara 'r' pe celule → 2 randuri distincte (a fost ${pNoRef.rows?.length})`);
+ok(pNoRef.rows[0][0] === "Client" && pNoRef.rows[1][0] === "Alfa Serv", "#4. celulele raman pe randul lor, nu se prabusesc pe rand 0");
+
+// #5 + #6: <v></v> gol → null (numeric NU 0; shared NU sharedStrings[0]).
+const sheetEmpty = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+<row r="1"><c r="A1"><v></v></c><c r="B1" t="s"><v></v></c><c r="C1"><v>42</v></c></row>
+</sheetData></worksheet>`;
+const bufEmpty = makeZip([
+  { name: "[Content_Types].xml", text: contentTypesXml }, { name: "xl/workbook.xml", text: workbookXml },
+  { name: "xl/_rels/workbook.xml.rels", text: relsXml }, { name: "xl/sharedStrings.xml", text: sharedStringsXml },
+  { name: "xl/worksheets/sheet1.xml", text: sheetEmpty },
+]);
+const pEmpty = parseXlsx(bufEmpty);
+ok(pEmpty.ok && pEmpty.rows[0][0] === null, "#5. celula numerica <v></v> gol → null, NU 0");
+ok(pEmpty.rows[0][1] === null, "#6. celula shared <v></v> gol → null, NU sharedStrings[0]");
+ok(pEmpty.rows[0][2] === 42, "#5. celula numerica reala ramane corecta langa cea goala");
+
+// #1: zip bomb (uncompSize declarat imens) → {ok:false}, procesul NU moare.
+const bomb = (() => {
+  const nb = Buffer.from("xl/worksheets/sheet1.xml"), body = Buffer.from("<x/>");
+  const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(0, 8);
+  lh.writeUInt32LE(body.length, 18); lh.writeUInt32LE(body.length, 22); lh.writeUInt16LE(nb.length, 26);
+  const local = Buffer.concat([lh, nb, body]);
+  const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(0, 10);
+  cd.writeUInt32LE(body.length, 20); cd.writeUInt32LE(0x7ffffffe, 24); // uncompSize FALS urias
+  cd.writeUInt16LE(nb.length, 28); cd.writeUInt32LE(0, 42);
+  const cdFull = Buffer.concat([cd, nb]);
+  const eocd = Buffer.alloc(22); eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(1, 8); eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(cdFull.length, 12); eocd.writeUInt32LE(local.length, 16);
+  return Buffer.concat([local, cdFull, eocd]);
+})();
+const pBomb = parseXlsx(bomb);
+ok(pBomb.ok === false && /BOMB|buget/i.test(pBomb.error || ""), "#1. zip bomb (uncompSize urias) → {ok:false} elegant, procesul traieste");
+
 // ── Verdict ─────────────────────────────────────────────────────────────
 console.log(failed === 0 ? "\nTOATE TESTELE XLSX AU TRECUT" : `\n${failed} TESTE PICATE`);
 process.exit(failed === 0 ? 0 : 1);

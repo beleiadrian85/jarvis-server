@@ -5,6 +5,37 @@ import { audit } from "./audit.js";
 
 export const bot = new Telegraf(config.telegramToken);
 
+// Telegram refuza mesajele > 4096 caractere. Raspunsurile la mai multe intrebari
+// pot depasi limita → trimitem in bucati, taind pe limite de linie/paragraf.
+const TG_LIMIT = 4000; // marja sub 4096
+export function chunkMessage(text, limit = TG_LIMIT) {
+  const t = String(text ?? "");
+  if (t.length <= limit) return [t];
+  const chunks = [];
+  let buf = "";
+  for (const line of t.split("\n")) {
+    // O singura linie mai lunga decat limita → o spargem dur.
+    if (line.length > limit) {
+      if (buf) { chunks.push(buf); buf = ""; }
+      for (let i = 0; i < line.length; i += limit) chunks.push(line.slice(i, i + limit));
+      continue;
+    }
+    if ((buf + "\n" + line).length > limit) { chunks.push(buf); buf = line; }
+    else buf = buf ? buf + "\n" + line : line;
+  }
+  if (buf) chunks.push(buf);
+  return chunks.length ? chunks : [t.slice(0, limit)];
+}
+
+/** Trimite un raspuns (posibil lung) prin ctx, in bucati sub limita Telegram. */
+async function replyChunked(ctx, text, extra) {
+  const parts = chunkMessage(text);
+  for (let i = 0; i < parts.length; i++) {
+    // Butoanele (extra) doar pe ultima bucata.
+    await ctx.reply(parts[i], i === parts.length - 1 ? extra : undefined);
+  }
+}
+
 // Doar proprietarul poate comanda botul.
 function isOwner(ctx) {
   return String(ctx.chat?.id) === config.ownerChatId;
@@ -54,7 +85,7 @@ bot.action(/^cf:(yes|no):(.+)$/, async (ctx) => {
   const [, verdict, id] = ctx.match;
   const result = await confirmAction(id, verdict === "yes");
   await ctx.editMessageReplyMarkup(undefined).catch(() => {});
-  await ctx.reply(splitVoice(result).text);
+  await replyChunked(ctx, splitVoice(result).text);
 });
 
 async function handle(ctx, text) {
@@ -65,7 +96,8 @@ async function handle(ctx, text) {
     const reply = splitVoice(res.reply).text;
     const confirmId = res.confirmId;
     if (confirmId) {
-      await ctx.reply(
+      await replyChunked(
+        ctx,
         reply.replace(/\n\nRaspunde: da \/ nu$/, ""),
         Markup.inlineKeyboard([
           Markup.button.callback("✅ Da", `cf:yes:${confirmId}`),
@@ -73,7 +105,7 @@ async function handle(ctx, text) {
         ])
       );
     } else {
-      await ctx.reply(reply);
+      await replyChunked(ctx, reply);
     }
   } catch (e) {
     console.error("[telegram]", e.message);
@@ -109,7 +141,9 @@ export async function pushToChat(chatId, text) {
 
 export async function pushToOwner(text) {
   try {
-    await bot.telegram.sendMessage(config.ownerChatId, splitVoice(text).text);
+    for (const part of chunkMessage(splitVoice(text).text)) {
+      await bot.telegram.sendMessage(config.ownerChatId, part);
+    }
   } catch (e) {
     console.error("[push]", e.message);
   }

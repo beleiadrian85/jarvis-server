@@ -62,8 +62,9 @@ ok(Object.keys(shape[0]).sort().join(",") === "amountRON,client,dueDate,ref,rema
 const reg = buildReceivablesRegister({ asOf: AS_OF, incomeInvoices: shape });
 // CONFIRMED remaining = 4000 (client-b); OVERDUE remaining = 1234.56 (client-a)
 ok(reg.totals.confirmedRON === 4000, "6. buildReceivablesRegister: confirmedRON coerent");
-// collected_count = 2: client-c (remaining 0) + client-d (amount/remaining null → engine trateaza null<=0 ca COLLECTED)
-ok(reg.totals.overdueRON === 1235 && reg.totals.collected_count === 2, "6. overdueRON + collected_count coerente");
+// collected_count = 1: DOAR client-c (remaining 0). client-d (amount/remaining
+// null) NU e COLLECTED — missing != zero (review E: null<=0 nu mai inseamna incasat).
+ok(reg.totals.overdueRON === 1235 && reg.totals.collected_count === 1, "6. overdueRON coerent + creanta cu suma lipsa NU e COLLECTED (missing!=zero)");
 
 // ── 7. Reconciliere ──────────────────────────────────────────────────────
 // doc 1000 vs ops 1000 → MATCHED (in ambele surse, suma egala)
@@ -107,6 +108,22 @@ const imp2 = importReceivables({ records: recordsProv, documentDate: AS_OF, sour
 ok(JSON.stringify(imp2.receivables) === JSON.stringify(imp.receivables), "9. determinism: import reproductibil");
 const rec2 = reconcileReceivables({ imported: [{ ref: "F2", amountRON: 1000 }], operationalInvoices: [{ ref: "F2", amountRON: 2000 }] });
 ok(JSON.stringify(rec2.summary) === JSON.stringify(recContra.summary), "9. determinism: reconciliere reproductibila");
+
+// Review A/B: ref prezent in doc dar negasit in surse → UNMATCHED (NU fallback
+// pe client+suma cu o factura DIFERITA), si NU se ridica trust la RECONCILED.
+const recRefMismatch = reconcileReceivables({
+  imported: [{ ref: "F123", client: "client-x", amountRON: 5000 }],
+  operationalInvoices: [{ ref: "F999", client: "client-x", amountRON: 5000 }],
+});
+ok(recRefMismatch.rows[0].verdict === "UNMATCHED" && recRefMismatch.summary.unmatched === 1, "A. ref prezent dar negasit → UNMATCHED (nu fallback pe factura diferita)");
+ok(recRefMismatch.trust_after !== "RECONCILED", "B. potrivire slaba pe client+suma NU ridica trust la RECONCILED");
+// Potrivire FERMA pe nr. factura → MATCHED + RECONCILED (calea legitima).
+const recStrong = reconcileReceivables({
+  imported: [{ ref: "F5", client: "client-y", amountRON: 5000 }],
+  operationalInvoices: [{ ref: "F5", client: "client-y", amountRON: 5000 }],
+  smartbillInvoices: [{ ref: "F5", client: "client-y", amountRON: 5000 }],
+});
+ok(recStrong.rows[0].verdict === "MATCHED" && recStrong.trust_after === "RECONCILED", "A. potrivire ferma pe nr. factura (ambele surse) → MATCHED + RECONCILED");
 
 // ── 10. records PLATE (fara provenienta) → aceleasi rezultate ────────────
 const flat = importReceivables({ records: [{ client: "client-e", invoice: "SB-9", amountRON: "2.500,00", remaining: "2.500,00", due_date: "01.07.2026" }], documentDate: AS_OF });

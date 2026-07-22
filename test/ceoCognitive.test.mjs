@@ -33,9 +33,12 @@ ok(good1.recommendation.startsWith("NOT_ENOUGH_EVIDENCE"), "3 task-uri / 1 zi �
 const reg = {};
 for (let i = 0; i < 6; i++) reg[`t${i}`] = { operational_id: `OP${i}`, lifecycle: "COMPLETED", verification: { verified: true } };
 const good2 = level3ReadinessScore({
-  selfEval: { TASKS_CREATED: 6, TASKS_USEFUL: 6, WRONG_OWNER: 0, TASKS_DUPLICATE_PREVENTED: 4, TASKS_REJECTED: 10, UNNECESSARY_ESCALATIONS: 0, data_health: 85 },
+  selfEval: { TASKS_CREATED: 6, TASKS_USEFUL: 6, WRONG_OWNER: 0, TASKS_DUPLICATE_PREVENTED: 4, TASKS_REJECTED: 10, UNNECESSARY_ESCALATIONS: 0, data_health: 85, unauthorized_writes: 0 },
   registry: reg, days_observed: 3,
 });
+// Review C: fara dovada de monitorizare a scrierilor neautorizate → NU ready.
+const noProof = level3ReadinessScore({ selfEval: { TASKS_CREATED: 6, TASKS_USEFUL: 6, WRONG_OWNER: 0, TASKS_DUPLICATE_PREVENTED: 4, TASKS_REJECTED: 10, data_health: 85 }, registry: reg, days_observed: 3 });
+ok(noProof.evidence_gate.unauthorized_zero === false && noProof.recommendation.startsWith("NOT_ENOUGH_EVIDENCE"), "C. lipsa dovezii de scrieri-zero → poarta pica (missing != zero)");
 ok(good2.recommendation.startsWith("READY_FOR_FOUNDER_REVIEW"), "6 bucle inchise / 3 zile / metrici bune → READY_FOR_FOUNDER_REVIEW (recomandare)");
 ok(good2.closed_loops === 6 && good2.evidence_gate.closed_loops === true, "readiness cere bucle reale INCHISE (§14 dovezi, nu timp)");
 ok(/aproba/.test(good2.note), "readiness = recomandare, fondatorul aproba (scris in nota)");

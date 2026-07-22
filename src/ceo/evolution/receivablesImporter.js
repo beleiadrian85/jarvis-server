@@ -332,16 +332,22 @@ function amountOf(row) {
   return typeof v === "number" ? v : parseAmount(v);
 }
 
-/** Potriveste o creanta din document cu o sursa (pe ref, fallback client+suma). PUR. */
+/** Potriveste o creanta din document cu o sursa. PUR.
+ *  Daca documentul ARE nr. factura, potrivirea se face DOAR pe ref: un ref
+ *  prezent dar negasit inseamna UNMATCHED (divergenta reala), NU cadem pe
+ *  client+suma — altfel o factura diferita cu aceeasi suma ar masca divergenta
+ *  (review A/B). Fallback-ul client+suma se aplica DOAR cand documentul nu are
+ *  deloc nr. factura si returneaza matchViaFallback ca sa nu conteze la MATCHED. */
 function findMatch(docRow, sourceRows, usedIdx) {
   const key = refKey(docRow);
   if (key) {
     for (let i = 0; i < sourceRows.length; i++) {
       if (usedIdx.has(i)) continue;
-      if (refKey(sourceRows[i]) === key) return i;
+      if (refKey(sourceRows[i]) === key) return { idx: i, via: "ref" };
     }
+    return { idx: -1, via: "ref" }; // ref prezent dar negasit → UNMATCHED
   }
-  // fallback: acelasi client + suma in toleranta 1%
+  // documentul NU are ref → fallback client+suma (marcat separat, slab)
   const docClient = normText(docRow?.client);
   const docAmt = amountOf(docRow);
   if (docClient && docAmt != null) {
@@ -350,11 +356,11 @@ function findMatch(docRow, sourceRows, usedIdx) {
       const sAmt = amountOf(sourceRows[i]);
       if (normText(sourceRows[i]?.client) === docClient && sAmt != null) {
         const tol = Math.max(Math.abs(docAmt) * AMOUNT_TOLERANCE_RATIO, 0.01);
-        if (Math.abs(sAmt - docAmt) <= tol) return i;
+        if (Math.abs(sAmt - docAmt) <= tol) return { idx: i, via: "fallback" };
       }
     }
   }
-  return -1;
+  return { idx: -1, via: "none" };
 }
 
 function diffOver(a, b) {
@@ -380,8 +386,9 @@ export function reconcileReceivables({ imported = [], operationalInvoices = [], 
   const divergentRefs = [];
 
   for (const d of docRows) {
-    const oi = findMatch(d, ops, usedOps);
-    const si = findMatch(d, sb, usedSb);
+    const om = findMatch(d, ops, usedOps);
+    const sm = findMatch(d, sb, usedSb);
+    const oi = om.idx, si = sm.idx;
     if (oi >= 0) usedOps.add(oi);
     if (si >= 0) usedSb.add(si);
     const doc_amount = amountOf(d);
@@ -389,10 +396,14 @@ export function reconcileReceivables({ imported = [], operationalInvoices = [], 
     const sb_amount = si >= 0 ? amountOf(sb[si]) : null;
     const ref = d?.ref ?? d?.invoice ?? null;
     const client = d?.client ?? null;
+    // Potrivirile ferme (pe nr. factura) sunt singurele care conteaza la
+    // MATCHED/RECONCILED; cele prin fallback client+suma raman PARTIAL (slabe).
+    const strongOps = oi >= 0 && om.via === "ref";
+    const strongSb = si >= 0 && sm.via === "ref";
 
     let verdict;
     if (oi < 0 && si < 0) {
-      verdict = "UNMATCHED"; // in document, dar in nicio sursa
+      verdict = "UNMATCHED"; // in document, dar in nicio sursa (sau ref negasit)
       summary.unmatched++;
       divergentRefs.push(ref || client || "?");
     } else {
@@ -401,15 +412,15 @@ export function reconcileReceivables({ imported = [], operationalInvoices = [], 
         verdict = "CONTRADICTION";
         summary.contradictions++;
         divergentRefs.push(ref || client || "?");
-      } else if (oi >= 0 && si >= 0) {
-        verdict = "MATCHED"; // confirmata de ambele surse
+      } else if (strongOps && strongSb) {
+        verdict = "MATCHED"; // confirmata FERM de ambele surse (pe nr. factura)
         summary.matched++;
       } else {
-        verdict = "PARTIAL_MATCH"; // gasita intr-o singura sursa, suma coerenta
+        verdict = "PARTIAL_MATCH"; // o singura sursa sau potrivire slaba (client+suma)
         summary.partial++;
       }
     }
-    rows.push({ ref, client, doc_amount, ops_amount, sb_amount, verdict });
+    rows.push({ ref, client, doc_amount, ops_amount, sb_amount, verdict, match_via: { ops: om.via, sb: sm.via } });
   }
 
   // Surse care NU apar in document → MISSING (nu se inventeaza in document).
@@ -458,7 +469,9 @@ export function receivablesForCash({ imported = [], asOf = null } = {}) {
     incomeInvoices: toIncomeInvoicesShape(receivables),
   });
 
-  const decisionGrade = DECISION_GRADE_TRUST.includes(trust);
+  // RECONCILED e cea mai INALTA incredere (reconciliat cu sursele fara
+  // contradictii) — se califica pentru cash la fel ca DECISION_GRADE (review F).
+  const decisionGrade = DECISION_GRADE_TRUST.includes(trust) || trust === TRUST_RECONCILED;
   if (!decisionGrade) {
     return {
       register,

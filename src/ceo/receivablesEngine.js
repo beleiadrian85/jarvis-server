@@ -21,7 +21,9 @@ export function buildReceivablesRegister({ asOf, incomeInvoices = null, estimate
   for (const inv of incomeInvoices || []) {
     const remaining = inv.remainingRON ?? inv.amountRON;
     let state;
-    if (remaining <= 0 || inv.status === "platita") state = "COLLECTED";
+    // missing != zero: null <= 0 e `true` in JS — o creanta cu suma LIPSA nu e
+    // "incasata". Cerem valoare numerica reala inainte de a marca COLLECTED.
+    if ((remaining != null && remaining <= 0) || inv.status === "platita") state = "COLLECTED";
     else if (inv.dueDate && inv.dueDate < asOf) state = "OVERDUE";
     else if (inv.dueDate) state = "CONFIRMED";
     else state = "UNKNOWN";

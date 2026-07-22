@@ -74,19 +74,24 @@ export function level3ReadinessScore({ selfEval = {}, registry = {}, overrides =
   const avg = measured.length ? Math.round(measured.reduce((a, b) => a + b, 0) / measured.length) : null;
   // Praguri de PROMOVARE pe DOVEZI (§14), nu pe timp calendaristic:
   const THRESH = 75, MIN_MEASURED = 6, MIN_DAYS = 3;
-  const MIN_CLOSED_LOOPS = 3;   // minimum bucle reale INCHISE (nu doar create)
+  const MIN_CLOSED_LOOPS = 3;   // minimum bucle reale INCHISE CU SUCCES (nu doar create)
   const MIN_CREATED = 5;
-  const closedLoops = created.filter((r) => ["COMPLETED", "FAILED", "EXPIRED", "NO_LONGER_NEEDED"].includes(r.lifecycle)).length;
-  const unauthorized = selfEval.unauthorized_writes ?? 0;
+  // Doar buclele COMPLETED sunt dovada de inchidere reusita; FAILED conteaza ca
+  // invatare dar EXPIRED/NO_LONGER_NEEDED NU sunt dovezi de management reusit (review D).
+  const closedLoops = created.filter((r) => r.lifecycle === "COMPLETED").length;
+  // missing != zero pe o poarta de SIGURANTA: absenta dovezii de monitorizare a
+  // scrierilor neautorizate NU se ia ca "zero" — poarta pica pana exista dovada (review C).
+  const unauthorizedKnown = selfEval.unauthorized_writes != null;
+  const unauthorized = selfEval.unauthorized_writes ?? null;
 
   // Criteriul de fond: task-uri utile, owner corect, rezultate verificate,
-  // ZERO scrieri neautorizate SI minimum de bucle reale inchise.
+  // ZERO scrieri neautorizate DOVEDITE SI minimum de bucle reale inchise cu succes.
   const evidenceGate = {
     closed_loops: closedLoops >= MIN_CLOSED_LOOPS,
     tasks_created: createdN >= MIN_CREATED,
     days_observed: days_observed >= MIN_DAYS,
     dimensions_measured: measured.length >= MIN_MEASURED,
-    unauthorized_zero: unauthorized === 0,
+    unauthorized_zero: unauthorizedKnown && unauthorized === 0, // lipsa dovezii → false
   };
   const allPass = measured.length >= MIN_MEASURED && measured.every((v) => v >= THRESH);
   const enoughEvidence = Object.values(evidenceGate).every(Boolean);

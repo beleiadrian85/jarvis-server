@@ -83,10 +83,12 @@ export async function founderActionsAnswer() {
   try {
     const organism = (await getState("ceo:nervous:last", null));
     if (!organism) return null;
-    const founder = organism.needs_founder || [];
-    const dana = (organism.what_i_need || []).filter((n) => n.owner_hint === "dana").map((n) => n.title);
-    const nelu = (organism.what_i_need || []).filter((n) => n.owner_hint === "nelu").map((n) => n.title);
-    const jarvis = (organism.what_i_asked || []).map((a) => a.title).filter(Boolean);
+    // Partea VIII — curata codurile interne (#XXXXXX) din textul catre om.
+    const clean = (s) => String(s || "").replace(/\s*#[A-Z0-9]{5,6}\b:?/g, "").replace(/\s+/g, " ").trim();
+    const founder = (organism.needs_founder || []).map(clean);
+    const dana = (organism.what_i_need || []).filter((n) => n.owner_hint === "dana").map((n) => clean(n.title));
+    const nelu = (organism.what_i_need || []).filter((n) => n.owner_hint === "nelu").map((n) => clean(n.title));
+    const jarvis = (organism.what_i_asked || []).map((a) => clean(a.title)).filter(Boolean);
     const L = [];
     L.push("👤 TU, ADRIAN (doar ce cere autoritatea ta):");
     if (founder.length) founder.forEach((x) => L.push(`  • ${x}`));

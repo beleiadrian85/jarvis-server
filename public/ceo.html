@@ -252,6 +252,11 @@ async function renderControls(o) {
     html += "<br><b>Workload " + pid + ":</b> " + w.total_open + " deschise, " + w.overdue + " restante · KEEP: " + w.buckets.KEEP_NOW.map(t => t.title).join(", ");
     if (w.buckets.CANCEL_CANDIDATES.length) html += " · <span class=dim>anulare propusă: " + w.buckets.CANCEL_CANDIDATES.map(t => t.title).join(", ") + "</span>";
   }
+  const wd = o.watchdog || [];
+  if (wd.length) html += "<br><b>Watchdog bucle (next action):</b><br>" + wd.map(l =>
+    "• " + (l.title || l.task_id) + " → <b>" + l.action + "</b> <span class=dim>(" + (l.why || "").slice(0, 70) + " · verific: " + (l.next_check_at || "").slice(5, 16) + ")</span>").join("<br>");
+  const hm = o.execution_heatmap;
+  if (hm && hm.domains) html += "<br><b>Heatmap execuție:</b> " + Object.entries(hm.domains).map(([d, v]) => d + "=" + (v.state || v)).join(" · ");
   $("orgUnified").innerHTML += html;
   const docs = await api("/api/ceo/documents");
   const list = docs?.documents || [];

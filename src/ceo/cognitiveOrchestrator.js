@@ -96,6 +96,9 @@ export async function organismStatus({ nowMs = Date.now() } = {}) {
     // §10 + §2 — controlul presiunii buclelor + review de incarcare (din ciclu).
     loop_pressure: nervousLast?.loop_pressure || null,
     workload_reviews: nervousLast?.workload_reviews || {},
+    // §2 + §24 — watchdog: fiecare bucla cu NEXT_ACTION + next_check_at.
+    watchdog: nervousLast?.watchdog || [],
+    execution_heatmap: nervousLast?.execution_heatmap || null,
     loops_closed_today: closedToday.map((r) => ({ task: r.human?.title || r.task_title, owner: r.owner, outcome: r.outcome || r.lifecycle })),
     autonomy: { active_level: activeLevel, name: AUTONOMY_LADDER[activeLevel]?.name, ladder: AUTONOMY_LADDER, kill_switch: config.nervousKill },
     what_jarvis_did_today: nervousLast?.ceo_tasks_today || [],

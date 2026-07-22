@@ -136,6 +136,10 @@ export const config = {
     ["on", "true"].includes(String(process.env.CEO_NERVOUS_KILL_SWITCH || "").toLowerCase()),
   nervousDailyLimit: Number(process.env.CEO_NERVOUS_DAILY_LIMIT || 0),
   nervousPerPersonLimit: Number(process.env.CEO_NERVOUS_PER_PERSON_LIMIT || 0),
+  // Follow-up REAL (§3): un reminder unic pe task-ul CEO restant, prin canalul
+  // nativ Operational (add_observation). Implicit OFF; se activeaza controlat
+  // dupa shadow-validarea mesajelor. Ramane in TASKS-ONLY WRITE, reversibil.
+  autonomousFollowup: ["on", "true"].includes(String(process.env.CEO_AUTONOMOUS_FOLLOWUP_ENABLED || "").toLowerCase()),
 
   // SELF-EVOLUTION V1 (§21-28) — detectia limitarilor proprii + capability
   // requests. ENABLED implicit OFF; totul in shadow (zero build real, zero

@@ -1,0 +1,56 @@
+// OPEN LOOP WATCHDOG (§2, §24) + gate-ul de follow-up real. node test/watchdog.test.mjs
+process.env.ANTHROPIC_API_KEY ||= "dummy";
+process.env.TELEGRAM_BOT_TOKEN ||= "dummy";
+process.env.TELEGRAM_OWNER_CHAT_ID ||= "1";
+
+import { readFileSync } from "node:fs";
+const { decideLoopAction, runWatchdog, LOOP_ACTIONS } = await import("../src/ceo/nervous/openLoopWatchdog.js");
+
+let failed = 0;
+const ok = (c, m) => { console.log(`${c ? "✅" : "❌"} ${m}`); if (!c) failed++; };
+const NOW = Date.parse("2026-07-22T08:00:00Z");
+const rec = (over) => ({ operational_id: "OP1", lifecycle: "IN_PROGRESS", human: { title: "Clarifica X", deadline: over ? "2026-07-15" : "2026-07-30" }, followups: [], created_at: "2026-07-10T08:00:00Z" });
+
+// Restant, fara reminder → FOLLOW_UP.
+const d1 = decideLoopAction(rec(true), { insistence: { level: "MEDIUM" }, nowMs: NOW, asOf: "2026-07-22" });
+ok(d1.action === "FOLLOW_UP" && d1.needs_followup === true, "restant fara reminder → FOLLOW_UP");
+ok(!!d1.next_check_at, "§24 — orice decizie are next_check_at (WAIT nu e pasiv)");
+
+// In termen → WAIT dar cu next_check_at.
+const d2 = decideLoopAction(rec(false), { insistence: { level: "LOW" }, nowMs: NOW, asOf: "2026-07-22" });
+ok(d2.action === "WAIT" && !!d2.next_check_at, "in termen → WAIT + next_check_at");
+
+// Rezultat raportat, neverificat → VERIFY (bifat != rezolvat).
+const d3 = decideLoopAction(rec(true), { opsTask: { id: "OP1", status: "rezolvat", report: "gata" }, insistence: { level: "MEDIUM" }, nowMs: NOW, asOf: "2026-07-22" });
+ok(d3.action === "VERIFY", "rezultat raportat dar neverificat → VERIFY");
+
+// Blocat → ASK_BLOCKER (nu esec).
+const d4 = decideLoopAction(rec(true), { opsTask: { id: "OP1", status: "blocat" }, insistence: { level: "HIGH" }, nowMs: NOW, asOf: "2026-07-22" });
+ok(d4.action === "ASK_BLOCKER", "blocat → ASK_BLOCKER (nu task nereusit)");
+
+// Nevoia nu mai e valida → NO_LONGER_NEEDED.
+const d5 = decideLoopAction(rec(true), { stillNeeded: false, nowMs: NOW, asOf: "2026-07-22" });
+ok(d5.action === "NO_LONGER_NEEDED", "nevoia nu mai e valida → NO_LONGER_NEEDED");
+
+// Reminder deja trimis + impact mare → ESCALATE (reevaluare, nu spam).
+const recFu = { ...rec(true), followups: [{ at: "2026-07-20T08:00:00Z", action: "FOLLOW_UP" }] };
+const d6 = decideLoopAction(recFu, { insistence: { level: "HIGH" }, nowMs: NOW, asOf: "2026-07-22" });
+ok(d6.action === "ESCALATE", "reminder deja trimis + impact HIGH → ESCALATE (nu al doilea reminder)");
+
+// runWatchdog acopera doar buclele deschise reale.
+const reg = { a: rec(true), b: { ...rec(false), lifecycle: "COMPLETED" }, c: { lifecycle: "PROPOSED" } };
+reg.a.operational_id = "A"; reg.b.operational_id = "B";
+const wd = runWatchdog({ registry: reg, nowMs: NOW, resolveCtx: () => ({ asOf: "2026-07-22" }) });
+ok(wd.length === 1 && wd[0].task_id === "A", "watchdog acopera doar buclele deschise reale (nu inchise/shadow)");
+ok(wd.every((l) => LOOP_ACTIONS.includes(l.action)), "toate actiunile sunt canonice");
+
+// Gate-ul de follow-up REAL: OFF implicit + result-check-first + structural.
+const cycleSrc = readFileSync(new URL("../src/ceo/nervous/cycle.js", import.meta.url), "utf8");
+ok(/cfg\.autonomousFollowup === true/.test(cycleSrc), "follow-up real e gated pe flag dedicat (OFF implicit)");
+ok(/result-check-first|hasResult/.test(cycleSrc), "§3 — result-check-first: nu deranja daca rezultatul exista deja");
+ok(/FINALIZAT \/ BLOCAT \+ motiv \/ TERMEN NOU/.test(cycleSrc), "§4 — follow-up cere raspuns structurat clasificabil");
+const cfgSrc = readFileSync(new URL("../src/config.js", import.meta.url), "utf8");
+ok(/autonomousFollowup:.*CEO_AUTONOMOUS_FOLLOWUP_ENABLED/.test(cfgSrc), "flag CEO_AUTONOMOUS_FOLLOWUP_ENABLED definit");
+
+console.log(`\n${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — watchdog`);
+process.exit(failed === 0 ? 0 : 1);

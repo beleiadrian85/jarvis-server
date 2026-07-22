@@ -232,6 +232,22 @@ export async function runNervousCycle(opts = {}) {
     }
 
     // ── 6-8. MONITOR + VERIFY + FOLLOW-UP/ESCALATE pe task-urile CEO ────
+    // OPEN LOOP WATCHDOG (§2, §24): pentru fiecare bucla deschisa, urmatoarea
+    // actiune + next_check_at — nicio bucla nu ramane uitata.
+    const { runWatchdog } = await import("./openLoopWatchdog.js");
+    const { insistenceScore } = await import("./insistenceEngine.js").catch(() => ({ insistenceScore: null }));
+    const watchdog = runWatchdog({
+      registry, nowMs,
+      resolveCtx: (rec) => {
+        const ops = (opsTasks || []).find((t) => t.id === rec.operational_id) || null;
+        const ins = insistenceScore ? insistenceScore({
+          businessImpact: rec.internal?.severity, urgencyDays: rec.internal?.urgency_days ?? null,
+          ageDays: rec.created_at ? (nowMs - Date.parse(rec.created_at)) / 86_400_000 : 0,
+          repeatedDelay: (rec.followups || []).length, cashImpactRON: rec.internal?.cash_impactRON ?? null,
+        }) : { level: "MEDIUM" };
+        return { opsTask: ops, insistence: ins, asOf };
+      },
+    });
     const followupProposals = [];
     for (const rec of Object.values(registry)) {
       if (!rec.operational_id) continue; // shadow/propuse: nu au task real de urmarit
@@ -240,6 +256,18 @@ export async function runNervousCycle(opts = {}) {
         rec.ops_status = ops.status; rec.sync_ok = true;
         const phase = mapOperationalStatus(ops.status);
         if (phase !== rec.lifecycle && !["COMPLETED", "FAILED"].includes(rec.lifecycle)) rec.lifecycle = phase;
+        // §4-5 — clasifica raspunsul uman (raport/status) si intelege blocajul.
+        if (String(ops.report || "").trim() || String(ops.status || "").toLowerCase() === "blocat") {
+          try {
+            const { classifyResponse, classifyBlocker } = await import("./responseClassifier.js");
+            const cls = classifyResponse({ text: ops.report || "", opsStatus: ops.status, hasAttachment: (ops.attachments || 0) > 0 || !!ops.hasAttachment });
+            rec.response_class = cls.category;
+            if (cls.category === "BLOCKED") {
+              rec.blocker = classifyBlocker({ text: ops.report || "", taskContext: rec.human?.title || "" });
+              events.push({ at: nowISO, event: "blocker_identified", detail: `${rec.human?.title}: ${rec.blocker.blocker_type} → poate debloca: ${rec.blocker.who_can_remove}`, task_id: rec.id });
+            }
+          } catch { /* clasificator optional */ }
+        }
       } else rec.sync_ok = false;
       // VERIFY (§14): bifat ≠ rezolvat — cere dovada.
       if (["RESULT_SUBMITTED", "COMPLETED"].includes(rec.lifecycle) && rec.outcome == null) {
@@ -275,14 +303,18 @@ export async function runNervousCycle(opts = {}) {
           // §11 — REMINDER automat UNIC pe task-urile create autonom (prin
           // observatie pe task, mecanismul nativ Operational). Restul raman
           // propuneri pentru fondator.
-          if (fu.action === "REMINDER" && rec.shadow === false && persist &&
+          // §3 — result-check-first: daca task-ul are deja un rezultat raportat,
+          // NU deranjam omul (mergem pe calea VERIFY, tratata mai sus).
+          const hasResult = !!(ops && (String(ops.report || "").trim() || ["rezolvat", "acceptat"].includes(String(ops.status || "").toLowerCase())));
+          if (fu.action === "REMINDER" && rec.shadow === false && persist && !hasResult &&
               !(rec.followups || []).some((f) => f.auto_sent) &&
-              (cfg.autonomousInfoTasks === true || cfg.autonomousVerifTasks === true)) {
+              cfg.autonomousFollowup === true) {
+            // Mesaj STRUCTURAT (§4): cere un raspuns clasificabil.
             const rr = await opsTaskReminder(rec.operational_id,
-              `Reminder JARVIS: "${rec.human?.title}" e restant (termen ${rec.human?.deadline}). ${fu.why}. Daca e un blocaj, noteaza-l aici.`, { cfg });
+              `JARVIS: pentru "${rec.human?.title}" inca nu am un rezultat verificabil (termen ${rec.human?.deadline}). Te rog actualizeaza cu una dintre variante: FINALIZAT / BLOCAT + motiv / TERMEN NOU. Daca ai un document, ataseaza-l direct — il procesez eu.`, { cfg });
             if (rr.ok) {
-              rec.followups = [...(rec.followups || []), { at: nowISO, action: "REMINDER", why: fu.why, auto_sent: true }];
-              events.push({ at: nowISO, event: "follow_up_proposed", detail: `${rec.human?.title}: REMINDER automat unic trimis (observatie pe task)`, task_id: rec.id });
+              rec.followups = [...(rec.followups || []), { at: nowISO, action: "FOLLOW_UP", why: fu.why, auto_sent: true }];
+              events.push({ at: nowISO, event: "follow_up_sent", detail: `${rec.human?.title}: follow-up REAL trimis (observatie pe task, cere FINALIZAT/BLOCAT/TERMEN NOU)`, task_id: rec.id });
               rec.updated_at = nowISO;
               continue;
             }
@@ -352,6 +384,14 @@ export async function runNervousCycle(opts = {}) {
       founder_label: founderLabel,
       system_health: { status: health.status, score: health.score, detections: health.detections },
       people_load: loads.detections,
+      // §2 + §24 — watchdog-ul buclelor: fiecare bucla are NEXT_ACTION + next_check_at.
+      watchdog,
+      // §20 — heatmap-ul de executie: unde compania "circula" si unde nu.
+      execution_heatmap: await (async () => {
+        try { const { buildExecutionHeatmap } = await import("./executionHeatmap.js");
+          return buildExecutionHeatmap({ registry, opsTasks: opsTasks || [], balances, needs: needsOut.needs, asOf, nowMs });
+        } catch { return null; }
+      })(),
       // §10 — presiunea buclelor (deschide vs inchide).
       loop_pressure: pressure,
       // §2 — review de incarcare pentru persoanele bottleneck (max 3 prioritati).

@@ -110,10 +110,11 @@ export function isOwnershipQuestion(text) {
   return /\bcine\b.*(se ocupa|raspunde|detine|e (director|manager|sef|responsabil|owner)|face|gestioneaza)|cine (e|este) (directorul|managerul|responsabilul|owner)/.test(n);
 }
 
-/** Intrebare FOUNDER-ACTIONS: "ce am eu de facut / ce trebuie sa decid/fac". */
+/** Intrebare FOUNDER-ACTIONS: "ce am eu de facut / ce trebuie sa decid/fac".
+ *  Tolerant la cuvinte intre (ex. "ce am eu, adrian, de facut"). */
 export function isFounderActionsQuestion(text) {
   const n = norm(text);
-  return /(ce am (eu )?de facut|ce trebuie sa (decid|fac)|ce am pe (azi|maine|lista)|ce e (de facut|treaba mea|pe capul meu)|actiunile mele)/.test(n);
+  return /ce (am|are adrian).{0,20}\bde facut\b|ce trebuie sa (decid|fac)\b|ce am pe (azi|maine|lista)|ce (e|am) (de facut|treaba mea|pe capul meu)|actiunile mele|ce decizii (am|trebuie)/.test(n);
 }
 
 export function guessCategory(text) {

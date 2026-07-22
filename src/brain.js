@@ -322,7 +322,9 @@ export async function handleMessage(channel, text) {
   }
 
   // 8.7) Operational fast path (O2) — task-uri determinist, fara Claude+MCP server-side.
-  const opFast = await operationalFast(text);
+  // NU intercepta intrebarile grounded (founder-actions/ownership/requests/multi):
+  // "ce am eu de facut" trebuie sa treaca prin founder filter, nu prin lista "today".
+  const opFast = wantsGrounded ? null : await operationalFast(text);
   if (opFast) {
     console.log(`[timing] route=operationalFastPath total=${Date.now() - t0}ms`);
     remember(channel, text, opFast);

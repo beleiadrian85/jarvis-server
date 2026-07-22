@@ -26,7 +26,13 @@ ok(!/CREATE TABLE|ALTER TABLE/i.test(all), "zero schema DB noua (totul in jarvis
 ok(!/runBoardMeeting/.test(all), "Boardul nu e convocat de CEO core (separat, gated)");
 const gate = await import("../src/approvalGate.js");
 ok(typeof gate.proposeAction === "function" && typeof gate.confirmActionById === "function", "approvalGate intact si nemodificat");
-ok(!/ceo\//.test(SRC("brain.js")), "brain.js neatins — raspunsurile vizibile neschimbate");
+// brain.js poate importa DOAR sourceTruth din ceo/ (harta read-only a surselor,
+// anti-halucinatie) — NU module de scriere/actiune (nervous/evolution/api/proposal).
+{
+  const b = SRC("brain.js");
+  const ceoImports = [...b.matchAll(/from\s+["']\.\/ceo\/([^"']+)["']/g), ...b.matchAll(/import\(\s*["']\.\/ceo\/([^"']+)["']/g)].map((m) => m[1]);
+  ok(ceoImports.every((p) => p === "sourceTruth.js"), `brain.js importa din ceo/ DOAR sourceTruth (are: ${ceoImports.join(",") || "nimic"})`);
+}
 
 // API read-only (Command Center foundation).
 const api = SRC("ceo/api.js");

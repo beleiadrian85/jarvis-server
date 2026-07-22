@@ -383,6 +383,12 @@ async function generalChat(channel, text) {
   const router = routeModel({ route: decision.route, capabilities: caps, options: {} });
 
   let system = PERSONA;
+  // SURSE REALE: injectam ce poate JARVIS chiar accesa (anti-halucinatie) —
+  // best-effort, ne-blocant.
+  try {
+    const { buildSourceTruth, sourceTruthForPrompt } = await import("./ceo/sourceTruth.js");
+    system += "\n\n" + sourceTruthForPrompt(await buildSourceTruth({}));
+  } catch { /* daca esueaza, chat-ul continua fara harta */ }
   if (ctx.summary) system += `\n\nSUMARUL CONVERSATIEI DE PANA ACUM:\n${ctx.summary}`;
   if (memories.length) {
     system +=

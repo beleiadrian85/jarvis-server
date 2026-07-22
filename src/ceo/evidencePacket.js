@@ -79,10 +79,13 @@ export function packetForPrompt(packet) {
   const f = packet.facts || {};
   let s = `EVIDENCE PACKET (intent: ${packet.intents.join("+")}) — porneste raspunsul de aici, nu inventa:\n`;
   if (f.founder_required) {
-    s += `• DECIZII ALE TALE (Adrian): ${f.founder_required.length ? f.founder_required.join("; ") : "niciuna"}\n`;
-    s += `• Dana gestioneaza: ${f.dana_handles?.join("; ") || "-"}\n• Nelu gestioneaza: ${f.nelu_handles?.join("; ") || "-"}\n• JARVIS urmareste: ${f.jarvis_tracking?.join("; ") || "-"}\n`;
+    s += `• DECIZII CARE CER AUTORITATEA LUI ADRIAN (din organism): ${f.founder_required.length ? f.founder_required.join("; ") : "NICIUNA"}\n`;
+    s += `• Dana gestioneaza (NU Adrian): ${f.dana_handles?.join("; ") || "-"}\n• Nelu gestioneaza (NU Adrian): ${f.nelu_handles?.join("; ") || "-"}\n• JARVIS urmareste singur (NU Adrian): ${f.jarvis_tracking?.join("; ") || "-"}\n`;
     if (f.founder_note) s += `• ${f.founder_note}\n`;
-    s += "REGULA (founder filter): la 'ce am eu de facut' listeaza DOAR deciziile lui Adrian; restul e treaba Danei/Nelu/JARVIS.\n";
+    s += "REGULA ABSOLUTA (founder filter, Partea V): Adrian primeste DOAR: decizii de aprobat, negocieri majore, capital/finantare, angajamente contractuale/juridice, exceptii. " +
+      "NU-i da lui Adrian sarcini de tip 'cere Danei X' / 'monitorizeaza Y' / 'urmareste Z' / 'verifica task' — ALEA LE FACE JARVIS sau echipa, NU Adrian. " +
+      "Daca lista de decizii care cer autoritatea lui e goala, raspunzi EXACT: 'Nu ai nicio actiune operationala necesara acum — echipa si JARVIS acopera.' " +
+      "Structura raspunsului: TU (doar decizii), DANA, NELU, JARVIS.\n";
   }
   if (f.confirmed_roles) {
     s += `• Roluri confirmate: Dana=${f.confirmed_roles.dana}; Nelu=${f.confirmed_roles.nelu}; Adrian=${f.confirmed_roles.adrian}\n• ${f.ownership_rule}\n`;

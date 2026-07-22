@@ -145,6 +145,9 @@ export function buildCeoTask(need = {}, delegation = {}, { asOf = null, formUrl 
   // §7: omul vede simplu (de ce / rezultat / termen) + provenienta vizibila.
   const description =
     `De ce: ${human.why}\nRezultat asteptat: ${human.expected_result}\nTermen: ${deadlineNote}` +
+    // §11 — context concret (referinta la task/sursa originala) ca omul sa poata
+    // actiona fara sa ceara lamuriri; apare doar cand nevoia il furnizeaza.
+    (need.context ? `\nContext: ${need.context}` : "") +
     (formUrl ? `\nFormular: ${formUrl}` : "") +
     `\n\nCreat de: JARVIS · CEO AI\n[nevoie: ${internal.ceo_need_id} · trigger: ${trigger}]`;
 

@@ -270,6 +270,10 @@ function makeNeed(fields) {
     blocking: fields.blocking === true,
     cash_impactRON: fields.cash_impactRON ?? null,
     reasoning: fields.reasoning || {},
+    // §11 — context concret pentru ca task-ul uman sa fie auto-suficient
+    // (referinta la sursa/task-ul original), fara sa devina eseu.
+    context: fields.context ?? null,
+    project_hint: fields.project_hint ?? null,
   };
   need.value = scoreTaskValue(need);
   return need;
@@ -530,15 +534,20 @@ export function buildNeeds({
     for (const t of worst) {
       const days = daysBetween(t.deadline, asOf) ?? 0;
       if (days < 2) continue; // prima intarziere = doar overdue (§16), nu task
+      const origTitle = titleOf(t);
       candidates.push(makeNeed({
         domain: "TASKS",
         type: "ACTION_NEED",
         task_type: String(t?.status || "").toLowerCase() === "blocat" ? "BLOCKER_CLARIFY" : "DEADLINE_CONFIRM",
-        title: `Clarifica task-ul restant: ${titleOf(t)}`.slice(0, 90),
-        summary: `Task #${t?.id || "?"} e restant de ${days} zile (deadline ${t?.deadline}). Ce lipseste pentru finalizare / care e termenul real?`,
-        evidence: [`[operational] task #${t?.id || "?"}: ${titleOf(t)} — deadline ${t?.deadline}, status ${t?.status}`],
-        material_consequence: `task restant de ${days} zile fara clarificare — planificarea si dependentele raman incerte`,
+        // §11 — titlu care spune ACTIUNEA + obiectul, nu doar numele task-ului.
+        title: `Ce blocheaza finalizarea: "${origTitle}"`.slice(0, 90),
+        summary: `Task-ul "${origTitle}" (#${t?.id || "?"}) e restant de ${days} zile (termen ${t?.deadline}, status ${t?.status}). Spune ce lipseste pentru finalizare sau care e termenul real.`,
+        evidence: [`[operational] task #${t?.id || "?"}: ${origTitle} — deadline ${t?.deadline}, status ${t?.status}, owner ${t?.assigneeName || t?.assignee || "?"}`],
+        material_consequence: `task-ul "${origTitle}" restant de ${days} zile fara clarificare — planificarea si dependentele raman incerte`,
         expected_change: "termen real asumat sau blocaj identificat si adresat",
+        // §11 — context auto-suficient pentru omul care primeste task-ul.
+        context: `Se refera la task-ul Operational #${t?.id || "?"} "${origTitle}" (termen ${t?.deadline || "?"}, status ${t?.status || "?"}), restant de ${days} zile. Deschide-l in Operational si spune ce lipseste sau confirma un termen real.`,
+        project_hint: t?.project || null,
         suggested_owner_hint: t?.assignee || null, // ownerul REAL al task-ului
         urgency_days: 0,
         confidence: 95,

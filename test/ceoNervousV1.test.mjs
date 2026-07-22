@@ -161,6 +161,14 @@ ok(!!task.internal.idempotency_key && task.idempotency_key === task.internal.ide
 ok(task.human.title.length <= 80 && !task.human.why.includes("\n"), "§6. task-ul uman e scurt, nu eseu");
 ok(task.operational_payload.assignee === "p-fin" && task.operational_payload.priority, "§5. payload Operational complet");
 
+// §11 — task-ul uman e AUTO-SUFICIENT: cand nevoia furnizeaza context (referinta
+// la task/sursa originala), descrierea il include ca omul sa poata actiona.
+const needCtx = { ...need, context: 'Se refera la task-ul Operational #QUKE7V "CERERE COMPENSARE" (termen 2026-06-20, restant 32 zile).' };
+const taskCtx = buildCeoTask(needCtx, delCash, { asOf: "2026-07-21" });
+ok(/Context: .*QUKE7V/.test(taskCtx.operational_payload.description), "§11. context concret (referinta task original) in descrierea umana");
+const taskNoCtx = buildCeoTask(need, delCash, { asOf: "2026-07-21" });
+ok(!/Context:/.test(taskNoCtx.operational_payload.description), "§11. fara context furnizat → nu se adauga sectiune goala");
+
 // ── X. Proposal ≠ execution: ACTION/DECISION niciodata autonome ─────────
 const laneShadow = classifyForAutonomy(task, { mode: "shadow", autonomousInfoEnabled: true });
 ok(laneShadow.lane === "SHADOW", "§11. mode shadow → totul e simulare, chiar cu flag on");

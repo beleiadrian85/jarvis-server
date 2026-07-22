@@ -25,9 +25,10 @@ import { audit } from "./audit.js";
 import { wrapExternal } from "./lib/safeContent.js";
 import { norm } from "./lib/text.js";
 import { PERSONA } from "./persona.js";
+import { splitQuestions, multiQuestionInstruction, completenessGap, tokenBudgetFor } from "./multiQuestion.js";
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
-  extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory, countQuestions,
+  extractBalance, isCashForecastTopic, isEmailTopic, isCalendarTopic, needsWeb, guessCategory,
   isStrongStrategic, isPredictionTopic,
 } from "./intents.js";
 // P2 — Prediction Engine (determinist, GATED pe config.predictionEngine).
@@ -388,6 +389,11 @@ async function generalChat(channel, text) {
       "\n\nMEMORIE RELEVANTA (fapte salvate anterior):\n" +
       memories.map((m) => `[${m.category}] ${m.fact}`).join("\n");
   }
+  // MAI MULTE INTREBARI: descompune si cere raspuns punctual la fiecare (in
+  // ordine, numerotat, UNKNOWN unde lipsesc date) — acelasi context pt toate.
+  const questions = splitQuestions(text);
+  const multi = questions.length >= 2;
+  if (multi) system += multiQuestionInstruction(questions);
 
   const messages = [
     ...ctx.recent.map((m) => ({ role: m.role, content: m.content })),
@@ -398,11 +404,6 @@ async function generalChat(channel, text) {
   // sunt necesare, ca raspunsurile simple sa fie instant.
   const useOperational = hasOperational && isOperationalTopic(text);
   const useWeb = needsWeb(text);
-
-  // MAI MULTE INTREBARI: cand mesajul are mai multe intrebari/cereri distincte,
-  // dam mai mult buget de tokeni ca raspunsurile punctuale sa nu fie taiate.
-  const nQ = countQuestions(text);
-  const multi = nQ >= 2;
 
   const tc = Date.now();
   let reply, providerUsed = "claude";
@@ -439,15 +440,37 @@ async function generalChat(channel, text) {
       mcpServers: useOperational
         ? [{ name: "operational", url: config.operationalMcpUrl, allowedTools: OPERATIONAL_READ_TOOLS }]
         : [],
-      // buget mai mare cand sunt mai multe intrebari (raspuns punctual la fiecare)
-      maxTokens: multi ? 2600 : 1400,
+      // buget scalat cu numarul de intrebari (raspuns punctual la fiecare)
+      maxTokens: tokenBudgetFor(questions.length, 1400),
     });
   } else {
-    // Cale rapida: fara tool-uri. Multi-intrebare → buget mai mare, nu taia.
-    reply = await callClaude({ model: CHAT_MODEL, system, messages, maxTokens: multi ? 2000 : 800 });
+    // Cale rapida: fara tool-uri. Multi-intrebare → buget scalat, nu taia.
+    reply = await callClaude({ model: CHAT_MODEL, system, messages, maxTokens: tokenBudgetFor(questions.length, 800) });
   }
   T.claude = Date.now() - tc;
   reply = reply || "…";
+
+  // GARDA DE COMPLETITUDINE (§2): daca s-au detectat N intrebari dar raspunsul
+  // acopera mai putine, cere O SINGURA completare pentru cele lipsa — nu trimite
+  // raspuns incomplet. Acelasi context (system + messages) reutilizat.
+  if (multi) {
+    const gap = completenessGap(questions.length, reply);
+    if (!gap.complete && gap.missing.length) {
+      try {
+        const missingList = gap.missing.map((i) => `${i}. ${questions[i - 1]}`).join("\n");
+        const completion = await callClaude({
+          model: CHAT_MODEL, system,
+          messages: [
+            ...messages,
+            { role: "assistant", content: reply },
+            { role: "user", content: `Ai omis raspunsul la aceste intrebari — raspunde DOAR la ele, numerotat exact la fel:\n${missingList}` },
+          ],
+          maxTokens: tokenBudgetFor(gap.missing.length, 600),
+        });
+        if (completion && completion.trim()) reply += `\n\n${completion.trim()}`;
+      } catch (e) { console.error("[multiQ.completion]", e.message); }
+    }
+  }
   _metrics.record({ provider: providerUsed, ms: T.claude, ok: true, tokens: estimateTokens(system + "\n" + text) });
 
   // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.

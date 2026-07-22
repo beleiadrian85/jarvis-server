@@ -235,7 +235,8 @@ let srcAll = "";
 for (const f of files) srcAll += `\n// FILE:${f}\n` + readFileSync(new URL(f, dir), "utf8");
 ok(!/INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM|ALTER TABLE|CREATE TABLE|DROP TABLE/i.test(srcAll), "Y. zero SQL de scriere/DDL in nervous/*");
 ok(!/writeFileSync|appendFileSync|fs\.promises\.write|child_process/.test(srcAll), "Z. CEO nu isi modifica singur codul (zero fs write/exec)");
-const engines = files.filter((f) => !["cycle.js", "index.js", "operationalWrite.js"].includes(f));
+// cycle/index/operationalWrite/reactiveWatch au IO (orchestratoare); restul PURE.
+const engines = files.filter((f) => !["cycle.js", "index.js", "operationalWrite.js", "reactiveWatch.js"].includes(f));
 for (const f of engines) {
   const src = readFileSync(new URL(f, dir), "utf8");
   ok(!/from\s+["'].*(mcp|opsdb|opsdata|state|audit|telegram|config|companyConfig)\.js["']/.test(src), `motor PUR fara IO: ${f}`);

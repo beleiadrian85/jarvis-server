@@ -29,9 +29,21 @@ async function runPoll() {
     await checkEmails();
     await checkDeadlines();
     await checkMeetings();
+    await checkCeoTaskUpdates();
   } catch (e) {
     console.error("[notifier]", e.message);
   }
+}
+
+// §2/§3 — detectare reactiva a schimbarilor pe task-urile CEO (reutilizeaza
+// acest poll; gated pe nervous). La schimbare → procesare reactiva imediata.
+async function checkCeoTaskUpdates() {
+  if (!config.nervousSystem) return;
+  try {
+    const { pollCeoTaskUpdates } = await import("./ceo/nervous/reactiveWatch.js");
+    const r = await pollCeoTaskUpdates();
+    if (r.changed?.length) console.log(`[reactive] ${r.changed.length} task-uri CEO schimbate → ciclu reactiv (${r.triggered ? "declansat" : "esuat"})`);
+  } catch (e) { console.error("[reactive]", e.message); }
 }
 
 // Task nou atribuit lui Adrian + task devenit intarziat.

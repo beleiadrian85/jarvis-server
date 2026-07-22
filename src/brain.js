@@ -321,6 +321,16 @@ export async function handleMessage(channel, text) {
     // strategy (inactiv) / operational_read / simple → chat Claude existent (identic).
   }
 
+  // 8.6) FOUNDER ACTIONS — raspuns DETERMINIST (Partea V), nu lasa modelul sa-i
+  // dea lui Adrian sarcini operationale. Structura TU/DANA/NELU/JARVIS.
+  if (isFounderActionsQuestion(text) && !splitQuestions(text).some((_, i) => i > 0)) {
+    try {
+      const { founderActionsAnswer } = await import("./ceo/evidencePacket.js");
+      const fa = await founderActionsAnswer();
+      if (fa) { remember(channel, text, fa); return { reply: fa }; }
+    } catch { /* fallback la chat grounded */ }
+  }
+
   // 8.7) Operational fast path (O2) — task-uri determinist, fara Claude+MCP server-side.
   // NU intercepta intrebarile grounded (founder-actions/ownership/requests/multi):
   // "ce am eu de facut" trebuie sa treaca prin founder filter, nu prin lista "today".

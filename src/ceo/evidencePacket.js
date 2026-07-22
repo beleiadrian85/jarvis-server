@@ -74,6 +74,30 @@ export async function buildEvidencePacket({ text = "", intents = null } = {}) {
   return packet;
 }
 
+/**
+ * Raspuns DETERMINIST la "ce am eu de facut?" (Partea V) — nu lasa modelul sa
+ * inventeze o lista de sarcini pentru fondator. Structura TU/DANA/NELU/JARVIS.
+ * Returneaza string user-facing sau null daca nu se poate (fallback la chat).
+ */
+export async function founderActionsAnswer() {
+  try {
+    const organism = (await getState("ceo:nervous:last", null));
+    if (!organism) return null;
+    const founder = organism.needs_founder || [];
+    const dana = (organism.what_i_need || []).filter((n) => n.owner_hint === "dana").map((n) => n.title);
+    const nelu = (organism.what_i_need || []).filter((n) => n.owner_hint === "nelu").map((n) => n.title);
+    const jarvis = (organism.what_i_asked || []).map((a) => a.title).filter(Boolean);
+    const L = [];
+    L.push("👤 TU, ADRIAN (doar ce cere autoritatea ta):");
+    if (founder.length) founder.forEach((x) => L.push(`  • ${x}`));
+    else L.push("  • Nimic operational necesar acum — echipa si JARVIS acopera. Te implic doar pentru decizii/capital/negocieri/contracte.");
+    if (dana.length) { L.push("\n💰 DANA gestioneaza (JARVIS ii cere, nu tu):"); dana.slice(0, 4).forEach((x) => L.push(`  • ${x}`)); }
+    if (nelu.length) { L.push("\n🔧 NELU gestioneaza (JARVIS il urmareste, nu tu):"); nelu.slice(0, 4).forEach((x) => L.push(`  • ${x}`)); }
+    if (jarvis.length) { L.push("\n🤖 JARVIS urmareste singur:"); jarvis.slice(0, 5).forEach((x) => L.push(`  • ${x}`)); }
+    return L.join("\n");
+  } catch { return null; }
+}
+
 /** Instructiune + facts pentru injectare in chat (Partea IV: fidelitate de intent). */
 export function packetForPrompt(packet) {
   const f = packet.facts || {};

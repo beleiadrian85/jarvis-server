@@ -241,6 +241,18 @@ async function renderOrganismUnified() {
     " · rată rezolvare " + (eff.RESOLUTION_RATE ?? "?") + (typeof eff.RESOLUTION_RATE === "number" ? "%" : "") +
     (o.loops_closed_today?.length ? "<br><b class=ok>ÎNCHIS AZI:</b> " + o.loops_closed_today.map(l => l.task + " (" + l.owner + ")").join("; ") : "") +
     (oh.symptoms?.length ? "<br><small class=" + (oh.status === "DEGRADED" ? "bad" : "warn") + ">sănătate " + oh.status + ": " + oh.symptoms.map(s => s.detail).join(" · ") + "</small>" : "<br><small class=ok>sănătate organism: OK</small>");
+  renderControls(o);
+}
+async function renderControls(o) {
+  const lp = o.loop_pressure; const wr = o.workload_reviews || {};
+  if (!lp && !Object.keys(wr).length) return;
+  let html = "";
+  if (lp) html += "<br><b>Presiune bucle:</b> <b class=" + (lp.throttle ? "warn" : "ok") + ">" + lp.level + "</b> (" + lp.open + " deschise / " + lp.closed + " închise" + (lp.aging ? ", " + lp.aging + " îmbătrânite" : "") + ")" + (lp.throttle ? " — task-uri noi doar valoare ≥ " + lp.min_value_to_create : "");
+  for (const [pid, w] of Object.entries(wr)) {
+    html += "<br><b>Workload " + pid + ":</b> " + w.total_open + " deschise, " + w.overdue + " restante · KEEP: " + w.buckets.KEEP_NOW.map(t => t.title).join(", ");
+    if (w.buckets.CANCEL_CANDIDATES.length) html += " · <span class=dim>anulare propusă: " + w.buckets.CANCEL_CANDIDATES.map(t => t.title).join(", ") + "</span>";
+  }
+  $("orgUnified").innerHTML += html;
   const docs = await api("/api/ceo/documents");
   const list = docs?.documents || [];
   $("docList").innerHTML = list.length

@@ -134,7 +134,13 @@ export async function runNervousCycle(opts = {}) {
 
     // ── 5. CREATE ACTION/TASK (Orchestrator + Dedup + Autonomie §5-6,10-12)
     const mode = cfg.taskAutonomy === "information" ? "information" : "shadow";
-    const results = { would_create: [], proposed: [], created: [], duplicates: [], unknown_owner: [], no_action: needsOut.no_action.length, audit_only: needsOut.audit_only.length };
+    // LOOP PRESSURE CONTROL (§10): daca deschidem mai repede decat inchidem,
+    // task-urile noi de valoare mica devin PROPUNERI (nu creare autonoma) —
+    // prioritizam inchiderea. Urgentele trec oricum.
+    const { computeLoopPressure, passesPressure } = await import("./loopPressure.js");
+    const pressure = computeLoopPressure({ registry, nowMs, cfg });
+    if (pressure.throttle) events.push({ at: nowISO, event: "loop_pressure", detail: pressure.recommendation });
+    const results = { would_create: [], proposed: [], created: [], duplicates: [], unknown_owner: [], throttled: [], no_action: needsOut.no_action.length, audit_only: needsOut.audit_only.length };
     const host = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "";
     for (const need of needsOut.needs) {
       // J din §28: problema rezolvata intre detectare si creare → NO_LONGER_NEEDED.
@@ -167,7 +173,17 @@ export async function runNervousCycle(opts = {}) {
         asOf, formUrl: need.task_type === "CASH_DATA" && host ? `${host}/ceo.html` : "",
         projects: OPERATIONAL_PROJECTS, defaultProject: "Altele", createdByUserId: founderId,
       });
-      const lane = classifyForAutonomy(task, { mode, autonomousInfoEnabled: cfg.autonomousInfoTasks === true, autonomousVerifEnabled: cfg.autonomousVerifTasks === true, autonomousOperationalEnabled: cfg.autonomousOperationalTasks === true });
+      let lane = classifyForAutonomy(task, { mode, autonomousInfoEnabled: cfg.autonomousInfoTasks === true, autonomousVerifEnabled: cfg.autonomousVerifTasks === true, autonomousOperationalEnabled: cfg.autonomousOperationalTasks === true });
+      // §10 — sub presiune, o nevoie de valoare mica NU se creeaza autonom:
+      // devine propunere (Inbox), ca sa prioritizam inchiderea buclelor deschise.
+      if (lane.lane === "AUTONOMOUS_OK") {
+        const pp = passesPressure(need, pressure);
+        if (!pp.pass) {
+          lane = { lane: "NEEDS_APPROVAL", why: pp.reason };
+          results.throttled.push({ title: task.human.title, owner: del.person_id, why: pp.reason });
+          events.push({ at: nowISO, event: "task_throttled", detail: `${task.human.title}: ${pp.reason}`, need_id: need.need_id });
+        }
+      }
       const rec = {
         id: task.idempotency_key, idempotency_key: task.idempotency_key, need_id: need.need_id,
         task_type: need.task_type, autonomy_class: task.autonomy_class, owner: del.person_id,
@@ -336,6 +352,16 @@ export async function runNervousCycle(opts = {}) {
       founder_label: founderLabel,
       system_health: { status: health.status, score: health.score, detections: health.detections },
       people_load: loads.detections,
+      // §10 — presiunea buclelor (deschide vs inchide).
+      loop_pressure: pressure,
+      // §2 — review de incarcare pentru persoanele bottleneck (max 3 prioritati).
+      workload_reviews: await (async () => {
+        const { reviewWorkload } = await import("./workloadReview.js");
+        const bottlenecked = new Set(loads.detections.filter((d) => ["overloaded", "overdue_cluster"].includes(d.key)).map((d) => d.person_id));
+        const out = {};
+        for (const pid of bottlenecked) out[pid] = reviewWorkload({ person_id: pid, opsTasks: opsTasks || [], asOf });
+        return out;
+      })(),
       selfeval: selfeval.metrics, verdict: selfeval.verdict,
       results, followup_proposals: followupProposals,
     };

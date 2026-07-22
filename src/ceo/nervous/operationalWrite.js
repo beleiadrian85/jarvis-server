@@ -144,7 +144,7 @@ export async function opsTaskReminder(operationalId, text, opts = {}) {
   if (!mine) return { ok: false, blocked: "NOT_CEO_TASK", error: "reminder doar pe task-urile create de CEO AI" };
   const mcp = opts.mcp || (await import("../../mcp.js"));
   try {
-    const out = await mcp.mcpCall("add_observation", { id: operationalId, text: String(text || "").slice(0, 500) });
+    const out = await mcp.mcpCall("add_observation", { id: operationalId, note: String(text || "").slice(0, 500) });
     await audit("nervous_task_reminder", `${operationalId}: reminder unic trimis`).catch(() => {});
     return { ok: true, raw: out };
   } catch (e) {
@@ -165,7 +165,7 @@ export async function opsObservation(operationalId, text, opts = {}) {
   if (!operationalId) return { ok: false, error: "lipseste id-ul task-ului original" };
   const mcp = opts.mcp || (await import("../../mcp.js"));
   try {
-    const out = await mcp.mcpCall("add_observation", { id: operationalId, text: String(text || "").slice(0, 500) });
+    const out = await mcp.mcpCall("add_observation", { id: operationalId, note: String(text || "").slice(0, 500) });
     await audit("nervous_clarification_on_original", `${operationalId}: clarificare pusa pe task-ul original`, String(text || "").slice(0, 300)).catch(() => {});
     return { ok: true, raw: out };
   } catch (e) {

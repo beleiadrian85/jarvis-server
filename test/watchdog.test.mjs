@@ -65,6 +65,12 @@ const out2 = buildNeeds({ asOf: "2026-07-24", opsTasks: overdue, domainOwners: {
 ok(out2.needs.find((n) => n.original_task_id === "7HYZDH")?.need_id === clar.need_id, "acelasi task original → acelasi need_id la orice rulare (zero task-despre-task duplicat)");
 const nSrc = readFileSync(new URL("../src/ceo/nervous/operationalWrite.js", import.meta.url), "utf8");
 ok(/export async function opsObservation/.test(nSrc) && /add_observation/.test(nSrc), "opsObservation: clarificare pe orice task prin add_observation (TASKS-ONLY)");
+// Bug real (gasit live): add_observation asteapta 'note', nu 'text'.
+const { opsObservation, opsTaskReminder } = await import("../src/ceo/nervous/operationalWrite.js");
+let cap; const mockMcp = { mcpCall: async (t, a) => { cap = a; return "ok"; } };
+await opsObservation("ABC123", "x", { mcp: mockMcp });
+ok(cap && "note" in cap && !("text" in cap), "add_observation foloseste campul 'note' (nu 'text') — bug real reparat");
+ok((nSrc.match(/add_observation.*note:/g) || []).length === 2 && !/add_observation.*text:/.test(nSrc), "ambele apeluri add_observation folosesc 'note'");
 
 console.log(`\n${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — watchdog`);
 process.exit(failed === 0 ? 0 : 1);

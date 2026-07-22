@@ -18,11 +18,19 @@ export function startNervousSystem() {
   _started = true;
   import("node-cron").then(({ default: cron }) => {
     const tz = { timezone: "Europe/Bucharest" };
+    // Ciclul cognitiv (PARTEA II/XIII): INGEST documente → management. Cade
+    // elegant pe runNervousCycle daca orchestratorul lipseste.
+    const cycle = async (kind) => {
+      try {
+        const { runCognitiveCycle } = await import("../cognitiveOrchestrator.js");
+        return await runCognitiveCycle({ kind, persist: true });
+      } catch { return runNervousCycle({ kind, persist: true }); }
+    };
     // §18 — ciclul de dimineata: task-urile de ieri, overdue, rezultate,
     // nevoi noi, max 3 prioritati active/persoana, blocaje, ce cere fondatorul.
-    cron.schedule("10 7 * * *", () => runNervousCycle({ kind: "morning", persist: true }), tz);
+    cron.schedule("10 7 * * *", () => cycle("morning"), tz);
     // §18 — mini-check ~15:30: ce s-a terminat, ce e blocat, ce s-a schimbat.
-    cron.schedule("30 15 * * *", () => runNervousCycle({ kind: "midday", persist: true }), tz);
+    cron.schedule("30 15 * * *", () => cycle("midday"), tz);
     console.log(`[nervous] pornit (mode=${config.taskAutonomy}, autonomous_info=${config.autonomousInfoTasks}, kill=${config.nervousKill}) — 07:10 + 15:30`);
   });
 }

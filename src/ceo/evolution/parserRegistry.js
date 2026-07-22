@@ -1,12 +1,15 @@
 // CEO SELF-EVOLUTION & CAPABILITY BUILDER — PARSER REGISTRY (§7).
 // Registrul deterministic de parsere pentru Document Intake Pipeline (§5):
-// CSV si JSON sunt COMPLETE (parsere proprii, fara dependente externe);
-// XLSX / PDF / IMAGE se declara onest available:false si raporteaza
+// CSV, JSON si XLSX sunt COMPLETE (parsere proprii, fara dependente externe;
+// XLSX = capabilitate construita prin self-evolution, vezi ./xlsxParser.js);
+// PDF / IMAGE se declara onest available:false si raporteaza
 // PARSER_UNAVAILABLE (capability gap, §2 ANALYSIS_GAP) — nu simulam parsare.
-// Modul PUR — zero IO, zero importuri de infrastructura; singurul import
-// permis: ./contract.js. Date lipsa = null/gap explicit, niciodata inventate.
+// Modul PUR — zero IO, zero importuri de infrastructura; importuri permise:
+// ./contract.js si ./xlsxParser.js. Date lipsa = null/gap explicit,
+// niciodata inventate (missing != zero).
 
 import { FILE_SECURITY_POLICY } from "./contract.js";
+import { parseXlsx } from "./xlsxParser.js";
 
 // ── Constante ───────────────────────────────────────────────────────────
 
@@ -15,7 +18,6 @@ export const CSV_MAX_ROWS = 50000;
 
 // Mesajele standard pentru parserele fara biblioteca (capability gap onest).
 const UNAVAILABLE_ERRORS = {
-  XLSX: "PARSER_UNAVAILABLE: biblioteca XLSX lipseste — capability gap",
   PDF: "PARSER_UNAVAILABLE: biblioteca PDF lipseste — capability gap",
   IMAGE: "PARSER_UNAVAILABLE: biblioteca OCR pentru imagini lipseste — capability gap",
   OTHER: "PARSER_UNAVAILABLE: format nerecunoscut — capability gap",
@@ -385,14 +387,95 @@ function unavailableParser({ format, extensions = [], mimes = [], fallback = fal
   };
 }
 
-const xlsxParser = unavailableParser({
+// ── XLSX: parser complet propriu (capabilitate construita — ./xlsxParser.js) ─
+
+/** data → Buffer pentru parserul binar: Buffer/Uint8Array trec direct;
+ *  string-ul se interpreteaza ca base64 (transport uzual pentru binare);
+ *  altceva → null (gap explicit). PUR. */
+function toBinary(data) {
+  if (data instanceof Uint8Array) return data; // include Buffer
+  if (typeof data === "string" && data.length) {
+    // XLSX nu poate veni ca text — daca e string, singura forma valida e base64
+    if (/^[A-Za-z0-9+/=\r\n]+$/.test(data)) {
+      try {
+        return Buffer.from(data, "base64");
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+  return null;
+}
+
+const xlsxParser = {
   format: "XLSX",
-  extensions: ["xlsx", "xls"],
-  mimes: [
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel",
-  ],
-});
+  available: true,
+  warnings: [],
+
+  canParse({ filename = "", mime = "" } = {}) {
+    const ext = extOf(filename);
+    const m = mimeOf(mime);
+    return ext === "xlsx" || ext === "xls"
+      || m === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      || m === "application/vnd.ms-excel";
+  },
+
+  parse({ data, filename = "" } = {}) {
+    void filename; // continutul (arhiva ZIP) decide totul
+    const buf = toBinary(data);
+    if (buf == null) {
+      return { ok: false, error: "NO_DATA: date lipsa sau tip nesuportat (se accepta Buffer sau base64)" };
+    }
+    return parseXlsx(buf); // nu arunca niciodata — { ok:false, error } la esec
+  },
+
+  validate(parsed) {
+    if (!parsed || parsed.ok !== true) {
+      return { valid: false, warnings: [`PARSE_FAILED: ${parsed && parsed.error ? parsed.error : "necunoscut"}`] };
+    }
+    const rows = parsed.rows || [];
+    const warnings = [...(parsed.warnings || [])];
+    const nonEmpty = rows.filter((r) => Array.isArray(r) && r.some((c) => c !== null && c !== undefined && String(c).trim() !== ""));
+    if (!nonEmpty.length) {
+      warnings.push("EMPTY: zero randuri cu continut dupa parsare");
+      return { valid: false, warnings };
+    }
+    if (parsed.meta && parsed.meta.truncated) {
+      warnings.push("TRUNCATED: peste limita de randuri — restul a fost taiat (meta.truncated=true)");
+    }
+    if (parsed.meta && Array.isArray(parsed.meta.date_candidates) && parsed.meta.date_candidates.length) {
+      warnings.push(`DATE_CANDIDATES: coloanele ${parsed.meta.date_candidates.join(", ")} au format numeric de data (seriale Excel NEconvertite)`);
+    }
+    return { valid: true, warnings };
+  },
+
+  normalize(parsed) {
+    if (!parsed || parsed.ok !== true) return { rows: [], columns: [] };
+    const rows = parsed.rows || [];
+    if (!rows.length) return { rows: [], columns: [] };
+    const width = Math.max(0, ...rows.map((r) => (Array.isArray(r) ? r.length : 0)));
+    const columns = Array.from({ length: width }, (_, i) => `col_${i}`);
+    // randurile mai scurte se completeaza cu null (missing != zero, nu "")
+    const out = rows.map((r) => {
+      const base = Array.isArray(r) ? r : [];
+      return base.length === width ? base : [...base, ...Array(width - base.length).fill(null)];
+    });
+    return { rows: out, columns };
+  },
+
+  confidence(parsed) {
+    if (!parsed || parsed.ok !== true) return 0;
+    const rows = parsed.rows || [];
+    const cells = parsed.meta && typeof parsed.meta.cells === "number" ? parsed.meta.cells : 0;
+    if (!rows.length || !cells) return 0;
+    let c = 90; // parser determinist pe format binar strict — incredere mare
+    const warnCount = (parsed.warnings || []).length;
+    if (warnCount > 0) c -= Math.min(30, warnCount * 5); // fiecare avertisment scade increderea
+    if (parsed.meta && parsed.meta.truncated) c -= 10;
+    return clamp01_100(c);
+  },
+};
 
 const pdfParser = unavailableParser({
   format: "PDF",

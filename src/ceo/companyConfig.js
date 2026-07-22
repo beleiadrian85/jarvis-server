@@ -127,9 +127,10 @@ systemFeatures: {
   bank_statement_lines: { exists: true, evidence: "opsdb: bank_statements/bank_statement_lines (rulaje, fara sold)" },
   site_traffic: { exists: true, evidence: "opsdb: site_visits (Spion)" },
   balance_form: { exists: true, evidence: "Command Center: formular solduri + balanceStore" },
-  xlsx_parser: { exists: false, evidence: "jarvis-server: nicio biblioteca XLSX in dependencies" },
-  pdf_parser: { exists: false, evidence: "jarvis-server: niciun parser PDF" },
-  receivables_importer: { exists: false, evidence: "nu exista motor de import Situatie Clienti" },
+  xlsx_parser: { exists: true, evidence: "src/ceo/evolution/xlsxParser.js (parser determinist pur, fara dependente) + registry available" },
+  document_intake: { exists: true, evidence: "src/ceo/documentIngestRunner.js: atasamentele task-urilor CEO → parse → clasificare → staging (zero write Operational)" },
+  pdf_parser: { exists: false, evidence: "jarvis-server: niciun parser PDF (text) inca" },
+  receivables_importer: { exists: false, evidence: "import Situatie Clienti: parser + tip document exista; maparea in Receivables canonice ramane capability gap" },
   gmail_read: { exists: false, evidence: "Google OAuth neconectat (wizard pregatit)" },
 },
 };

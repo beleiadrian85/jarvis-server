@@ -37,8 +37,8 @@ ok((api.match(/app\.get\(/g) || []).length >= 8 && !/app\.(put|delete|patch)\(/.
 // capabilitati — zero deploy), evolution-scan (scan shadow-safe, zero build).
 // Singurul outbound = decizie cu send:true pe information_request (LEVEL 2).
 const posts = api.match(/app\.post\("([^"]+)"/g) || [];
-ok(posts.length === 7 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping", "nervous-cycle", "capabilities/decision", "evolution-scan"].every((p) => posts.join(",").includes(p)),
-   `API: DOAR cele 7 POST-uri sanctionate (${posts.length})`);
+ok(posts.length === 8 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping", "nervous-cycle", "capabilities/decision", "evolution-scan", "cognitive-cycle"].every((p) => posts.join(",").includes(p)),
+   `API: DOAR cele 8 POST-uri sanctionate (${posts.length})`);
 ok(/registerCeoApi\(app\)/.test(SRC("index.js")) &&
    SRC("index.js").indexOf("registerApi(app)") < SRC("index.js").indexOf("registerCeoApi(app)"),
    "rutele /api/ceo/* montate DUPA middleware-ul PIN existent");

@@ -195,7 +195,10 @@ export function registerCeoApi(app) {
   app.get("/api/ceo/source-health", async (_req, res) => {
     try {
       const { getSourcesHealth } = await import("../connectors/opsdata.js");
-      res.json({ sources: getSourcesHealth(), autonomy: (await import("./nervousSystem.js")).AUTONOMY_LEVELS, active_level: 1 });
+      // Nivelul ACTIV se deriva din flag-uri (nu hardcodat) — sursa canonica.
+      const { activeAutonomyLevel, AUTONOMY_LADDER } = await import("./autonomyLadder.js");
+      const { config: cfg } = await import("../config.js");
+      res.json({ sources: getSourcesHealth(), autonomy: AUTONOMY_LADDER, active_level: activeAutonomyLevel(cfg) });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -360,6 +363,37 @@ export function registerCeoApi(app) {
       const { runEvolutionScan } = await import("./evolution/cycle.js");
       const r = await runEvolutionScan({ simulateBuild: req.body?.simulate_build || null });
       res.json(r.error ? { ok: false, error: r.error } : { ok: true, skipped: r.skipped || null, view: r.view || null, buildSim: r.buildSim || null });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ── COGNITIVE ORCHESTRATOR (PARTEA II/XV) — imaginea unitara a organismului ─
+  app.get("/api/ceo/organism-status", async (_req, res) => {
+    try {
+      const { organismStatus } = await import("./cognitiveOrchestrator.js");
+      res.json(await organismStatus({}));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Documentele ingestate (staging JARVIS — zero write Operational).
+  app.get("/api/ceo/documents", async (_req, res) => {
+    try {
+      const { documentsView } = await import("./documentIngestRunner.js");
+      res.json({ documents: await documentsView() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Ciclu cognitiv manual (INGEST → management). Reactiv/validare.
+  app.post("/api/ceo/cognitive-cycle", async (_req, res) => {
+    try {
+      const { runCognitiveCycle } = await import("./cognitiveOrchestrator.js");
+      const r = await runCognitiveCycle({ kind: "manual", persist: true });
+      res.json(r.error ? { ok: false, error: r.error } : { ok: true, phases: r.phases, organism: r.organism || null });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Scorul de pregatire Level 3 (recomandare pe dovezi; fondatorul aproba).
+  app.get("/api/ceo/autonomy-readiness", async (_req, res) => {
+    try {
+      const { organismStatus } = await import("./cognitiveOrchestrator.js");
+      const s = await organismStatus({});
+      res.json({ autonomy: s.autonomy, level3_readiness: s.level3_readiness });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

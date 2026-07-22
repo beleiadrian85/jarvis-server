@@ -95,6 +95,10 @@ small{color:var(--dim)}
   <div class="row" style="margin-top:8px"><button class="ghost" onclick="runCycle()">Rulează un ciclu acum (shadow-safe)</button><span id="orgMsg" class="dim"></span></div>
 </div>
 <div class="card"><h2>PEOPLE — supervizare operațională + bucle deschise</h2><div id="peopleSup" class="dim">—</div></div>
+<div class="card"><h2>ORGANISM — status unificat + autonomie</h2>
+  <div id="orgUnified" class="dim">—</div>
+  <div id="docList" style="margin-top:8px"></div>
+</div>
 <div class="card"><h2>EVOLUȚIE — capabilități (self-evolution, shadow)</h2>
   <div id="evoStatus" class="dim">—</div>
   <div id="evoList" style="margin-top:8px"></div>
@@ -213,7 +217,28 @@ async function renderOrganism() {
     (o.verdict ? "<small class=dim>" + o.verdict + "</small>" : "");
   const s = await api("/api/ceo/activity-stream");
   if (s && s.text) $("orgStream").textContent = s.text;
+  renderOrganismUnified();
   renderEvolution();
+}
+async function renderOrganismUnified() {
+  const o = await api("/api/ceo/organism-status"); if (!o) return;
+  const rd = o.level3_readiness || {};
+  const au = o.autonomy || {};
+  $("orgUnified").innerHTML =
+    "fază: <b>" + (o.phase || "?") + "</b> · autonomie: <b>LEVEL " + (au.active_level ?? "?") + "</b> (" + (au.name || "") + ")" +
+    (au.kill_switch ? " · <b class=bad>KILL SWITCH ON</b>" : "") +
+    "<br>JARVIS azi: <b>" + (o.created_today ?? 0) + "</b> task-uri · bucle deschise: <b>" + (o.open_management_loops ?? 0) + "</b>" +
+    " · gap-uri date: " + (o.data_gaps ?? 0) + " · gap-uri capabilitate: " + (o.capability_gaps?.length ?? 0) +
+    "<br>Pregătire Level 3: <b class=" + (String(rd.recommendation).startsWith("READY") ? "ok" : "dim") + ">" + (rd.recommendation || "?") + "</b>" +
+    (rd.overall != null ? " (scor " + rd.overall + "/100, " + rd.measured_count + " dimensiuni măsurate)" : "") +
+    (rd.blockers?.length ? "<br><small class=dim>blocaje: " + rd.blockers.join(", ") + "</small>" : "");
+  const docs = await api("/api/ceo/documents");
+  const list = docs?.documents || [];
+  $("docList").innerHTML = list.length
+    ? "<b>Documente ingestate (staging, zero write Operational):</b><br>" + list.slice(0, 6).map(d =>
+        "• " + d.filename + " → <b>" + d.doc_type + "</b> [" + d.trust + "]" + (d.records_count ? " · " + d.records_count + " rânduri" : "") +
+        (d.needs_human_mapping ? " · <span class=warn>mapare umană</span>" : "")).join("<br>")
+    : "<small class=dim>niciun document ingestat încă (JARVIS le citește când echipa atașează fișiere pe task-uri)</small>";
 }
 async function renderPeople() {
   const p = await api("/api/ceo/people"); if (!p) return;

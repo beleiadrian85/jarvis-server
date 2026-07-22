@@ -139,7 +139,7 @@ export function runIntake({ file = {}, parsers = null, targetFields = [], asOf =
   let schema = null;
   let schemaNote = null;
   try {
-    schema = typeof discoverSchema === "function" ? discoverSchema(rows ?? []) ?? null : null;
+    schema = typeof discoverSchema === "function" ? discoverSchema({ rows: rows ?? [] }) ?? null : null;
   } catch (e) {
     schemaNote = `descoperirea schemei a esuat: ${e?.message || "eroare necunoscuta"}`;
   }
@@ -154,7 +154,10 @@ export function runIntake({ file = {}, parsers = null, targetFields = [], asOf =
   }
 
   // ── 5) CLASSIFICATION — coloanele clasificate (nu blocheaza) ──
-  const cols = Array.isArray(schema?.columns) ? schema.columns : Array.isArray(schema?.fields) ? schema.fields : null;
+  // discoverSchema expune coloanele in schema.header.columns / column_types.
+  const cols = Array.isArray(schema?.header?.columns) ? schema.header.columns
+    : Array.isArray(schema?.column_types) ? schema.column_types
+    : Array.isArray(schema?.columns) ? schema.columns : null;
   pushStage(stages, "CLASSIFICATION", !!(cols && cols.length),
     cols && cols.length ? `${cols.length} coloane clasificate` : "coloane neclasificate (gap)");
 
@@ -162,7 +165,8 @@ export function runIntake({ file = {}, parsers = null, targetFields = [], asOf =
   let mapping = null;
   let mapNote = null;
   try {
-    mapping = typeof proposeMapping === "function" ? proposeMapping(schema, targetFields) ?? null : null;
+    // proposeMapping asteapta argument OBIECT numit { schema, targetFields }.
+    mapping = typeof proposeMapping === "function" ? proposeMapping({ schema, targetFields }) ?? null : null;
   } catch (e) {
     mapNote = `propunerea de mapare a esuat: ${e?.message || "eroare necunoscuta"}`;
   }
@@ -187,7 +191,10 @@ export function runIntake({ file = {}, parsers = null, targetFields = [], asOf =
   let ds = null;
   let dsNote = null;
   try {
-    ds = typeof extractDataset === "function" ? extractDataset(rows ?? [], mapping) ?? null : null;
+    // extractDataset asteapta argument OBIECT numit { rows, schema, mapping }.
+    ds = typeof extractDataset === "function"
+      ? extractDataset({ rows: rows ?? [], schema, mapping: mapping?.mapping ?? mapping }) ?? null
+      : null;
   } catch (e) {
     dsNote = `extractia dataset-ului a esuat: ${e?.message || "eroare necunoscuta"}`;
   }

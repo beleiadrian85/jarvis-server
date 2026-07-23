@@ -428,6 +428,17 @@ async function generalChat(channel, text) {
       system += "\n\n" + packetForPrompt(await buildEvidencePacket({ text, intents }));
     }
   } catch { /* best-effort */ }
+  // EXTERNAL INTELLIGENCE (Fazele 23-26): la intrebari despre lumea externa,
+  // injecteaza semnalele cu impact intern (marcate EXTERNAL, NU fapte interne).
+  if (config.externalIntel) {
+    try {
+      const { asksExternal, externalForPrompt } = await import("./ceo/externalIntel.js");
+      if (asksExternal(text)) {
+        const cached = await (await import("./state.js")).getState("ceo:external-intel", null);
+        if (cached) system += "\n\n" + externalForPrompt(cached);
+      }
+    } catch { /* best-effort */ }
+  }
   if (ctx.summary) system += `\n\nSUMARUL CONVERSATIEI DE PANA ACUM:\n${ctx.summary}`;
   if (memories.length) {
     system +=

@@ -31,7 +31,7 @@ ok(typeof gate.proposeAction === "function" && typeof gate.confirmActionById ===
 {
   const b = SRC("brain.js");
   const ceoImports = [...b.matchAll(/from\s+["']\.\/ceo\/([^"']+)["']/g), ...b.matchAll(/import\(\s*["']\.\/ceo\/([^"']+)["']/g)].map((m) => m[1]);
-  const allowed = new Set(["sourceTruth.js", "actionLedger.js", "evidencePacket.js"]);
+  const allowed = new Set(["sourceTruth.js", "actionLedger.js", "evidencePacket.js", "externalIntel.js"]);
   ok(ceoImports.every((p) => allowed.has(p)), `brain.js importa din ceo/ DOAR grounding read-only (sourceTruth/actionLedger/evidencePacket) — are: ${ceoImports.join(",") || "nimic"}`);
 }
 
@@ -44,8 +44,8 @@ ok((api.match(/app\.get\(/g) || []).length >= 8 && !/app\.(put|delete|patch)\(/.
 // capabilitati — zero deploy), evolution-scan (scan shadow-safe, zero build).
 // Singurul outbound = decizie cu send:true pe information_request (LEVEL 2).
 const posts = api.match(/app\.post\("([^"]+)"/g) || [];
-ok(posts.length === 8 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping", "nervous-cycle", "capabilities/decision", "evolution-scan", "cognitive-cycle"].every((p) => posts.join(",").includes(p)),
-   `API: DOAR cele 8 POST-uri sanctionate (${posts.length})`);
+ok(posts.length === 9 && ["bank-balance", "proposals/decision", "google-credentials", "people-mapping", "nervous-cycle", "capabilities/decision", "evolution-scan", "cognitive-cycle", "external-scan"].every((p) => posts.join(",").includes(p)),
+   `API: DOAR cele 9 POST-uri sanctionate (${posts.length}) — external-scan = read-only (web+jarvis_state), zero write Operational`);
 ok(/registerCeoApi\(app\)/.test(SRC("index.js")) &&
    SRC("index.js").indexOf("registerApi(app)") < SRC("index.js").indexOf("registerCeoApi(app)"),
    "rutele /api/ceo/* montate DUPA middleware-ul PIN existent");

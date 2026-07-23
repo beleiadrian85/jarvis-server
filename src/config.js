@@ -146,6 +146,9 @@ export const config = {
   // deploy). Politica de deploy NU e aici: e constanta inghetata in
   // evolution/contract.js (PRODUCTION_DEPLOYMENT_REQUIRES_ADRIAN_APPROVAL).
   selfEvolution: ["on", "true"].includes(String(process.env.CEO_SELF_EVOLUTION_ENABLED || "").toLowerCase()),
+  // External Intelligence (Fazele 23-26): web/news → impact intern. Implicit OFF
+  // (cost web search); cand e on, scan zilnic + raspuns pe intrebari externe.
+  externalIntel: ["on", "true"].includes(String(process.env.CEO_EXTERNAL_INTEL_ENABLED || "").toLowerCase()),
   evolutionKill: ["on", "true"].includes(String(process.env.CEO_EVOLUTION_KILL_SWITCH || "").toLowerCase()),
   evolutionMaxBuildsPerDay: Number(process.env.CEO_EVOLUTION_MAX_BUILDS_PER_DAY || 0),
   evolutionMaxConcurrent: Number(process.env.CEO_EVOLUTION_MAX_CONCURRENT_BUILDS || 0),

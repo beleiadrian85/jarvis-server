@@ -396,4 +396,21 @@ export function registerCeoApi(app) {
       res.json({ autonomy: s.autonomy, level3_readiness: s.level3_readiness });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
+
+  // ── EXTERNAL INTELLIGENCE (Fazele 23-26) — web/news → impact intern ────
+  app.get("/api/ceo/external-intel", async (_req, res) => {
+    try {
+      const { getState } = await import("../state.js");
+      res.json((await getState("ceo:external-intel", { signals: [], note: "niciun scan inca" })));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/ceo/external-scan", async (req, res) => {
+    try {
+      const { config: cfg } = await import("../config.js");
+      if (!cfg.externalIntel) return res.status(200).json({ ok: false, skipped: "CEO_EXTERNAL_INTEL_ENABLED=off" });
+      const { runExternalScan } = await import("./externalIntel.js");
+      const brief = await runExternalScan({ topics: req.body?.topics || null });
+      res.json({ ok: true, signals: brief.signals?.length || 0, brief });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 }

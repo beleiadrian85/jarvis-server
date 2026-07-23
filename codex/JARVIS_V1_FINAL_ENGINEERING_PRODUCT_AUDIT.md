@@ -21,6 +21,7 @@ Data: 23 iul 2026. Fara exagerare — dovezi, nu optimism.
 - **Commands:** ConversationMode → CommandBus (operationalWrite) → execution receipt. TASKS-only. Zero permission bypass (garda `codex.wiring`).
 - **Memory:** per user+thread; afirmatii umane = HUMAN_CLAIM (nu fapt verificat).
 - **UX:** conversational, uman, zero coduri interne (`humanize`). Buton in dashboard + pe task (context auto).
+- **STARE FRONTEND (onest):** componenta `AskCodex` + butonul "Intreaba CODEX" sunt scrise in `operational.jsx` (bracket-check OK, stil consecvent). Backend-ul e LIVE si validat. Integrarea in Operationalul DEPLOYAT ramane un pas: repo-ul local `operational` nu are commit-uri si nu e legat de pipeline-ul de deploy real → NU am impins in orb. Pas de integrare (ca OAuth): (1) preia componenta din operational.jsx in Operationalul deployat; (2) adauga pe serverul Operational un proxy same-origin `/api/codex/ask` → jarvis-server care injecteaza PIN-ul (angajatii nu vad PIN-ul). Pana atunci butonul degradeaza elegant ("CODEX indisponibil").
 
 ## STRATURI COGNITIVE
 - **COGNITIVE KERNEL:** unificat; Ask CODEX si chat-ul folosesc acelasi grounding (nu chatbot paralel).

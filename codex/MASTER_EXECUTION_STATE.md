@@ -41,7 +41,7 @@ LAST_UPDATED: 22 iul 2026
 | 20 | Bank Reality | 🟡 PARTIAL | rulaje + sold manual + reconciliere; fara API bancar (corect declarat) |
 | 21 | SmartBill | 🟡 PARTIAL | serie + status plata; fara bulk (corect declarat) |
 | 22 | Gmail/Calendar | 🔴 NOT CONNECTED | OAuth lipsa (env); cod pregatit |
-| 23-26 | External Intelligence | 🟢 IN CONSTRUCTIE ACUM | web search exista; news monitor + external→internal impact = ACEASTA FAZA |
+| 23-26 | External Intelligence | ✅ DONE + LIVE | `ceo/externalIntel.js`: web search real → 7 semnale (BNR/ROBOR/EUR-RON/imobiliar Sibiu) mapate la impact Bell/Profi Concept, cu provenienta; I14 (extern≠intern); gated CEO_EXTERNAL_INTEL_ENABLED=on; injectat in chat; validat live |
 | 27 | CEO Morning Brief | ✅ DONE | Daily Digest 07:40 |
 | 28 | Ask CODEX | 🔴 PROPUNERE | arhitectura documentata, neconstruit (cere aprobare) |
 | 29 | Capability Registry | ✅ DONE | Source Truth Registry |

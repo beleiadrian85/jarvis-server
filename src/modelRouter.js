@@ -25,6 +25,46 @@ const FALLBACK = { chatgpt: "claude", claude: "deterministic", deterministic: "n
 const str = (v) => (v == null ? "" : String(v));
 const isObj = (v) => v != null && typeof v === "object" && !Array.isArray(v);
 
+// ── TIER-uri de rationament (Faza 12) — explicit, ca rutele vechi sa nu decida
+// accidental modelul. TIER 0 determinist (fara model), TIER 1 fast (chat),
+// TIER 2 heavy CEO reasoning, TIER 3 adversarial second opinion.
+export const REASONING_TIERS = {
+  0: { name: "deterministic", model: "none", use: "rapoarte, confirmari, memory, coduri fixe" },
+  1: { name: "fast", model: "claude-haiku-4-5-20251001", use: "chat operational, intrebari simple" },
+  2: { name: "heavy", model: "claude-opus-4-8", use: "capital allocation, 'ce sa fac?', strategie, negociere, people, dovezi conflictuale" },
+  3: { name: "adversarial", model: "claude-opus-4-8", use: "a doua opinie adversariala pe decizii mari" },
+};
+
+// Semnale (in intent/text) care CER heavy reasoning (TIER 2).
+const HEAVY_CUES = [
+  "capital", "aloc", "investit", "cat sa bag", "ce sa fac", "ce ai face", "tu ce",
+  "strategie", "strategic", "negoci", "vand sau", "vindem sau", "risc mare",
+  "imprumut", "credit mare", "concediez", "angajez", "conflict", "dilema",
+];
+
+/**
+ * Selecteaza TIER-ul de rationament dupa ruta/intent/text. Determinist, PUR.
+ * @returns { tier, name, model, reason, requiresSecondOpinion }
+ */
+export function selectTier({ route = "", intent = "", text = "", conflictingEvidence = false } = {}) {
+  const blob = `${str(route)} ${str(intent)} ${str(text)}`.toLowerCase();
+  if (DETERMINISTIC_ROUTES.has(str(route))) return tier(0, "ruta determinista (fara model)");
+  const heavy = conflictingEvidence || HEAVY_CUES.some((c) => blob.includes(c)) || STRATEGY_ROUTES.has(str(route));
+  if (heavy) {
+    const t = tier(2, conflictingEvidence ? "dovezi conflictuale → heavy reasoning" : "decizie de capital/strategie/negociere → heavy reasoning");
+    // Decizii cu miza mare (bani/capital/negociere/strategie) sau dovezi
+    // conflictuale → merita a doua opinie adversariala (TIER 3).
+    t.requiresSecondOpinion = conflictingEvidence || /capital|invest|imprumut|credit|\bbag\b|mai bag|aloc|vind|vandut|strategi|negoci|\d{2,}k|milion|1m/.test(blob);
+    return t;
+  }
+  return tier(1, "chat operational → fast model");
+}
+
+function tier(n, reason) {
+  const t = REASONING_TIERS[n];
+  return { tier: n, name: t.name, model: t.model, reason, requiresSecondOpinion: false };
+}
+
 export function routeModel(input) {
   const inp = isObj(input) ? input : {};
   const route = str(inp.route);

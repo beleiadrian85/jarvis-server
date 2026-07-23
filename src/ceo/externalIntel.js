@@ -86,6 +86,46 @@ export function externalForPrompt(brief) {
     mat.slice(0, 6).map((s, i) => `${i + 1}. ${s.headline} [${s.source}, ${s.published}] → ${s.internal_impact} (urgenta ${s.urgency}, ${s.recommendation})`).join("\n");
 }
 
+// ── CONTINUOUS MODE (Faza 25-26) — dedup, novelty, credibilitate sursa. Nu news
+// spam: doar EXTERNAL SIGNAL → INTERNAL EXPOSURE → IMPACT → RECOMMENDATION.
+const SOURCE_CREDIBILITY = {
+  bnr: 95, "banca nationala": 95, ins: 90, "institutul national": 90, eurostat: 90,
+  anaf: 90, ancpi: 85, zf: 75, "ziarul financiar": 75, profit: 70, economica: 65,
+  agerpres: 80, hotnews: 65, mediafax: 65, imobiliare: 60, storia: 60, necunoscut: 30,
+};
+
+/** Scor de credibilitate din numele sursei (0-100). PUR. */
+export function sourceCredibility(source) {
+  const n = String(source || "").toLowerCase();
+  for (const [k, v] of Object.entries(SOURCE_CREDIBILITY)) if (n.includes(k)) return v;
+  return SOURCE_CREDIBILITY.necunoscut;
+}
+
+/**
+ * Filtreaza semnale noi fata de cele deja vazute (dedup pe headline normalizat)
+ * si le scoreaza pe novelty + credibilitate. Nu declanseaza pe zgomot.
+ * @returns {{ fresh, confirmed }} fresh = noi & materiale.
+ */
+export function classifySignals(newSignals = [], prevSignals = []) {
+  const seen = new Set((prevSignals || []).map((s) => normHeadline(s.headline)));
+  const fresh = [], confirmed = [];
+  for (const s of newSignals || []) {
+    const cred = sourceCredibility(s.source);
+    const enriched = { ...s, source_credibility: cred };
+    const key = normHeadline(s.headline);
+    if (seen.has(key)) { enriched.novelty = "CONFIRMED"; confirmed.push(enriched); }
+    else {
+      enriched.novelty = "NEW";
+      // material = credibil SAU urgent SAU incredere ridicata (altfel = zgomot).
+      const material = cred >= 60 || s.urgency === "high" || (Number(s.confidence) || 0) >= 65;
+      if (material) fresh.push(enriched);
+    }
+  }
+  return { fresh, confirmed };
+}
+
+function normHeadline(h) { return String(h || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60); }
+
 /** Detecteaza intrebari despre lumea externa. */
 export function asksExternal(text) {
   const n = String(text || "").toLowerCase();

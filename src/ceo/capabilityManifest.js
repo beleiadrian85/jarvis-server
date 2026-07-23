@@ -23,6 +23,17 @@ export function buildCapabilityManifest({ world = null } = {}) {
       financing_register: "available",
       priority_engine: "available",
       command_center: "read-only + approval inbox",
+      // Straturi cognitive V1 (self-model aliniat cu code truth).
+      external_intelligence: config.externalIntel ? "active" : "off",
+      change_events: "available",       // OPERATIONAL→JARVIS, evenimente canonice
+      data_trust_score: "available",     // incredere per domeniu (5 dimensiuni)
+      founder_decision_model: "available", // invata Adrian, nu yes-man
+      model_reasoning_tiers: "available",  // TIER 0-3 explicit
+      cognitive_trace: "available",        // trace factual per interactiune
+      untrusted_input_guard: "available",  // anti prompt/tool injection
+      data_contract: "available",          // contract Operational→JARVIS
+      self_evolution: config.selfEvolution ? "active (sandbox, no self-deploy)" : "off",
+      nervous_system: config.nervousSystem ? "active (TASKS-ONLY write)" : "off",
     },
     sources: Object.fromEntries(map.domains.map((d) => [d.domain, d.connected])),
     data_health: map.healthScore,

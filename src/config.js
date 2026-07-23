@@ -149,6 +149,10 @@ export const config = {
   // External Intelligence (Fazele 23-26): web/news → impact intern. Implicit OFF
   // (cost web search); cand e on, scan zilnic + raspuns pe intrebari externe.
   externalIntel: ["on", "true"].includes(String(process.env.CEO_EXTERNAL_INTEL_ENABLED || "").toLowerCase()),
+  // ASK CODEX (aprobat de Adrian 23 iul): buton "Intreaba CODEX" in Operational
+  // pentru Dana/Nelu. Acelasi Cognitive Kernel; need-to-know; comenzi TASKS-only
+  // prin CommandBus. Implicit OFF pana la deploy validat.
+  askCodex: ["on", "true"].includes(String(process.env.CODEX_ASK_ENABLED || "").toLowerCase()),
   evolutionKill: ["on", "true"].includes(String(process.env.CEO_EVOLUTION_KILL_SWITCH || "").toLowerCase()),
   evolutionMaxBuildsPerDay: Number(process.env.CEO_EVOLUTION_MAX_BUILDS_PER_DAY || 0),
   evolutionMaxConcurrent: Number(process.env.CEO_EVOLUTION_MAX_CONCURRENT_BUILDS || 0),

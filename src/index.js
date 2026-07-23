@@ -40,6 +40,10 @@ registerCeoApi(app);
 // NU in CEO core (respecta granita testata in ceo.wiring): expune
 // runBoardMeeting existent catre interfata, sub acelasi middleware PIN.
 registerBoardApi(app);
+// ASK CODEX (aprobat de Adrian) — buton "Intreaba CODEX" din Operational pentru
+// Dana/Nelu. Acelasi Cognitive Kernel; sub acelasi middleware PIN; TASKS-only.
+const { registerCodexApi } = await import("./codex/api.js");
+registerCodexApi(app);
 
 // CEO OS e noul UI implicit: radacina (start_url "/" al PWA instalat) duce la
 // /os.html. UI-ul vechi ramane accesibil direct la /index.html si /ceo.html

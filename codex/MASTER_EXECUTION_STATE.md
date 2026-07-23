@@ -40,10 +40,10 @@ LAST_UPDATED: 23 iul 2026
 | 19 | Document Intelligence | ✅ DONE | Document Intake + CSV/XLSX + Receivables Importer |
 | 20 | Bank Reality | 🟡 PARTIAL | rulaje + sold manual + reconciliere; fara API bancar (corect declarat) |
 | 21 | SmartBill | 🟡 PARTIAL | serie + status plata; fara bulk (corect declarat) |
-| 22 | Gmail/Calendar | 🔴 NOT CONNECTED | OAuth lipsa (env); cod pregatit |
+| 22 | Gmail/Calendar | 🟡 BLOCKED_EXTERNAL_AUTH | Tot ce e tehnic posibil fara Adrian = gata (scopes, buildAuthUrl, callback self-set token pe Railway + redeploy, auto-detect CONNECTED in sourceTruth). Ramane DOAR consimtamantul Google al lui Adrian → `codex/GMAIL_CALENDAR_AUTH_STEP.md` (tip client, redirect URI, scopes, ce apesi). Zero trimitere email autonoma |
 | 23-26 | External Intelligence | ✅ DONE + LIVE | `ceo/externalIntel.js`: web search real → 7 semnale (BNR/ROBOR/EUR-RON/imobiliar Sibiu) mapate la impact Bell/Profi Concept, cu provenienta; I14 (extern≠intern); gated CEO_EXTERNAL_INTEL_ENABLED=on; injectat in chat; validat live |
 | 27 | CEO Morning Brief | ✅ DONE | Daily Digest 07:40 |
-| 28 | Ask CODEX | 🔴 PROPUNERE | arhitectura documentata, neconstruit (cere aprobare) |
+| 28 | Ask CODEX | ✅ DONE + LIVE | Aprobat de Adrian 23 iul. `src/codex/` (identity need-to-know, conversationStore HUMAN_CLAIM, askCodex orchestrator, friction, api) + buton in operational.jsx. Acelasi Cognitive Kernel; comenzi TASKS-only prin CommandBus; deployat, CODEX_ASK_ENABLED=on. Validat LIVE: Nelu→finance blocat (out_of_scope, zero leakage), Dana→ce lipseste (surse neconectate), injectare in atasament→detectata+refuzata. Teste: askCodex (25) + codex.wiring |
 | 29 | Capability Registry | ✅ DONE | Source Truth Registry |
 | 30 | Self-Evolution | ✅ DONE | Self-Evolution V1 (sandbox, no self-deploy) |
 | 31 | Cognitive Trace | ✅ DONE | `ceo/cognitiveTrace.js`: persistenta ring-buffer (trace_id/actor/mode/intent/route/tier/models/sources/facts/latency/egress) peste executionTrace pur; recentTraces/getTrace read-only; test cognitiveTrace — nu mai intrebam 'ce model ai folosit' |

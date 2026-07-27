@@ -61,11 +61,12 @@ const CHANNEL_ADAPTERS = {
 export async function finalizeManagerialOutput(p = {}) {
   const {
     assessment = {}, draft = "", channel = "chat", trigger = null,
-    executionReceipts = [], confirmedFailures = [], forFounder = true, llm = null, system = null, messages = null,
+    executionReceipts = [], sourceChecks = [], confirmedFailures = [], forFounder = true, llm = null, system = null, messages = null,
   } = isObj(p) ? p : {};
 
   let text = String(draft || "");
-  const gctx = { text: assessment?.decision_context || "", isManagerial: true, forFounder, unknowns: arr(assessment?.unknowns), receipts: arr(executionReceipts), confirmedFailures: arr(confirmedFailures), founderExpectation: arr(assessment?.founder_declared_expectations).length > 0 };
+  const hasActionReceipt = arr(executionReceipts).some((x) => x && !/source_check/i.test(x.kind || "") && (x.operational_id || x.id || /task|operational|created|action|job/i.test(x.kind || "")));
+  const gctx = { text: assessment?.decision_context || "", isManagerial: true, forFounder, unknowns: arr(assessment?.unknowns), receipts: arr(executionReceipts), sourceChecks: arr(sourceChecks), confirmedFailures: arr(confirmedFailures), founderExpectation: arr(assessment?.founder_declared_expectations).length > 0 };
 
   let gate = checkManagerialResponse(text, gctx);
   let trace = assertResponseTraceability(text, assessment, { receipts: executionReceipts });
@@ -88,7 +89,7 @@ export async function finalizeManagerialOutput(p = {}) {
 
   // SANITIZER DETERMINIST (dupa cele max 1 ciclu): garanteaza ca inferentele cauzale
   // nesustinute NU supravietuiesc, chiar daca modelul le-a repetat.
-  const sanitized = sanitizeManagerial(text, { confirmedFailures: arr(confirmedFailures) });
+  const sanitized = sanitizeManagerial(text, { confirmedFailures: arr(confirmedFailures), hasActionReceipt });
   if (sanitized !== text) { text = sanitized; corrected = true; trace = assertResponseTraceability(text, assessment, { receipts: executionReceipts }); }
 
   const adapt = CHANNEL_ADAPTERS[channel] || CHANNEL_ADAPTERS.chat;

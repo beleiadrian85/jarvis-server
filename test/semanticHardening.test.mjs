@@ -121,5 +121,13 @@ ok(!V("Dacă apare deficit confirmat după reconciliere, propun reeșalonare cu 
 { const fin = await finalizeManagerialOutput({ assessment: { decision_context: "pipeline" }, draft: "Extrasele nu au intrat în sistem.", channel: "chat", confirmedFailures: [] });
   ok(!/nu au intrat/i.test(fin.text) && fin.corrected, "FINALIZER: sanitizeaza cauzalitatea chiar fara ciclu LLM (garantie de output)"); }
 
+// ══ FABRICATED TASK RECEIPT: 'EXECUTAT / Task [XXXXXX]' fara scriere reala ══
+ok(V("EXECUTAT. Task [O6MHIB]: Dana caută extrasele.", { sourceChecks: [{ kind: "source_check" }] }).includes("FABRICATED_TASK_RECEIPT"), "FABRICATED_TASK: 'EXECUTAT Task [ID]' cu doar source-check → FAIL");
+ok(!V("Am creat task-ul.", { receipts: [{ operational_id: "O6MHIB", kind: "task" }] }).includes("FABRICATED_TASK_RECEIPT"), "FABRICATED_TASK: cu receipt REAL de actiune → OK");
+{ const fin = await finalizeManagerialOutput({ assessment: { decision_context: "x" }, draft: "✅ EXECUTAT. Task [O6MHIB]: Dana caută.", channel: "chat", executionReceipts: [], sourceChecks: [{ kind: "source_check" }] });
+  ok(!/EXECUTAT|\[O6MHIB\]/i.test(fin.text) && /pot crea/i.test(fin.text), "FINALIZER: receipt fabricat → 'pot crea task' (propunere), nu executie falsa"); }
+// Source-check NU autorizeaza claim de actiune, DAR autorizeaza 'am verificat'.
+ok(!V("Am verificat sursele accesibile.", { sourceChecks: [{ kind: "source_check" }] }).includes("EXECUTION_WITHOUT_RECEIPT"), "SOURCE-CHECK: 'am verificat' e permis de source-check");
+
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — semanticHardening`);
 process.exit(failed === 0 ? 0 : 1);

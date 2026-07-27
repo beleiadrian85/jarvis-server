@@ -96,7 +96,7 @@ export function checkManagerialResponse(reply, ctx = {}) {
 
   // SUBSTANTA (Managerial Claim Validator): termen/prag/owner/executie/founder/
   // emotie/proces manual — respinge valorile FABRICATE, nu doar formatul.
-  const claim = validateClaims(r, { receipts: c.receipts, founderExpectation: c.founderExpectation, unknowns: c.unknowns });
+  const claim = validateClaims(r, { receipts: c.receipts, sourceChecks: c.sourceChecks, confirmedFailures: c.confirmedFailures, founderExpectation: c.founderExpectation, unknowns: c.unknowns });
   for (const cv of claim.violations) add(cv.type, cv.principle, cv.why);
 
   const material = v.filter((x) => ["P1", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"].includes(String(x.principle).split("/")[0]));

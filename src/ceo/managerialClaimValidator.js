@@ -127,9 +127,21 @@ export function validateClaims(reply, ctx = {}) {
     }
   }
 
-  // 4. EXECUTIE fara receipt (plan prezentat ca executie).
-  if (EXECUTION_LANG.test(r) && !(ctx.receipts?.length) && !CAPABILITY_LANG.test(n))
-    add("EXECUTION_WITHOUT_RECEIPT", "P12", "limbaj de executie ('pun observatie/alertez/verific zilnic') fara receipt sau mecanism real — spune 'pot crea…' sau 'nu pot urmari automat pana cand…'");
+  // 4. EXECUTIE fara receipt. Distinctie: limbajul de VERIFICARE ('am verificat X')
+  //    e satisfacut de source-checks reale (pipeline); actiunile ('am creat/alertez')
+  //    cer receipts REALE de actiune. Source-checks NU autorizeaza claim de actiune.
+  const hasSourceCheck = arr(ctx.sourceChecks).length > 0 || arr(ctx.receipts).some((x) => /source_check/i.test(x?.kind || ""));
+  // Receipt de ACTIUNE = are id/operational_id SI NU e un simplu source-check.
+  const hasActionReceipt = arr(ctx.receipts).some((x) => x && !/source_check/i.test(x.kind || "") && (x.operational_id || x.id || /task|operational|created|action|job/i.test(x.kind || "")));
+  if (EXECUTION_LANG.test(r) && !hasActionReceipt && !hasSourceCheck && !CAPABILITY_LANG.test(n))
+    add("EXECUTION_WITHOUT_RECEIPT", "P12", "limbaj de executie fara receipt/mecanism — spune 'pot crea…' sau 'nu pot urmari automat pana cand…'");
+
+  // 4b. RECEIPT FABRICAT: pretinde ca a CREAT un task / EXECUTAT / cu ID de task,
+  //     fara un receipt REAL de actiune (source-check NU conteaza). Pe calea de chat
+  //     JARVIS nu poate scrie direct → orice astfel de claim e fabricat.
+  const claimsTaskDone = /\b(task\s*\[?[a-z0-9]{6}\]?|am creat (un )?task|task creat|\bexecutat\b|am trimis task|dana primeste notificare acum)\b/i.test(r);
+  if (claimsTaskDone && !hasActionReceipt)
+    add("FABRICATED_TASK_RECEIPT", "P12", "pretinde crearea/executarea unui task (ID sau 'EXECUTAT') fara receipt real de actiune — un source-check nu e o scriere; spune 'pot crea task-ul catre Dana' (propunere), nu ca l-ai creat");
 
   // 5. STARE emotionala (chiar hedge-uita: "pare/probabil frustrat" ramane interzis).
   //    Permis DOAR daca vine cu sursa umana explicita ("mi-a spus ca").
@@ -167,9 +179,15 @@ export function validateClaims(reply, ctx = {}) {
  * Garanteaza ca frazele interzise NU supravietuiesc, indiferent de incapatanarea
  * modelului. Se aplica DOAR cand nu exista confirmed_failures. PUR.
  */
-export function sanitizeManagerial(text, { confirmedFailures = [] } = {}) {
-  if (arr(confirmedFailures).length) return String(text || ""); // cu log real, cauzalitatea e permisa
+export function sanitizeManagerial(text, { confirmedFailures = [], hasActionReceipt = false } = {}) {
   let t = String(text || "");
+  // Receipt fabricat de task: fara actiune reala, scoate ID-ul + 'EXECUTAT' inventat.
+  if (!hasActionReceipt) {
+    t = t.replace(/[✅🔴🟢]?\s*\*{0,2}executat[.!:]?\*{0,2}/gi, "")
+         .replace(/\btask\s*\[?[a-z0-9]{6}\]?\s*:?/gi, "pot crea un task catre Dana:")
+         .replace(/\bdana prime[sș]te notificare acum\b[^.!?\n]*/gi, "pot trimite solicitarea catre Dana");
+  }
+  if (arr(confirmedFailures).length) return t.replace(/[ \t]{2,}/g, " ").trim(); // cu log real, cauzalitatea e permisa
   const rules = [
     [/((extrasele|documentele|ele|acestea)\s+)?(sunt|raman|se afla|au ramas)\s+[iî]ntr-?un\s+loc[^.!?\n]*/gi, "nu sunt observabile in sursele pe care le verific"],
     [/\b(nu au intrat|n-?au intrat|nu au ajuns|n-?au ajuns)\b[^.!?\n]*/gi, "nu sunt inca observabile in sursele verificate"],

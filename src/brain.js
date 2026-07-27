@@ -589,7 +589,7 @@ async function generalChat(channel, text) {
       const { finalizeManagerialOutput } = await import("./ceo/managerialFinalizer.js");
       const fin = await finalizeManagerialOutput({
         assessment: _assessment, draft: reply, channel: channel === "hud" ? "hud" : channel === "telegram" ? "telegram" : "chat",
-        trigger: "chat", executionReceipts: _pipelineReceipts, confirmedFailures: _confirmedFailures, forFounder: true,
+        trigger: "chat", executionReceipts: [], sourceChecks: _pipelineReceipts, confirmedFailures: _confirmedFailures, forFounder: true,
         llm: ({ system: s, messages: m }) => callClaude({ model: CHAT_MODEL, system: s, messages: m, maxTokens: tokenBudgetFor(1, 900) }),
         system, messages,
       });

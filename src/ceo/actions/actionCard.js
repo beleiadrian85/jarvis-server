@@ -109,7 +109,7 @@ export function buttonsFor(card) {
     case "AUTO_EXECUTE": return []; // se executa singur; butoanele apar DUPA (Corect/Anuleaza) doar sub politica
     case "APPROVAL_REQUIRED": return ["Aproba", "Modifica", "Respinge"];
     case "CHOICE_REQUIRED": return [...arr(card.alternatives).map((a) => a.label || a).slice(0, 4), "Analizeaza alte variante"];
-    case "INFORMATION_REQUIRED": return [...arr(card.alternatives).map((a) => a.label || a).slice(0, 4), "Alta locatie"];
+    case "INFORMATION_REQUIRED": { const opts = arr(card.alternatives).map((a) => a.label || a).slice(0, 4); return [...opts, ...(opts.some((o) => /alta locatie|altceva|alt/i.test(o)) ? [] : ["Alta locatie"])]; }
     case "FORBIDDEN": return [];
     default: return ["Aproba", "Respinge"];
   }

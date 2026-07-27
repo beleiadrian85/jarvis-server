@@ -110,6 +110,7 @@ function executedText(card) {
   const r = card?.receipt;
   if (!r) return "Executat.";
   if (r.kind === "info_recorded") return `Notat: ${r.value}.`;
+  if (r.kind === "verification") return `Am verificat: ${r.note || card.title}.`;
   return `Am executat.\n\nDovada:\n- task${card.owner ? ` (${card.owner})` : ""}: ${card.execution_payload?.title || card.title}\n- receipt: ${r.operational_id || "inregistrat"}`;
 }
 

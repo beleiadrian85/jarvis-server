@@ -54,9 +54,14 @@ export async function executeAction(p = {}) {
   // (6) Executa — DOAR prin CommandBus (TASKS-only). Payload-ul cardului = payload-ul MCP.
   let receipt = null;
   try {
+    const READ_ONLY_KINDS = ["search_source", "check_status", "collect_accessible_data", "collect_info"];
     if (card.action_type === "INFORMATION_REQUIRED" || card.action_kind === "collect_info") {
       // Nu scrie nimic — inregistreaza informatia aleasa (choice_label).
       receipt = { kind: "info_recorded", value: choice_label, at: nowISO || new Date().toISOString() };
+    } else if (READ_ONLY_KINDS.includes(String(card.action_kind || "")) || !card.execution_payload?.title) {
+      // Actiune READ-ONLY (cautare/verificare) — munca deja facuta (ex. diagnoza pipeline).
+      // NU scrie in Operational; produce un receipt de verificare.
+      receipt = { kind: "verification", note: card.summary || card.title, at: nowISO || new Date().toISOString() };
     } else {
       const bus = commandBus || (await import("../nervous/operationalWrite.js")).opsWrite;
       const payload = { ...(card.execution_payload || {}), source: `action_card:${user_id}` };
@@ -79,5 +84,6 @@ export function renderExecuted(card) {
   const r = card?.receipt;
   if (!r) return "Executat.";
   if (r.kind === "info_recorded") return `Notat: ${r.value}.`;
+  if (r.kind === "verification") return `Am verificat: ${r.note || card.title}.`;
   return `Executat.\n\nTask creat${card.owner ? ` pentru ${card.owner}` : ""}: „${card.execution_payload?.title || card.title}”.\nReceipt: ${r.operational_id || "inregistrat"}${r.deduped ? " (deja exista — nu s-a duplicat)" : ""}.`;
 }

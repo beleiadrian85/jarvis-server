@@ -37,6 +37,7 @@ LAST_UPDATED: 23 iul 2026
 | 16 | Canonical Management Loop | ✅ DONE | Nervous cycle: observe→need→owner→task→followup→verify→close |
 | 17 | Team Supervision | ✅ DONE | peopleSupervision + workloadReview |
 | 18 | Human Communication | ✅ DONE | template uman + coduri interne curatate (Partea VIII) |
+| 18.5 | CEO Constitution + Managerial Reasoning + Quality Gate | ✅ DONE + LIVE | `docs/JARVIS_CEO_CONSTITUTION.md` (15 principii, v1.0.0) + `constitution.js` (loader) + `managerialReasoning.js` (ManagerialAssessment) + `qualityGate.js` (15 verificari, 1 ciclu corectie) + founderModel.recordCorrection. Injectat pe calea manageriala (brain.js) + Ask CODEX; NU poate fi ocolit de canned (isManagerialIntent→wantsGrounded). Validat LIVE: 'care sunt riscurile' → format CE CONTEAZA ACUM/RISC DOMINANT/CE FAC EU/owner (nu TOP 10 dump). Teste: constitution (27, cele 8 obligatorii) |
 | 19 | Document Intelligence | ✅ DONE | Document Intake + CSV/XLSX + Receivables Importer |
 | 20 | Bank Reality | 🟡 PARTIAL | rulaje + sold manual + reconciliere; fara API bancar (corect declarat) |
 | 21 | SmartBill | 🟡 PARTIAL | serie + status plata; fara bulk (corect declarat) |

@@ -47,6 +47,9 @@ registerCodexApi(app);
 // ACTION CARDS — propuneri executabile prin buton (token semnat, TASKS-only, idempotent).
 const { registerActionApi } = await import("./ceo/actions/api.js");
 registerActionApi(app);
+// EMAIL + MONITOR + NOTIFICATION CENTER (read + config), gated pe flags.
+const { registerMonitorApi } = await import("./ceo/monitor/api.js");
+registerMonitorApi(app);
 
 // CEO OS e noul UI implicit: radacina (start_url "/" al PWA instalat) duce la
 // /os.html. UI-ul vechi ramane accesibil direct la /index.html si /ceo.html

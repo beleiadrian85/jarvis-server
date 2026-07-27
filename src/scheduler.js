@@ -3,7 +3,7 @@ import { pushToOwner } from "./telegram.js";
 import { buildMorningReport } from "./morning.js";
 import { ceoHomeReport } from "./engines/ceoHome.js";
 import { listTasks } from "./mcp.js";
-import { hasOperational } from "./config.js";
+import { hasOperational, config } from "./config.js";
 import { parseTaskLines, groupReport, isOverdue } from "./taskparse.js";
 import { getState, setState, pruneNotified } from "./state.js";
 import { buildBriefing } from "./supervisor/briefing.js";
@@ -61,6 +61,23 @@ export function startScheduler() {
   cron.schedule("30 3 * * *", () => pruneNotified(14).catch(() => {}), {
     timezone: "Europe/Bucharest",
   });
+
+  // PERSISTENT WATCHER legislativ/web (worker pe scheduler, NU bucla model). La
+  // fiecare 3h in zile lucratoare; inregistreaza health; produce notificari. Gated.
+  if (config.legislationMonitoring || config.webMonitoring) {
+    cron.schedule("15 */3 * * 1-5", async () => {
+      try {
+        const { runWatch } = await import("./ceo/monitor/worker.js");
+        const r = await runWatch({});
+        await audit("monitor_watch", `checked=${r.checked} material=${r.material} notified=${r.notified}`, (r.errors || []).join("; ").slice(0, 300), true);
+      } catch (e) { console.error("[monitor.watch]", e.message); }
+    }, { timezone: "Europe/Bucharest" });
+    console.log("[monitor] legislation/web watcher activ (la 3h, L-V)");
+    // Escaladare notificari critice nevazute (la fiecare ora).
+    cron.schedule("45 * * * *", async () => {
+      try { const { escalateStale } = await import("./ceo/notifications/center.js"); await escalateStale({}); } catch { /* best-effort */ }
+    }, { timezone: "Europe/Bucharest" });
+  }
 
   // SUPERVISOR AGENT F1 — briefing zilnic 07:30 (doar citire + recomandari).
   if (hasOpsDb) {

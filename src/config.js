@@ -156,6 +156,18 @@ export const config = {
   // Action Cards (propuneri executabile prin buton) + invatare + autonomie controlata.
   // AUTO_EXECUTE doar reversibil/risc redus/TASKS-only; never-autonomous cere aprobare.
   actionCards: ["on", "true"].includes(String(process.env.CEO_ACTION_CARDS_ENABLED || "").toLowerCase()),
+  // Email + Internet/Regulatory Intelligence + monitorizare persistenta + notificari.
+  // Email = READ-ONLY; drafturi doar la cerere; SEND dezactivat PERMANENT in aceasta faza.
+  emailIntel: { enabled: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_INTELLIGENCE_ENABLED || "").toLowerCase()),
+    attachments: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_ATTACHMENTS_ENABLED || "").toLowerCase()),
+    drafts: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_DRAFTS_ENABLED || "").toLowerCase()),
+    send: false }, // JARVIS_EMAIL_SEND_ENABLED ignorat — SEND ramane OFF prin design
+  infoResolver: ["on", "true"].includes(String(process.env.JARVIS_INFORMATION_RESOLVER_ENABLED || "").toLowerCase()),
+  webMonitoring: ["on", "true"].includes(String(process.env.JARVIS_WEB_MONITORING_ENABLED || "").toLowerCase()),
+  legislationMonitoring: ["on", "true"].includes(String(process.env.JARVIS_LEGISLATION_MONITORING_ENABLED || "").toLowerCase()),
+  notificationCenter: ["on", "true"].includes(String(process.env.JARVIS_NOTIFICATION_CENTER_ENABLED || "").toLowerCase()),
+  webPush: ["on", "true"].includes(String(process.env.JARVIS_WEB_PUSH_ENABLED || "").toLowerCase()),
+  monitoringHealth: ["on", "true"].includes(String(process.env.JARVIS_MONITORING_HEALTH_ENABLED || "").toLowerCase()),
   evolutionKill: ["on", "true"].includes(String(process.env.CEO_EVOLUTION_KILL_SWITCH || "").toLowerCase()),
   evolutionMaxBuildsPerDay: Number(process.env.CEO_EVOLUTION_MAX_BUILDS_PER_DAY || 0),
   evolutionMaxConcurrent: Number(process.env.CEO_EVOLUTION_MAX_CONCURRENT_BUILDS || 0),

@@ -471,7 +471,9 @@
 
   <header>
     <div class="brand"><span class="mini"></span><h1>JARVIS</h1></div>
+    <button id="notif-bell" title="Notificări" style="margin-left:auto;background:none;border:none;cursor:pointer;position:relative;font-size:20px;color:#cbd6e2;">🔔<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-6px;background:#ef4444;color:#fff;font-size:10px;min-width:16px;height:16px;line-height:16px;border-radius:8px;text-align:center;padding:0 3px;"></span></button>
   </header>
+  <div id="notif-panel" style="display:none;position:fixed;top:52px;right:12px;width:min(380px,92vw);max-height:70vh;overflow-y:auto;background:#0e1520;border:1px solid #2b3a4c;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:50;padding:10px;"></div>
   <button class="btn-raport" id="btn-raport">RAPOARTE</button>
 
   <main id="chat" aria-live="polite"></main>
@@ -1061,6 +1063,30 @@ function setLed(name, on) {
   if (led) led.className = "led " + (on ? "on" : "off");
   if (st) st.textContent = on ? "ONLINE" : "OFF";
 }
+// ── NOTIFICATION CENTER (badge + panou) ──
+async function refreshNotifications() {
+  let d; try { d = await api("/api/monitor/notifications"); } catch { return; } // 503 daca off
+  if (!d || !d.sections) return;
+  const badge = $("notif-badge");
+  if (d.badge > 0) { badge.textContent = d.badge; badge.style.display = "block"; } else badge.style.display = "none";
+  const panel = $("notif-panel"); if (!panel) return;
+  const sec = (title, items) => items && items.length ? `<div style="font-size:11px;color:#a78bfa;margin:8px 0 4px;text-transform:uppercase;">${title}</div>` +
+    items.slice(0, 6).map(n => `<div class="notif-item" data-id="${n.id}" style="padding:8px;border:1px solid #253346;border-radius:8px;margin-bottom:6px;cursor:pointer;">
+      <div style="font-weight:600;font-size:13px;color:${n.severity==='CRITICAL'||n.requires_founder?'#f87171':n.severity==='HIGH'?'#f5a623':'#cbd6e2'};">${n.title||''}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:2px;">${(n.summary||'').slice(0,160)}</div>
+    </div>`).join("") : "";
+  const s = d.sections;
+  panel.innerHTML = (sec("Necesită decizia mea", s.needs_decision) + sec("Risc material", s.material_risk) +
+    sec("Legislație", s.legislative) + sec("Piață", s.market) + sec("Executate", s.executed) + sec("Informații", s.informational)) ||
+    '<div style="opacity:.6;font-size:13px;padding:10px;">Nicio notificare.</div>';
+  panel.querySelectorAll(".notif-item").forEach(el => el.addEventListener("click", async () => {
+    try { await api("/api/monitor/notifications/" + el.dataset.id, { action: "read" }); el.style.opacity = ".5"; refreshNotifications(); } catch {}
+  }));
+}
+(function initNotif(){ const b=document.getElementById("notif-bell"), p=document.getElementById("notif-panel");
+  if(b) b.addEventListener("click",()=>{ p.style.display = p.style.display==="none"?"block":"none"; refreshNotifications(); });
+  setInterval(()=>refreshNotifications().catch(()=>{}), 120000); setTimeout(()=>refreshNotifications().catch(()=>{}), 3000);
+})();
 async function refreshHud() {
   let d; try { d = await api("/api/hud"); } catch { return; }
   if (!d) return;

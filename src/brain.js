@@ -25,6 +25,9 @@ import { audit } from "./audit.js";
 import { wrapExternal } from "./lib/safeContent.js";
 import { norm } from "./lib/text.js";
 import { PERSONA } from "./persona.js";
+import { constitutionForPrompt, isManagerialIntent } from "./ceo/constitution.js";
+import { needsManagerialReasoning, assessmentInstruction, buildManagerialAssessment } from "./ceo/managerialReasoning.js";
+import { checkManagerialResponse, correctionInstruction, gateSummary } from "./ceo/qualityGate.js";
 import { splitQuestions, multiQuestionInstruction, completenessGap, tokenBudgetFor } from "./multiQuestion.js";
 import {
   isOperationalTopic, extractEntity, isProjectTopic, isRiskTopic, isCeoHomeTopic,
@@ -428,6 +431,20 @@ async function generalChat(channel, text) {
       system += "\n\n" + packetForPrompt(await buildEvidencePacket({ text, intents }));
     }
   } catch { /* best-effort */ }
+  // CONSTITUTIA CEO + CONTRACT MANAGERIAL (o singura sursa canonica): pe calea
+  // manageriala injectam principiile (interpreteaza/prioritizeaza/founder filter/
+  // owner/UNKNOWN/actioneaza) + instructiunea de raspuns pe contract. Intrebarile
+  // simple/factuale NU primesc structura (raman pe ruta rapida).
+  let _managerial = false;
+  try {
+    const { detectIntents } = await import("./ceo/evidencePacket.js");
+    _managerial = needsManagerialReasoning(text, detectIntents(text));
+    if (_managerial) {
+      system += "\n\n" + constitutionForPrompt({ scope: "compact" });
+      const assessment = buildManagerialAssessment({ text, intents: detectIntents(text) });
+      system += "\n\n" + assessmentInstruction(assessment);
+    }
+  } catch { /* best-effort */ }
   // EXTERNAL INTELLIGENCE (Fazele 23-26): la intrebari despre lumea externa,
   // injecteaza semnalele cu impact intern (marcate EXTERNAL, NU fapte interne).
   if (config.externalIntel) {
@@ -536,6 +553,37 @@ async function generalChat(channel, text) {
       formatReminders(reminders.slice(0, 3)) +
       `\n(raspunde: rezolvat #id / amana #id [zile] / ignora #id)`;
   }
+
+  // RESPONSE QUALITY GATE (Partea III): pe raspunsurile manageriale, valideaza
+  // determinist inainte de livrare; la esec MATERIAL → UN singur ciclu de corectie.
+  // Nu poate fi ocolit de fast-path/canned (acelea nu ajung aici cu _managerial).
+  if (_managerial) {
+    try {
+      const gctx = { text, isManagerial: true, forFounder: channel === "telegram" || channel === "hud", unknowns: [], receipts: [] };
+      const check = checkManagerialResponse(reply, gctx);
+      if (!check.pass) {
+        const corrected = await callClaude({
+          model: CHAT_MODEL, system,
+          messages: [...messages, { role: "assistant", content: reply }, { role: "user", content: correctionInstruction(check) }],
+          maxTokens: tokenBudgetFor(1, 900),
+        });
+        if (corrected && corrected.trim()) {
+          const recheck = checkManagerialResponse(corrected, gctx);
+          // Pastreaza corectia doar daca chiar imbunatateste (mai putine violari materiale).
+          if (recheck.material <= check.material) reply = corrected.trim();
+        }
+      }
+      await audit("quality_gate", text.slice(0, 80), gateSummary(check)).catch(() => {});
+    } catch (e) { console.error("[qualityGate]", e.message); }
+  }
+
+  // INVATARE DIN CORECTIILE LUI ADRIAN (Partea VI): daca mesajul curent e o corectie
+  // pe raspunsul anterior, o inregistram in Founder Model (nu modifica Constitutia).
+  try {
+    const { recordCorrection } = await import("./ceo/founderModel.js");
+    const prevAssistant = [...ctx.recent].reverse().find((m) => m.role === "assistant");
+    await recordCorrection(text, prevAssistant?.content || "");
+  } catch { /* best-effort */ }
 
   remember(channel, text, reply);
 

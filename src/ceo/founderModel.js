@@ -104,3 +104,55 @@ export function asksFounderOpinion(text) {
   const n = norm(text);
   return /(tu ce ai face|ce ai face tu|ce m[- ]?ai sfatui|ce recomanzi tu|ce ai alege|parerea ta|tu ce zici)/.test(n);
 }
+
+// ── INVATARE DIN CORECTII (Partea VI). Corectiile lui Adrian pe un raspuns →
+// observatie in Founder Model. NU modifica Constitutia (un pattern se promoveaza
+// doar dupa repetare+validare). Fiecare corectie: context, comportament gresit,
+// principiul extras, confidence, confirmari, contraexemple.
+const CORRECTION_PATTERNS = [
+  { rx: /nu asta am cerut|nu asta te-am intrebat|nu la asta/i, wrong: "a raspuns langa intentie", principle: "P2 intelege intentia, nu raspunde generic" },
+  { rx: /vorbesti ca un robot|prea tehnic|limbaj de robot|ca un bot/i, wrong: "limbaj robotic/tehnic", principle: "P14 limbaj uman, concluzie sus" },
+  { rx: /nu-mi lista|nu insira|nu enumera|prea multe|prea lung/i, wrong: "a enumerat in loc sa prioritizeze", principle: "P3 prioritizeaza, nu enumera" },
+  { rx: /asta trebuia sa faci tu|puteai sa faci tu|de ce nu ai facut tu/i, wrong: "a cerut in loc sa actioneze", principle: "P12 actioneaza cand e in boundary" },
+  { rx: /nu ma pune pe mine|de ce eu|nu e treaba mea asta/i, wrong: "a pus sarcina operationala pe Adrian", principle: "P5 founder filter" },
+  { rx: /ai presupus|de unde stii|ai inventat|nu ti-am zis asta/i, wrong: "a presupus fara dovada", principle: "P1 realitatea inaintea concluziei" },
+  { rx: /nu e confirmat|nu e sigur asta|nu ai de unde sti/i, wrong: "a prezentat nesigur ca fapt", principle: "P1/P9 UNKNOWN ramane UNKNOWN" },
+];
+
+const CORR_KEY = "ceo:founder-corrections";
+
+/** Detecteaza daca un mesaj e o corectie (pe raspunsul anterior). PUR. */
+export function detectCorrection(text) {
+  const t = String(text || "");
+  for (const p of CORRECTION_PATTERNS) if (p.rx.test(t)) return { isCorrection: true, wrong: p.wrong, principle: p.principle };
+  return { isCorrection: false };
+}
+
+/** Inregistreaza o corectie in Founder Model (best-effort, nu arunca). */
+export async function recordCorrection(text, prevReply = "", { store = null, nowISO = null } = {}) {
+  const det = detectCorrection(text);
+  if (!det.isCorrection) return { recorded: false };
+  try {
+    const { getState, setState } = await import("../state.js");
+    const S = store || { get: getState, set: setState };
+    const prev = (await S.get(CORR_KEY, { corrections: [] })) || { corrections: [] };
+    // Agrega pe principiu: confidence creste cu numarul de confirmari.
+    const list = arr(prev.corrections);
+    const existing = list.find((c) => c.principle === det.principle);
+    const entry = existing || { principle: det.principle, wrong: det.wrong, confirmations: 0, examples: [], confidence: 0, counterexamples: 0 };
+    entry.confirmations += 1;
+    entry.confidence = Math.min(90, 30 + entry.confirmations * 15);
+    entry.examples = [...arr(entry.examples), { context: String(text).slice(0, 160), prev: String(prevReply).slice(0, 160), at: nowISO || new Date().toISOString() }].slice(-5);
+    const corrections = existing ? list : [...list, entry];
+    await S.set(CORR_KEY, { corrections }).catch(() => {});
+    return { recorded: true, principle: det.principle, confirmations: entry.confirmations, promote_candidate: entry.confirmations >= 3 };
+  } catch (e) { return { recorded: false, error: e.message }; }
+}
+
+/** Corectiile invatate → pentru prompt (tipare de EVITAT, invatate din Adrian). */
+export function correctionsForPrompt(state) {
+  const list = arr(state?.corrections).filter((c) => c.confidence >= 45);
+  if (!list.length) return "";
+  return "CORECTII INVATATE de la Adrian (evita aceste tipare):\n" +
+    list.map((c) => `- ${c.principle} (Adrian a corectat de ${c.confirmations}x: ${c.wrong})`).join("\n");
+}

@@ -183,9 +183,16 @@ async function groundedAnswer({ identity, question, thread_context = "", task_co
     return `Aceasta tine de o zona (${oos.domains.join(", ")}) care nu e in rolul tau — nu am acces sa-ti dau acele date. Intreaba-l pe Adrian pentru ea. Cu ce te pot ajuta din zona ta?`;
   }
   const call = llm || (await import("../claude.js")).callClaude;
+  // Constitutia CEO (aceeasi sursa canonica) — pe intrebari manageriale, compact.
+  let constitution = "";
+  try {
+    const { isManagerialIntent, constitutionForPrompt } = await import("../ceo/constitution.js");
+    if (isManagerialIntent(question)) constitution = constitutionForPrompt({ scope: "compact" });
+  } catch { /* best-effort */ }
   const parts = [
     "Esti CODEX — colegul competent din Operational (nu un bot). Raspunzi scurt, uman, la obiect, in romana. Nu arata coduri interne, nu jargon tehnic.",
     identityForPrompt(identity.user_id),
+    constitution,
     thread_context || "",
     sourceTruth ? sourcesLine(sourceTruth) : "",
     trustReport ? trustForPrompt(trustReport) : "",

@@ -171,7 +171,7 @@ export function sanitizeManagerial(text, { confirmedFailures = [] } = {}) {
   if (arr(confirmedFailures).length) return String(text || ""); // cu log real, cauzalitatea e permisa
   let t = String(text || "");
   const rules = [
-    [/(extrasele|documentele|ele|acestea)\s+(sunt|raman|au ramas)\s+[iî]ntr-?un\s+loc[^.!?\n]*/gi, "nu sunt observabile in sursele pe care le verific"],
+    [/((extrasele|documentele|ele|acestea)\s+)?(sunt|raman|se afla|au ramas)\s+[iî]ntr-?un\s+loc[^.!?\n]*/gi, "nu sunt observabile in sursele pe care le verific"],
     [/\b(nu au intrat|n-?au intrat|nu au ajuns|n-?au ajuns)\b[^.!?\n]*/gi, "nu sunt inca observabile in sursele verificate"],
     [/parserul nu (le-a |a )?(preluat|luat|procesat|v[aă]zut)[^.!?\n]*/gi, "nu pot confirma starea procesarii"],
     [/\b(au r[aă]mas blocate|s-au blocat|upload(ul)? a e[sș]uat|au picat)\b[^.!?\n]*/gi, "nu pot confirma daca au fost procesate"],

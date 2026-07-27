@@ -7,6 +7,7 @@ process.env.TELEGRAM_OWNER_CHAT_ID ||= "1";
 import { readFileSync } from "node:fs";
 import { validateClaims, normalizeFounderTasking } from "../src/ceo/managerialClaimValidator.js";
 import { diagnoseSourcePipeline, PIPELINE_VERDICTS, declaresUpload } from "../src/ceo/sourcePipeline.js";
+import { finalizeManagerialOutput } from "../src/ceo/managerialFinalizer.js";
 
 let failed = 0, n = 0;
 const ok = (c, m) => { n++; console.log(`${c ? "✅" : "❌"} ${n}. ${m}`); if (!c) failed++; };

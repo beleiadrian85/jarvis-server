@@ -69,9 +69,41 @@ ok(!detectCorrection("multumesc, perfect").isCorrection, "mesaj normal != corect
 // ── Anti-ocolire: correctionInstruction produce ghidaj concret ──
 { const g = G(risc_rau); ok(/P7|P6|P2/.test(correctionInstruction(g)) && /owner|concluzie|specific/i.test(correctionInstruction(g)), "correctionInstruction da ghidaj concret pt. regenerare"); }
 
+// ══ CLAIM VALIDATOR — SUBSTANTA (corectia critica) ══════════════
+// TEST A — FOUNDER FILTER: "Adrian, intreab-o pe Dana" → FAIL
+ok(!G("Tu sa o intrebi pe Dana de sold la 11:00 si sa verifici rezultatul.").pass, "TEST A. ii cere lui Adrian sa intrebe/verifice (operational) → FAIL");
+ok(G("Ii cer eu Danei soldul azi si urmaresc raspunsul; te implic doar daca nu raspunde sau apare deficit de capital.").pass, "TEST A2. JARVIS preia solicitarea + urmarirea → PASS");
+
+// TEST B — DEADLINE FABRICATION: ora exacta fara baza → FAIL
+ok(!G("Dana da soldul la 11:00, forecast la 12:00, verificare la 14:00.").pass, "TEST B. ore exacte fabricate → FAIL");
+ok(G("Ii cer Danei soldul azi; conform task-ului scadent pe 30 iulie, urmaresc pana atunci.").pass, "TEST B2. termen cu baza (task/azi) → PASS");
+ok(!G("Raspuns necesar in 30 de minute.").pass, "TEST B3. 'in 30 de minute' fara baza → FAIL");
+
+// TEST C — THRESHOLD FABRICATION: prag numeric fara model → FAIL
+ok(!G("Daca soldul e sub 200.000 lei, criza imediata.").pass, "TEST C. prag 200k fara model → FAIL");
+ok(G("Riscul devine critic daca soldul reconciliat nu acopera obligatiile certe pana la urmatoarea incasare verificata.").pass, "TEST C2. prag conditional fara cifra inventata → PASS");
+ok(G("Conform obligatiilor certe de plata de 416.000 lei scadente, riscul e acoperit doar daca soldul depaseste aceasta suma.").pass, "TEST C3. prag cu baza (obligatii certe) → PASS");
+
+// TEST D — EXECUTION LANGUAGE: "pun observatie" fara receipt → FAIL
+ok(!G("Pun observatie pe task si alertez zilnic pana se rezolva.").pass, "TEST D. limbaj de executie fara receipt → FAIL");
+ok(G("Pot crea solicitarea catre Dana si o urmaresc; nu pot reconcilia automat pana nu se importa extrasul.").pass, "TEST D2. limbaj de capabilitate → PASS");
+ok(G("Am creat solicitarea catre Dana.", { receipts: [{ id: "OP1" }] }).pass, "TEST D3. 'am creat' CU receipt → PASS");
+
+// TEST E — HUMAN PSYCHOLOGY (deja P10, intarit)
+ok(!G("Nelu isi pierde motivatia din cauza reluarilor.").pass, "TEST E. deduce motivatia din task-uri → FAIL");
+ok(G("Lipsa validarii poate produce reluare inutila si intarziere la Nelu.").pass, "TEST E2. efect factual, nu psihologie → PASS");
+
+// TEST F — TECHNICAL ROOT CAUSE: proces manual inainte de pipeline → FAIL
+ok(!G("Dana sa faca reconciliere manuala zilnic 30 de minute.").pass, "TEST F. rutina manuala fara root-cause → FAIL");
+ok(G("Verific intai daca extrasul incarcat a fost detectat, parsat si importat; daca pipeline-ul e blocat, e problema tehnica, nu o transform in rutina manuala.").pass, "TEST F2. root-cause pipeline inainte de munca manuala → PASS");
+
+// TEST G — VALIDATION AUTHORITY: "doar Adrian valideaza" → FAIL
+ok(!G("Doar Adrian poate valida task-urile.").pass, "TEST G. presupune ca doar Adrian valideaza → FAIL (regula reala: creatorul valideaza)");
+
 // ── Wiring: brain.js aplica gate-ul pe calea manageriala (nu poate fi ocolit) ─
 const brain = readFileSync(new URL("../src/brain.js", import.meta.url), "utf8");
 ok(/needsManagerialReasoning/.test(brain) && /constitutionForPrompt/.test(brain) && /checkManagerialResponse/.test(brain), "brain.js injecteaza Constitutia + ruleaza Quality Gate pe calea manageriala");
+ok(/CLAIM_DISCIPLINE_PROMPT/.test(brain), "brain.js injecteaza disciplina afirmatiilor (termen/prag/owner/executie/founder)");
 ok(/recordCorrection/.test(brain), "brain.js inregistreaza corectiile lui Adrian (Founder Model)");
 
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — constitution`);

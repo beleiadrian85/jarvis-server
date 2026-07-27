@@ -447,6 +447,16 @@ async function generalChat(channel, text) {
       system += "\n\n" + constitutionForPrompt({ scope: "compact" });
       const assessment = buildManagerialAssessment({ text, intents: detectIntents(text) });
       system += "\n\n" + assessmentInstruction(assessment);
+      // DISCIPLINA AFIRMATIILOR: valorile din rubrici (termen/prag/owner/executie/
+      // founder) trebuie sa aiba baza — nu fabricate. Repara continutul, nu formatul.
+      const { CLAIM_DISCIPLINE_PROMPT } = await import("./ceo/managerialClaimValidator.js");
+      system += "\n\n" + CLAIM_DISCIPLINE_PROMPT;
+      // DATE STALE / DOCUMENTE INCARCATE: diagnostic pipeline (upload→...→reconciliat)
+      // INAINTE de a propune munca manuala (P13 — root cause before process burden).
+      try {
+        const { asksPipeline, diagnoseSourcePipeline, pipelineForPrompt } = await import("./ceo/sourcePipeline.js");
+        if (asksPipeline(text)) system += "\n\n" + pipelineForPrompt(await diagnoseSourcePipeline({}));
+      } catch { /* best-effort */ }
     }
   } catch { /* best-effort */ }
   // EXTERNAL INTELLIGENCE (Fazele 23-26): la intrebari despre lumea externa,

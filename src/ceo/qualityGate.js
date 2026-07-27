@@ -3,6 +3,7 @@
 // UN singur ciclu de corectie (regenerare cu violarile ca instructiune), apoi
 // livreaza cu incertitudinea explicita. Fara loop-uri nelimitate. PUR.
 import { PRINCIPLES } from "./constitution.js";
+import { validateClaims } from "./managerialClaimValidator.js";
 
 const isObj = (v) => v != null && typeof v === "object" && !Array.isArray(v);
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -85,9 +86,14 @@ export function checkManagerialResponse(reply, ctx = {}) {
   if (c.forFounder && r.length > 600 && !/^(.{0,120})(ce conteaza acum|concluzie|pe scurt|dominant|cel mai important)/i.test(n.slice(0, 160)))
     add("founder_attention", "P14", "raspuns lung fara concluzie manageriala la inceput");
 
-  const material = v.filter((x) => ["P1", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P14"].includes(x.principle.split("/")[0]));
+  // SUBSTANTA (Managerial Claim Validator): termen/prag/owner/executie/founder/
+  // emotie/proces manual — respinge valorile FABRICATE, nu doar formatul.
+  const claim = validateClaims(r, { receipts: c.receipts, founderExpectation: c.founderExpectation, unknowns: c.unknowns });
+  for (const cv of claim.violations) add(cv.type, cv.principle, cv.why);
+
+  const material = v.filter((x) => ["P1", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"].includes(String(x.principle).split("/")[0]));
   const score = Math.max(0, 100 - v.length * 12);
-  return { pass: material.length === 0, violations: v, material: material.length, score };
+  return { pass: material.length === 0, violations: v, material: material.length, score, claim_violations: claim.violations };
 }
 
 /** Instructiune de corectie pentru regenerare (UN singur ciclu). */

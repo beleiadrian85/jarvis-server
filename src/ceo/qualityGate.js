@@ -99,7 +99,7 @@ export function checkManagerialResponse(reply, ctx = {}) {
   const claim = validateClaims(r, { receipts: c.receipts, founderExpectation: c.founderExpectation, unknowns: c.unknowns });
   for (const cv of claim.violations) add(cv.type, cv.principle, cv.why);
 
-  const material = v.filter((x) => ["P1", "P3", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"].includes(String(x.principle).split("/")[0]));
+  const material = v.filter((x) => ["P1", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"].includes(String(x.principle).split("/")[0]));
   const score = Math.max(0, 100 - v.length * 12);
   return { pass: material.length === 0, violations: v, material: material.length, score, claim_violations: claim.violations };
 }

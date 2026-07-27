@@ -122,16 +122,34 @@ export async function diagnoseSourcePipeline({ text = "", nowMs = Date.now(), op
 /** Rezumat pentru prompt: verdict trasabil, fara a inventa esec tehnic. */
 export function pipelineForPrompt(diag) {
   if (!diag?.verdict) return "";
+  const titleByVerdict = {
+    PIPELINE_NOT_OBSERVED: "EXTRASELE NU SUNT INCA OBSERVABILE IN SURSELE VERIFICATE",
+    HUMAN_INPUT_REQUIRED: "EXTRASELE NU SUNT INCA OBSERVABILE — AM NEVOIE DE LOCATIA UPLOADULUI",
+    UPLOAD_OBSERVED_PROCESSING_PENDING: "EXTRAS OBSERVAT — PROCESARE IN CURS",
+    PARSING_FAILED: "EROARE DE PARSARE CONFIRMATA",
+    IMPORT_FAILED: "EROARE DE IMPORT CONFIRMATA",
+    RECONCILIATION_PENDING: "IMPORTAT — RECONCILIERE IN ASTEPTARE",
+    RECONCILIATION_FAILED: "EROARE DE RECONCILIERE CONFIRMATA",
+    SOURCE_STALE: "SURSA VECHE — POSIBIL EXTRASE MAI NOI DE INCARCAT",
+    PIPELINE_OK: "PIPELINE COMPLET SI PROASPAT",
+    INSUFFICIENT_EVIDENCE: "NU POT CONFIRMA STAREA PIPELINE-ULUI",
+  };
   return (
-    "DIAGNOSTIC PIPELINE SURSA (verdict TRASABIL — NU inventa esec tehnic):\n" +
-    `- declarat de user: ${diag.declared_event || "nimic"}\n` +
-    `- evenimente observate: ${diag.observed_events.join(", ") || "niciunul"}\n` +
-    `- surse verificate: ${diag.searched_sources.join(", ")}\n` +
-    `- esecuri CONFIRMATE (cu log): ${diag.confirmed_failures.join(", ") || "NICIUNUL"}\n` +
-    `- VERDICT: ${diag.verdict} — ${diag.verdict_basis}\n` +
-    `- urmatoarea actiune sistem: ${diag.next_system_action}\n` +
-    "REGULA: 'extrasele nu au intrat/au esuat' se afirma DOAR cu esecuri confirmate. " +
-    "Daca verdict=PIPELINE_NOT_OBSERVED/HUMAN_INPUT_REQUIRED: spune 'nu pot observa inca documentul in pipeline', NU 'a esuat'. " +
-    "Nu spune 'am verificat' fara sa fi verificat efectiv sursele in acest tur."
+    "DIAGNOSTIC PIPELINE SURSA — RANDEAZA raspunsul DIN aceste campuri structurate (titlu/concluzie/actiuni derivate DIN verdict, NU explicatii cauzale in plus):\n" +
+    `- declared_event: ${diag.declared_event || "nimic"}\n` +
+    `- observed_events: ${diag.observed_events.join(", ") || "niciunul"}\n` +
+    `- searched_sources: ${diag.searched_sources.join(", ")}\n` +
+    `- confirmed_failures: ${diag.confirmed_failures.join(", ") || "NICIUNUL"}\n` +
+    `- verdict: ${diag.verdict} — ${diag.verdict_basis}\n` +
+    `- confidence: ${diag.confidence}\n` +
+    `- human_input_needed: ${diag.human_input_needed}\n` +
+    `- next_system_action: ${diag.next_system_action}\n` +
+    `- TITLU IMPUS: "${titleByVerdict[diag.verdict] || "DIAGNOSTIC PIPELINE"}"\n` +
+    "REGULI DE RANDARE:\n" +
+    "• Titlul = cel impus mai sus (derivat din verdict), NU 'nu au intrat'.\n" +
+    "• Fara explicatii cauzale care nu sunt in confirmed_failures (interzis: 'sunt intr-un loc nescanat', 'parserul nu le-a preluat', 'au ramas blocate').\n" +
+    "• Daca confirmed_failures=NICIUNUL: spune ca nu poti confirma nici esec, nici blocaj — doar ca nu sunt observabile.\n" +
+    "• 'am verificat X' = DOAR searched_sources de mai sus. Nu promite ora reconcilierii.\n" +
+    "• Daca human_input_needed: cere DOAR informatia minima (interfata uploadului), fara re-upload, fara a trimite la Dana."
   );
 }

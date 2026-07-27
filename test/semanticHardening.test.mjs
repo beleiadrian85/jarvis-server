@@ -92,5 +92,24 @@ ok(/constitutionForPrompt/.test(codex), "H. Ask CODEX → Constitutie");
 // Nicio ruta canned nu trimite direct fara finalizer (scheduler nu mai are pushToOwner(await ceoHome/briefing/sales)).
 ok(!/pushToOwner\(await (ceoHomeReport|buildBriefing|buildSalesReport)/.test(sched), "H. canned reports NU mai fac pushToOwner direct (trec prin sendManagerial)");
 
+// ══ LIVE-FAILURE CORRECTION: titluri, cauzalitate, promisiuni, praguri, escaladare ══
+const V = (t, ctx) => validateClaims(t, ctx).violations.map((x) => x.type);
+ok(V("EXTRASELE NU AU INTRAT ÎN SISTEM").includes("CAUSAL_UNSUPPORTED"), "TITLU: 'nu au intrat' (verdict NOT_OBSERVED) → CAUSAL_UNSUPPORTED");
+ok(V("Extrasele sunt în locul pe care sistemul nu-l scanează.").includes("CAUSAL_UNSUPPORTED"), "CAUZAL: 'loc nescanat' fără log → FAIL");
+ok(V("Parserul nu le-a preluat.").includes("CAUSAL_UNSUPPORTED"), "CAUZAL: 'parserul nu le-a preluat' fără log → FAIL");
+ok(!V("Parserul nu le-a preluat — eroare confirmată.", { confirmedFailures: ["parse_error"] }).includes("CAUSAL_UNSUPPORTED"), "CAUZAL: permis CU confirmed_failures");
+ok(V("Până azi seara voi ști soldul real.").includes("FUTURE_PROMISE_NO_MECHANISM"), "PROMISIUNE: 'până diseară voi ști' fără mecanism → FAIL");
+ok(V("Verific imediat și transmit Danei rezultatul.").includes("FUTURE_PROMISE_NO_MECHANISM"), "PROMISIUNE: 'verific imediat/transmit Danei' fără receipt → FAIL");
+ok(!V("După ce identific sursa, pot verifica dacă este accesibilă.").includes("FUTURE_PROMISE_NO_MECHANISM"), "PROMISIUNE: reformulare ca abilitate → OK");
+ok(V("Dacă soldul este sub 300k, escaladez.").includes("FABRICATED_THRESHOLD"), "PRAG-CONDIȚIE: 'sub 300k' fără model → FAIL");
+ok(!V("Escaladez dacă soldul reconciliat nu acoperă obligațiile certe până la următorul punct de lichiditate.").some((x) => x === "FABRICATED_THRESHOLD"), "PRAG-CONDIȚIE: condițional fără cifră → OK");
+ok(V("Adrian sună banca pentru reeșalonare imediat.").includes("ESCALATION_WITHOUT_CHAIN"), "ESCALADARE: 'sună banca' fără lanț → FAIL");
+ok(!V("Dacă apare deficit confirmat după reconciliere, propun reeșalonare cu banca.").includes("ESCALATION_WITHOUT_CHAIN"), "ESCALADARE: cu lanț (deficit confirmat) → OK");
+
+// Randare structurata (titlu impus din verdict).
+{ const { pipelineForPrompt } = await import("../src/ceo/sourcePipeline.js");
+  const p = pipelineForPrompt({ verdict: "PIPELINE_NOT_OBSERVED", verdict_basis: "x", declared_event: "u", observed_events: [], searched_sources: ["a", "b"], confirmed_failures: [], next_system_action: "cauta", human_input_needed: true, confidence: "MEDIUM" });
+  ok(/NU SUNT INCA OBSERVABILE/.test(p) && /TITLU IMPUS/.test(p) && /Fara explicatii cauzale/.test(p), "RANDARE: titlu impus din verdict + interdictie cauzala"); }
+
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — semanticHardening`);
 process.exit(failed === 0 ? 0 : 1);

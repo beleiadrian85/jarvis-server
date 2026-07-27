@@ -78,6 +78,16 @@ const EMOTION = /(demotiv|paraliz|dezinteres|neimplica|incompeten|frustrat|lenes
 
 // Recomandare de proces manual (rutina umana).
 const MANUAL_PROCESS = /\b(reconciliere manuala|manual zilnic|zilnic \d+ (min|minute)|\d+ (min|minute) zilnic|rutina (manuala|zilnica)|sa faca (zilnic|manual))\b/i;
+
+// INFERENTA CAUZALA nesustinuta despre pipeline/documente (fara event/log confirmat).
+const CAUSAL_FAILURE = /(nu au intrat|n-au intrat|nu au ajuns|n-au ajuns|nu (s-)?au (incarcat|importat|procesat|preluat)|(sunt|raman|au ramas) (intr-un|in|pe|la) (folder|loc|locul|server|zona|sursa)[^.]{0,25}(nescanat|neverificat|neobservat|nescan|pe care sistemul nu)|(intr-un|in) locul pe care sistemul nu-?l scaneaza|parserul nu (le-a |a )?(preluat|luat|procesat|vazut)|au ramas blocate|s-au blocat|upload(ul)? (a )?esuat|au picat|nu le-a preluat sistemul)/i;
+
+// PROMISIUNE de executie viitoare / rezultat / ora pe care sistemul nu le controleaza.
+const FUTURE_PROMISE = /(verific imediat|verific acum|transmit (danei|lui nelu|nelu|danei)|voi transmite|il anunt|o anunt|ma ocup eu|ma ocup de|rezolv eu|revin cu (rezultatul|raspunsul|un raspuns)|voi sti (pana|azi|diseara|deseara|maine)|pana (azi )?(diseara|deseara|seara)|voi avea (raspunsul|soldul|cifra)|iti spun (pana|diseara|deseara)|pana diseara (voi|iti|am))/i;
+
+// ESCALADARE la fondator dintr-o cifra izolata, fara lantul de analiza.
+const BANK_ESCALATION = /(suna banca|apeleaza banca|suni la banca|contacteaza banca|reesalonare|reesaloneaza|renegoci|refinant)/i;
+const ESCALATION_CHAIN = /(deficit confirmat|dupa reconciliere|sold reconciliat|obligatii certe|incasari confirmate|daca deficitul)/i;
 // Root-cause verificat (pipeline).
 const ROOTCAUSE_CHECKED = /(upload|incarcat|detectat|parsat|import|pipeline|integrar|s-a actualizat sursa|eroare tehnica|verific intai daca)/i;
 
@@ -133,6 +143,20 @@ export function validateClaims(reply, ctx = {}) {
   if (PERMISSION_ASSUMPTION.test(n))
     add("PERMISSION_ASSUMPTION", "P5", "regula reala Operational: CREATORUL task-ului valideaza (nu exclusiv Adrian) — nu transforma o conventie in responsabilitate permanenta a fondatorului");
 
+  // 8. INFERENTA CAUZALA nesustinuta (titlu SAU corp): "nu au intrat / sunt intr-un
+  //    loc nescanat / parserul nu le-a preluat" — permis DOAR cu esec confirmat (log).
+  if (CAUSAL_FAILURE.test(r) && !(ctx.confirmedFailures?.length))
+    add("CAUSAL_UNSUPPORTED", "P1", "explicatie cauzala fara eveniment/log confirmat ('nu au intrat / loc nescanat / parserul nu le-a preluat') — din PIPELINE_NOT_OBSERVED rezulta DOAR ca nu sunt observabile, nu de ce; spune 'nu sunt inca observabile in sursele verificate'");
+
+  // 9. PROMISIUNE de executie/rezultat/ora viitoare fara task/job/receipt.
+  if (FUTURE_PROMISE.test(r) && !(ctx.receipts?.length) && !CAPABILITY_LANG.test(n))
+    add("FUTURE_PROMISE_NO_MECHANISM", "P12", "promite un rezultat/ora/actiune viitoare fara task/job/receipt real — reformuleaza ca abilitate ('dupa ce identificam sursa, pot verifica…' / 'pot crea solicitarea catre Dana'); nu promite ce sistemul nu controleaza");
+
+  // 10. ESCALADARE la fondator (suna banca/reesalonare) dintr-o cifra izolata, fara
+  //     lantul de analiza (sold reconciliat→obligatii certe→incasari→deficit→optiuni).
+  if (BANK_ESCALATION.test(n) && !ESCALATION_CHAIN.test(n))
+    add("ESCALATION_WITHOUT_CHAIN", "P4/P7", "recomanda actiune de fondator (banca/reesalonare) fara lantul: sold reconciliat → obligatii certe → incasari confirmate → deficit confirmat → optiuni interne → abia apoi decizie de fondator");
+
   return { violations, count: violations.length };
 }
 
@@ -145,4 +169,8 @@ export const CLAIM_DISCIPLINE_PROMPT =
   "• EXECUTIE: spune 'am facut' DOAR daca ai receipt in acest tur. Altfel: 'pot crea solicitarea…' / 'nu pot urmari automat pana cand…'. Nu simula autonomie.\n" +
   "• EMOTII: nu deduce motivatia/starea oamenilor din task-uri. Descrie efectul factual ('lipsa validarii → intarziere'), nu psihologia.\n" +
   "• DATE VECHI: daca o sursa pare stale, verifica intai pipeline-ul (upload→detectat→parsat→importat→reconciliat) inainte sa propui munca manuala. Un upload care pare esuat nu dovedeste ca a esuat.\n" +
+  "• CAUZALITATE: nu explica DE CE ('nu au intrat', 'loc nescanat', 'parserul nu le-a preluat', 'blocate') fara eveniment/log confirmat. Din 'neobservabil' rezulta DOAR ca nu le vezi, nu de ce. Titlurile respecta aceeasi regula.\n" +
+  "• PROMISIUNI: nu promite rezultat/ora viitoare ('verific imediat', 'pana diseara stiu', 'transmit Danei', 'ma ocup') fara task/job/receipt real. Spune 'dupa ce identific sursa, pot verifica…' / 'pot crea solicitarea catre Dana'.\n" +
+  "• ESCALADARE BANCA: nu recomanda 'suna banca/reesalonare' dintr-o cifra izolata. Lant: sold reconciliat → obligatii certe → incasari confirmate → deficit confirmat → optiuni interne → abia apoi decizie de fondator (cu founder_reason).\n" +
+  "• INCASARI DECLARATE: '1,5M din Marsa' = clasifica dupa dovada reala — founder-declared expectation / receivable planned / contract confirmed / invoice issued / bank receipt confirmed. Fara dovada bancara/contract: e ASTEPTARE, nu fapt financiar.\n" +
   "• VALIDARE: in Operational CREATORUL task-ului valideaza, nu doar Adrian.";

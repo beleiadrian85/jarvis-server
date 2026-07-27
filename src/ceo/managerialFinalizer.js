@@ -61,11 +61,11 @@ const CHANNEL_ADAPTERS = {
 export async function finalizeManagerialOutput(p = {}) {
   const {
     assessment = {}, draft = "", channel = "chat", trigger = null,
-    executionReceipts = [], forFounder = true, llm = null, system = null, messages = null,
+    executionReceipts = [], confirmedFailures = [], forFounder = true, llm = null, system = null, messages = null,
   } = isObj(p) ? p : {};
 
   let text = String(draft || "");
-  const gctx = { text: assessment?.decision_context || "", isManagerial: true, forFounder, unknowns: arr(assessment?.unknowns), receipts: arr(executionReceipts), founderExpectation: arr(assessment?.founder_declared_expectations).length > 0 };
+  const gctx = { text: assessment?.decision_context || "", isManagerial: true, forFounder, unknowns: arr(assessment?.unknowns), receipts: arr(executionReceipts), confirmedFailures: arr(confirmedFailures), founderExpectation: arr(assessment?.founder_declared_expectations).length > 0 };
 
   let gate = checkManagerialResponse(text, gctx);
   let trace = assertResponseTraceability(text, assessment, { receipts: executionReceipts });

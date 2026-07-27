@@ -439,7 +439,7 @@ async function generalChat(channel, text) {
   // manageriala injectam principiile (interpreteaza/prioritizeaza/founder filter/
   // owner/UNKNOWN/actioneaza) + instructiunea de raspuns pe contract. Intrebarile
   // simple/factuale NU primesc structura (raman pe ruta rapida).
-  let _managerial = false, _assessment = null, _pipelineReceipts = [];
+  let _managerial = false, _assessment = null, _pipelineReceipts = [], _confirmedFailures = [];
   try {
     const { detectIntents } = await import("./ceo/evidencePacket.js");
     _managerial = needsManagerialReasoning(text, detectIntents(text));
@@ -465,6 +465,7 @@ async function generalChat(channel, text) {
           system += "\n\n" + pipelineForPrompt(diag);
           // Sursele verificate REAL = receipts: "am verificat X,Y,Z" devine adevarat.
           _pipelineReceipts = diag.searched_sources.map((s) => ({ id: "checked:" + s, kind: "source_check" }));
+          _confirmedFailures = diag.confirmed_failures; // gate-ul respinge cauzalitatea fara aceste esecuri
         }
       } catch { /* best-effort */ }
     }
@@ -588,7 +589,7 @@ async function generalChat(channel, text) {
       const { finalizeManagerialOutput } = await import("./ceo/managerialFinalizer.js");
       const fin = await finalizeManagerialOutput({
         assessment: _assessment, draft: reply, channel: channel === "hud" ? "hud" : channel === "telegram" ? "telegram" : "chat",
-        trigger: "chat", executionReceipts: _pipelineReceipts, forFounder: true,
+        trigger: "chat", executionReceipts: _pipelineReceipts, confirmedFailures: _confirmedFailures, forFounder: true,
         llm: ({ system: s, messages: m }) => callClaude({ model: CHAT_MODEL, system: s, messages: m, maxTokens: tokenBudgetFor(1, 900) }),
         system, messages,
       });

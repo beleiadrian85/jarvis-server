@@ -156,7 +156,11 @@ export async function handleMessage(channel, text) {
   const wantsGrounded = (() => {
     try {
       return isOwnershipQuestion(text) || isFounderActionsQuestion(text) ||
-        asksAboutRequests(text).about || splitQuestions(text).length >= 2;
+        asksAboutRequests(text).about || splitQuestions(text).length >= 2 ||
+        // CONSTITUTIA nu poate fi ocolita de rapoartele canned: orice intrebare
+        // MANAGERIALA (riscuri, cash, task-uri, "cum stam", rezervari) merge pe
+        // calea grounded cu Constitutie + Quality Gate, nu la raportul canned.
+        isManagerialIntent(text);
     } catch { return false; }
   })();
 
@@ -475,7 +479,8 @@ async function generalChat(channel, text) {
 
   // VITEZA: chat pe model rapid (Haiku); tool-urile (MCP/web) intra DOAR cand
   // sunt necesare, ca raspunsurile simple sa fie instant.
-  const useOperational = hasOperational && isOperationalTopic(text);
+  // Managerial → are nevoie de datele reale: expune tool-urile de citire Operational.
+  const useOperational = hasOperational && (isOperationalTopic(text) || _managerial);
   const useWeb = needsWeb(text);
 
   const tc = Date.now();

@@ -41,6 +41,24 @@ export function registerMonitorApi(app) {
     try { res.json(await setImpactProfile(req.body || {}, {})); } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // Testeaza o notificare (Part VIII — feature de config; util si pt validare live).
+  app.post("/api/monitor/test-notification", async (req, res) => {
+    if (!config.notificationCenter) return res.status(503).json({ error: "off" });
+    try {
+      const { pushNotification } = await import("../notifications/center.js");
+      const sev = req.body?.severity || "MEDIUM";
+      const r = await pushNotification({ title: req.body?.title || "Notificare de test", summary: req.body?.summary || "Aceasta este o notificare de test pentru Notification Center.", severity: sev, category: "test", requires_founder: sev === "FOUNDER_DECISION", requires_action: ["HIGH", "CRITICAL", "FOUNDER_DECISION"].includes(sev) });
+      res.json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Ruleaza watcher-ul o data (manual — pt validare live). Gated pe web/legislatie.
+  app.post("/api/monitor/run-watch", async (req, res) => {
+    if (!config.legislationMonitoring && !config.webMonitoring) return res.status(503).json({ error: "web/legislation monitoring off" });
+    try { const { runWatch } = await import("./worker.js"); res.json(await runWatch({ topicFilter: req.body?.topic_id || null })); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Matricea de permisiuni email (transparenta: ce e permis vs blocat).
   app.get("/api/monitor/email-permissions", (_req, res) => {
     res.json({ matrix: emailPermissionMatrix(), send_available: false, note: "read-only + drafturi la cerere; SEND dezactivat" });

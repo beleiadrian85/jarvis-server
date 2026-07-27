@@ -218,6 +218,21 @@
   .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
   @keyframes tp { 0%,60%,100% { opacity: .25; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
 
+  .action-card { align-self: flex-start; max-width: 85%; margin: 6px 0; padding: 13px 15px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(124,58,237,.12), rgba(79,70,229,.08)); border: 1px solid rgba(124,58,237,.4); }
+  .action-card .ac-title { font-weight: 600; color: #c7b8ff; margin-bottom: 4px; }
+  .action-card .ac-summary { font-size: 13.5px; line-height: 1.45; margin-bottom: 4px; }
+  .action-card .ac-reason { font-size: 12.5px; opacity: .82; margin-bottom: 4px; }
+  .action-card .ac-meta { font-size: 11.5px; color: #a78bfa; margin-bottom: 3px; }
+  .action-card .ac-unknown { font-size: 11.5px; color: #f5a623; margin-bottom: 6px; }
+  .action-card .ac-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+  .action-card .ac-btn { font-family: inherit; font-size: 12.5px; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    background: rgba(124,58,237,.2); color: #e9e4ff; border: 1px solid rgba(124,58,237,.55); transition: background .18s; }
+  .action-card .ac-btn:hover:not(:disabled) { background: rgba(124,58,237,.38); }
+  .action-card .ac-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .action-card .ac-status { font-size: 12px; opacity: .7; font-style: italic; }
+  .action-card .ac-result { margin-top: 8px; font-size: 13px; color: var(--green); white-space: pre-wrap; }
+  .msg.receipt { align-self: flex-start; font-size: 12.5px; color: var(--green); border-color: rgba(52,211,153,.35); }
   .confirm-row { display: flex; gap: 10px; margin-top: 10px; }
   .confirm-row button { font-family: "Share Tech Mono"; font-size: 13px; letter-spacing: .12em; padding: 8px 20px; border-radius: 8px; cursor: pointer; transition: background .2s, box-shadow .2s; }
   .confirm-row .yes { background: rgba(52,211,153,.13); color: var(--green); border: 1px solid rgba(52,211,153,.5); }
@@ -567,6 +582,47 @@ function showReply(data) {
   const el = addMsg("jarvis", "JARVIS", data.reply);
   sayReply(data.voice || data.reply);   // rosteste rezumatul scurt daca exista
   if (data.confirmId) addConfirmButtons(el, data.confirmId);
+  if (data.action_cards && data.action_cards.length) renderActionCards(data.action_cards);
+  if (data.execution_receipts && data.execution_receipts.length) {
+    for (const r of data.execution_receipts) if (r.operational_id) addMsg("receipt", "✓", `Executat — receipt: ${r.operational_id}`);
+  }
+}
+// ── ACTION CARDS: propuneri executabile prin buton (nativ in chat) ──
+function renderActionCards(cards) {
+  for (const c of cards) {
+    const card = document.createElement("div"); card.className = "action-card"; card.dataset.cardId = c.id;
+    const h = document.createElement("div"); h.className = "ac-title"; h.textContent = c.title || "Decizie"; card.appendChild(h);
+    if (c.summary) { const s = document.createElement("div"); s.className = "ac-summary"; s.textContent = c.summary; card.appendChild(s); }
+    if (c.reason) { const r = document.createElement("div"); r.className = "ac-reason"; r.textContent = c.reason; card.appendChild(r); }
+    const meta = [];
+    if (c.owner) meta.push("owner: " + c.owner);
+    if (c.impact === "material") meta.push("impact material");
+    if (c.founder_required) meta.push("decizie de fondator");
+    if (meta.length) { const m = document.createElement("div"); m.className = "ac-meta"; m.textContent = meta.join(" · "); card.appendChild(m); }
+    if (c.unknowns && c.unknowns.length) { const u = document.createElement("div"); u.className = "ac-unknown"; u.textContent = "Necunoscut: " + c.unknowns.join("; "); card.appendChild(u); }
+    const row = document.createElement("div"); row.className = "ac-buttons";
+    const status = document.createElement("span"); status.className = "ac-status";
+    for (const b of (c.buttons || [])) {
+      const btn = document.createElement("button"); btn.className = "ac-btn"; btn.textContent = b.label;
+      btn.addEventListener("click", async () => {
+        [...row.querySelectorAll("button")].forEach((x) => x.disabled = true);
+        status.textContent = "…se execută"; row.appendChild(status);
+        try {
+          const d = await api("/api/actions/execute", { token: b.token, card_id: c.id, action_id: b.action_id, user_id: "adrian", conversation_id: "hud", choice_label: b.label });
+          row.remove();
+          const res = document.createElement("div"); res.className = "ac-result";
+          res.textContent = d.rendered || (d.ok ? "Executat." : (d.reason || "Nu am putut executa."));
+          card.appendChild(res);
+          if (d.status === "SUPERSEDED") res.textContent = "Situația s-a schimbat de la propunere — JARVIS a reanalizat și nu a executat acțiunea veche.";
+          refreshHud();
+        } catch (e) { status.textContent = "Eroare: " + e.message; [...row.querySelectorAll("button")].forEach((x) => x.disabled = false); }
+      });
+      row.appendChild(btn);
+    }
+    if ((c.buttons || []).length) card.appendChild(row);
+    else if (c.rendered) { const res = document.createElement("div"); res.className = "ac-result"; res.textContent = c.rendered; card.appendChild(res); }
+    chat.appendChild(card); chat.scrollTop = chat.scrollHeight;
+  }
 }
 function addConfirmButtons(msgEl, confirmId) {
   const row = document.createElement("div"); row.className = "confirm-row";

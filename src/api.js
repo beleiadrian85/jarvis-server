@@ -249,13 +249,70 @@ export function registerApi(app) {
     }
   });
 
+  // Producator determinist de envelope pentru cazul pipeline (extrase vechi). Din
+  // VERDICTUL structurat (nu din proza): AUTO search + INFORMATION_REQUIRED locatie.
+  async function buildPipelineEnvelope(text, convId) {
+    const { diagnoseSourcePipeline } = await import("./ceo/sourcePipeline.js");
+    const { buildEnvelope } = await import("./ceo/actions/envelope.js");
+    const diag = await diagnoseSourcePipeline({ text }).catch(() => null);
+    if (!diag) return null;
+    const actions = [
+      { intent: "search_sources", action_kind: "search_source", title: "Verifica sursele accesibile",
+        summary: `Verificate: ${diag.searched_sources.join(", ")}.`, tasks_only: true, permission_basis: "role_allowed", reversibility: "reversible", risk_level: "low" },
+    ];
+    const info = [];
+    if (diag.human_input_needed || ["HUMAN_INPUT_REQUIRED", "PIPELINE_NOT_OBSERVED"].includes(diag.verdict)) {
+      info.push({ intent: "ask_upload_location", title: "In ce interfata ai incarcat extrasele?",
+        alternatives: [{ label: "Operational" }, { label: "Google Drive" }, { label: "Email" }, { label: "Alta locatie" }] });
+    }
+    const titleMap = { PIPELINE_NOT_OBSERVED: "Extrasele nu sunt inca observabile in sursele verificate", HUMAN_INPUT_REQUIRED: "Extrasele nu sunt inca observabile — am nevoie de locatia uploadului" };
+    return buildEnvelope({
+      narrative: `${titleMap[diag.verdict] || "Diagnostic pipeline"}. ${diag.confirmed_failures.length ? "" : "Nu exista dovada ca uploadul a esuat — doar ca nu sunt observabile."}`,
+      situation: text, facts: diag.observed_events, unknowns: diag.missing_observations,
+      actions, information_requests: info,
+    }, { user_id: "adrian", conversation_id: convId });
+  }
+
   app.post("/api/chat", async (req, res) => {
     const text = String(req.body?.text ?? extractLastUser(req.body?.messages) ?? "").trim();
     if (!text) return res.status(400).json({ error: "text lipsa." });
+    const convId = String(req.body?.conversation_id || "hud");
     try {
+      // ACTION CARDS: raspuns "1"/"2"/"3" = apasare pe butonul unui card activ
+      // (fallback numerotat), interpretat DOAR daca exista exact un card compatibil.
+      if (config.actionCards && /^\s*[1-9]\s*$/.test(text)) {
+        const { resolveNumberedChoice } = await import("./ceo/actions/envelope.js");
+        const r = await resolveNumberedChoice(text, { user_id: "adrian", conversation_id: convId });
+        if (r.matched) {
+          const { executeAction, renderExecuted } = await import("./ceo/actions/executor.js");
+          const ex = await executeAction({ token: r.token, card_id: r.card_id, action_id: r.action_id, user_id: "adrian", conversation_id: convId, choice_label: r.choice_label });
+          const msg = ex.ok && ex.card ? renderExecuted(ex.card) : (ex.reason || "Nu am putut executa.");
+          return res.json({ reply: msg, executed: ex.ok, receipt: ex.receipt || null, action_cards: [] });
+        }
+      }
+
       const { reply, confirmId } = await handleMessage("hud", text);
-      const { text: shown, voice } = splitVoice(reply);
-      res.json({ reply: shown, voice, confirmId: confirmId || null });
+      let responseText = reply, action_cards = [], rendering_hints = null, execution_receipts = [];
+
+      // Producator determinist (keyed pe INTENTIA intrebarii, nu pe proza raspunsului):
+      // intrebare de tip pipeline → envelope cu INFORMATION_REQUIRED + AUTO search.
+      if (config.actionCards) {
+        try {
+          const { asksPipeline } = await import("./ceo/sourcePipeline.js");
+          if (asksPipeline(text)) {
+            const env = await buildPipelineEnvelope(text, convId);
+            if (env) {
+              const { finalizeEnvelope } = await import("./ceo/actions/envelope.js");
+              const fin = await finalizeEnvelope({ envelope: env, ctx: { user_id: "adrian", conversation_id: convId }, channel: "chat" });
+              responseText = fin.message || reply;
+              action_cards = fin.action_cards; rendering_hints = fin.rendering_hints; execution_receipts = fin.execution_receipts;
+            }
+          }
+        } catch (e) { console.error("[chat.cards]", e.message); }
+      }
+
+      const { text: shown, voice } = splitVoice(responseText);
+      res.json({ reply: shown, voice, confirmId: confirmId || null, action_cards, rendering_hints, execution_receipts });
     } catch (e) {
       console.error("[api/chat]", e.message);
       res.status(502).json({ error: "Eroare la nucleu." });

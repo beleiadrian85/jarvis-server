@@ -23,6 +23,18 @@ export function needsManagerialReasoning(text, intents = []) {
 }
 
 /**
+ * Detecteaza o ASTEPTARE declarata de fondator (bani/incasare viitoare) — P8:
+ * scenariu, NU fapt. @returns {object|null} founder expectation.
+ */
+export function detectFounderExpectation(text) {
+  const n = String(text || "").toLowerCase();
+  const future = /(vor intra|va intra|o sa intre|urmeaza sa intre|intra|incasez|primesc|voi (incasa|primi)|saptamana viitoare|luna viitoare|zilele astea|urmeaza)/i.test(n);
+  const money = n.match(/(\d[\d.,\s]*)\s*(milioane|milion|mil|k|mii|lei|ron|eur|€)/i);
+  if (!future || !money) return null;
+  return { what: String(text).slice(0, 120), value: money[0], status: "EXPECTED", source: "Adrian", confidence: 40, bank_confirmation: "absent" };
+}
+
+/**
  * Construieste ManagerialAssessment din contextul determinist disponibil
  * (evidence packet, source truth, ledger, founder expectations). PUR — nu cheama
  * LLM. Campurile ramase necunoscute sunt marcate explicit (nu inventate).

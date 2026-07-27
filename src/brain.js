@@ -447,8 +447,11 @@ async function generalChat(channel, text) {
       system += "\n\n" + constitutionForPrompt({ scope: "compact" });
       let _srcTruth = null;
       try { _srcTruth = await (await import("./ceo/sourceTruth.js")).buildSourceTruth({}); } catch { /* best-effort */ }
-      _assessment = buildManagerialAssessment({ text, intents: detectIntents(text), sourceTruth: _srcTruth });
+      const { detectFounderExpectation } = await import("./ceo/managerialReasoning.js");
+      const _exp = detectFounderExpectation(text);
+      _assessment = buildManagerialAssessment({ text, intents: detectIntents(text), sourceTruth: _srcTruth, expectations: _exp ? [_exp] : [] });
       system += "\n\n" + assessmentInstruction(_assessment);
+      if (_exp) system += "\n\nATENTIE (P8): utilizatorul declara o ASTEPTARE de incasare (" + _exp.value + "), NU un fapt. Trateaz-o conditional ('DACA se confirma incasarea…'). NU spune ca vanzarea e 'confirmata/reala/sigura' fara dovada bancara/contract. Nu inventa ore exacte pentru pasi.";
       // DISCIPLINA AFIRMATIILOR: valorile din rubrici (termen/prag/owner/executie/
       // founder) trebuie sa aiba baza — nu fabricate. Repara continutul, nu formatul.
       const { CLAIM_DISCIPLINE_PROMPT } = await import("./ceo/managerialClaimValidator.js");

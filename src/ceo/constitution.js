@@ -68,6 +68,9 @@ const MANAGERIAL_CUES = [
   "rezervari", "avans", "vanzari", "task-uri", "taskuri", "supraincarcat", "bottleneck", "blocaj",
   "prioritati", "prioritate", "situatia", "sa fac", "ce am de facut", "ce urmeaza", "decizie", "decid",
   "cine se ocupa", "owner", "escalad", "urmaresc", "follow", "ce lipseste",
+  // Asteptari declarate de fondator (bani/incasari viitoare) — P8: scenariu, nu fapt.
+  "milion", "milioane", "vor intra", "intra bani", "va intra", "incasez", "incaseaza", "primesc bani",
+  "vand", "vanzare", "vindem", "semnez", "semnam contract", "o sa intre", "urmeaza sa intre", "banii de la",
 ];
 const SIMPLE_FACTUAL = [
   /^\s*(cate|cati|cat|care|cine|unde|cand|ce ora|ce zi)\b/i, // intrebari factuale scurte

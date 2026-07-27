@@ -64,9 +64,11 @@ export function checkManagerialResponse(reply, ctx = {}) {
   if (GENERIC_PHRASES.some((g) => n.includes(g)) && !/(pana cand|termen|verific|prag|optiun|cine)/i.test(n))
     add("specific_recommendation", "P7", "recomandare generica fara cine/ce/pana cand/prag");
 
-  // 8. Scenariu prezentat ca fapt (P8).
-  if (c.founderExpectation && /\b(vei avea|ai|avem) (sigur|garantat|\d)/i.test(n) && !/daca se confirma|conditionat|expected/i.test(n))
-    add("scenario_not_fact", "P8", "asteptarea fondatorului prezentata ca incasare sigura");
+  // 8. Scenariu prezentat ca fapt (P8) — inclusiv "e real/confirmat/sigur".
+  if (c.founderExpectation &&
+      (/\b(vei avea|ai|avem) (sigur|garantat|\d)/i.test(n) || /(vanzarea|incasarea|tranzactia|banii) (e|este|sunt) (real|confirmat|sigur|garantat)/i.test(n) || /\b(real si confirmat|confirmat si real|sigur ca intra)\b/i.test(n)) &&
+      !/daca se confirma|conditionat|neconfirmat|nu e (inca )?(confirmat|semnat|in sistem)|expected/i.test(n))
+    add("scenario_not_fact", "P8", "asteptarea fondatorului prezentata ca incasare/vanzare sigura ('real/confirmat') fara dovada — conditioneaz-o ('DACA se confirma')");
 
   // 9. Succes declarat fara receipt/dovada (P11).
   if (SUCCESS_CLAIM.test(n) && !EVIDENCE_WORD.test(n) && !(c.receipts?.length))

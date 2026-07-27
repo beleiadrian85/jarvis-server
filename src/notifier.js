@@ -7,6 +7,19 @@ import { getUpcomingEvents } from "./sources/calendar.js";
 import { activeReminders } from "./reminders.js";
 import { getState, setState, wasNotified, markNotified } from "./state.js";
 
+// Toate alertele catre fondator trec prin finalizer-ul canonic (validare + adapter),
+// ca sa NU existe bypass prin notifier. Sunt pings factuale → trec fara violari,
+// dar traseul e unic si auditabil.
+async function pushFounderAlert(msg, trigger) {
+  let text = String(msg || "");
+  try {
+    const { finalizeManagerialOutput } = await import("./ceo/managerialFinalizer.js");
+    const fin = await finalizeManagerialOutput({ assessment: { decision_context: trigger }, draft: text, channel: "telegram", trigger });
+    if (fin.text) text = fin.text;
+  } catch { /* best-effort */ }
+  if (text.trim()) await pushToOwner(text);
+}
+
 /**
  * FAZA 3 — notificari imediate (polling la NOTIFY_POLL_MINUTES).
  * Pe canalul Telegram, doar proprietarul. Dedup prin tabelul `notified`.
@@ -62,10 +75,10 @@ async function checkTasks() {
   const knownSet = new Set(known);
   for (const t of cur) {
     if (!knownSet.has(t.id) && t.assignee.toLowerCase() === "adrian") {
-      await pushToOwner(`📥 Task nou atribuit ție: „${t.title}” (${t.priority}, termen ${t.deadline || "-"}).`);
+      await pushFounderAlert(`📥 Task nou atribuit ție: „${t.title}” (${t.priority}, termen ${t.deadline || "-"}).`, "task_nou");
     }
     if (isOverdue(t.deadline) && t.status !== "rezolvat" && !(await wasNotified(`overdue:${t.id}`))) {
-      await pushToOwner(`⏰ Task întârziat: „${t.title}” (termen ${t.deadline}, responsabil ${t.assignee}).`);
+      await pushFounderAlert(`⏰ Task întârziat: „${t.title}” (termen ${t.deadline}, responsabil ${t.assignee}).`, "task_intarziat");
       await markNotified(`overdue:${t.id}`);
     }
   }
@@ -86,7 +99,7 @@ async function checkEmails() {
   const seenSet = new Set(seen);
   for (const e of emails) {
     if (!seenSet.has(e.id) && !(await wasNotified(`email:${e.id}`))) {
-      await pushToOwner(`📧 Email important: „${e.subject}” — ${e.from.replace(/<.*>/, "").trim()}.`);
+      await pushFounderAlert(`📧 Email important: „${e.subject}” — ${e.from.replace(/<.*>/, "").trim()}.`, "email_important");
       await markNotified(`email:${e.id}`);
     }
   }
@@ -102,7 +115,7 @@ async function checkDeadlines() {
     if (!r.due_date) continue;
     const due = new Date(r.due_date).getTime();
     if (due >= now && due <= in48h && !(await wasNotified(`deadline48:${r.id}`))) {
-      await pushToOwner(`📌 Termen critic în <48h: ${r.title} (scadență ${new Date(r.due_date).toLocaleDateString("ro-RO")}).`);
+      await pushFounderAlert(`📌 Termen critic în <48h: ${r.title} (scadență ${new Date(r.due_date).toLocaleDateString("ro-RO")}).`, "termen_critic");
       await markNotified(`deadline48:${r.id}`);
     }
   }
@@ -116,7 +129,7 @@ async function checkMeetings() {
   for (const ev of events) {
     const key = `meeting:${ev.id}:${ev.startISO.slice(0, 16)}`;
     if (!(await wasNotified(key))) {
-      await pushToOwner(`🗓️ În 30 min: ${ev.title} (la ${ev.time}).`);
+      await pushFounderAlert(`🗓️ În 30 min: ${ev.title} (la ${ev.time}).`, "meeting_30min");
       await markNotified(key);
     }
   }

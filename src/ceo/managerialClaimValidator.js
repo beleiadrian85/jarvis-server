@@ -35,11 +35,41 @@ const FOUNDER_TASKING = new RegExp(
   `(la\\s+([01]?\\d|2[0-3])[:.]\\d\\d)[^.]{0,40}(intreab|verific|cere|suna|vorbe)` +
   ")\\b", "i");
 // Motiv legitim de fondator (capital/autoritate/negociere/strategie/decizie).
-const FOUNDER_REASON = /(decizie de capital|capital|aprobare|autoritate|negoci|strateg|risc (juridic|material)|angajament financiar|semnatura|deficit|doar tu (poti|ai autoritatea))/i;
+const FOUNDER_REASON = /(decizie de capital|capital|aprobare|aprobi|aproba|autoritate|negoci|strateg|risc (juridic|material)|angajament financiar|semnatura|deficit|doar tu (poti|ai autoritatea)|decizie strategica)/i;
+
+// ── STRAT SEMANTIC FOUNDER-TASKING: detecteaza INTENTIA de a-i pasa lui Adrian o
+// actiune operationala/de contact, indiferent de formulare. Al doilea strat peste
+// regex-ul literal. Verbe de contact/informare (2nd person = Adrian actor).
+const FT_SECOND_PERSON = /\b(sa\s+)?(vorbesti|discuti|verifici|verifica-|ceri|soliciti|suni|telefonezi|confirmi|intervii|contactezi|intrebi|clarifici|urmaresti|obtii|rezolvi|deblochezi|accelerezi|iei (tu )?legatura|te intalnesti|te implici|scrii)\b/;
+const FT_CONDITIONAL_YOU = /\b(daca )?ai\s+(discuta|vorbi|verifica|cere|solicita|suna|telefona|confirma|interveni|contacta|clarifica|obtine|rezolva|debloca|accelera|lua legatura|scrie|merge|vorbit)\b/;
+const FT_FROM_YOU = /\b(interventia|implicarea|prezenta|contributia|un semnal|un cuvant|o vorba)\s+(directa\s+)?(din partea |a )?ta\b|\bdin partea ta\b/;
+const FT_FOUNDER_PERSONAL = /\b(fondatorul|adrian)\b[^.]{0,50}\b(personal|direct|el insusi|singur|sa (confirme|verifice|discute|intervina|sune|ceara|vorbeasca))\b|\b(confirme|verifice|discute|intervina|sune|ceara|vorbeasca)\s+personal\b|\b(sa )?confirmi personal\b/;
+const FT_UNBLOCK_IF = /\bs-?ar\s+(debloca|rezolva|accelera|misca|imbunatati|urni|misc)[^.]{0,40}\b(daca|dac)\s+(ai|tu|fondatorul|adrian)\b/;
+const FT_SIMPLEST_YOU = /\bcel mai (simplu|bine|usor|rapid|eficient)\b[^.]{0,40}\b(tu|sa (ii |i-|le )?(ceri|verifici|vorbesti|suni|confirmi|obtii|intrebi) tu|sa ceri tu|ceri tu|verifici tu|obtii tu)\b/;
+const FT_ADRIAN_IMP = /\badrian,?\s+(intreab|verific|cere|solicit|suna|vorbe|confirm|clarific|discut|contacteaz|obtii)/;
+const FT_SHOULD_YOU = /\b(ar trebui|ar fi (bine|util|indicat|de dorit|preferabil)|poate ar trebui|nu ar strica)\b[^.]{0,40}\b(sa (tu |ii |i-)?)?(vorbesti|discuti|verifici|ceri|suni|confirmi|intervii|contactezi|intrebi|clarifici|iei legatura|te implici)\b/;
+
+const FOUNDER_TASK_LAYERS = [FT_SECOND_PERSON, FT_CONDITIONAL_YOU, FT_FROM_YOU, FT_FOUNDER_PERSONAL, FT_UNBLOCK_IF, FT_SIMPLEST_YOU, FT_ADRIAN_IMP, FT_SHOULD_YOU];
+
+/**
+ * Intentie normalizata de founder-tasking (semantic). @returns {tasking, matched}
+ * NU adauga fapte — doar clasifica sensul propozitiei.
+ */
+export function normalizeFounderTasking(sentence) {
+  const s = L(sentence);
+  // Excludem cazul in care JARVIS spune ce face EL ("eu ii cer/verific/urmaresc").
+  if (/\b(eu (ii |le |i-)?(cer|verific|urmaresc|solicit|contactez|intreb|clarific)|ii cer eu|jarvis (ii |le )?(cere|verifica|urmareste))\b/.test(s)) return { tasking: false, matched: null };
+  if (FOUNDER_TASKING.test(s)) return { tasking: true, matched: "literal" };
+  for (let i = 0; i < FOUNDER_TASK_LAYERS.length; i++) if (FOUNDER_TASK_LAYERS[i].test(s)) return { tasking: true, matched: "semantic:" + i };
+  return { tasking: false, matched: null };
+}
 
 // Limbaj de EXECUTIE (pretinde ca s-a facut/se face automat), inclusiv paraphrase:
 // "urmaresc situatia", "voi alerta", "ma asigur ca Dana raspunde", "am rezolvat".
-const EXECUTION_LANG = /\b(pun (o )?observatie|am pus|alertez|voi alerta|am alertat|iau lista|am luat|am cerut|am trimis|am creat|am verificat|am contactat|verific zilnic|monitorizez( zilnic)?|urmaresc (zilnic|situatia)|fac reconciliere|ma asigur ca .{0,20}(raspunde|face|rezolva)|am rezolvat|am inchis)\b/i;
+// EXECUTION_LANG e RECEIPT-GATED: flagat DOAR daca nu exista receipts reale. Cand
+// pipeline diagnosis ruleaza, searched_sources = receipts, deci "am verificat X,Y,Z"
+// devine adevarat. Prezentul pentru intentie viitoare ("verific unde") = tot aici.
+const EXECUTION_LANG = /\b(pun (o )?observatie|am pus|alertez|voi alerta|am alertat|iau lista|am luat|am cerut|am trimis|am creat|am contactat|am verificat|verific zilnic|monitorizez( zilnic)?|urmaresc (zilnic|situatia)|fac reconciliere|ma asigur ca .{0,20}(raspunde|face|rezolva)|am rezolvat|am inchis|verific unde|verific daca|caut documentul|caut extrasul|ma uit unde)\b/i;
 // Limbaj corect de capabilitate/propunere.
 const CAPABILITY_LANG = /(pot crea|pot trimite|pot urmari|propun|urmeaza sa|voi putea|nu pot (urmari|verifica) automat)/i;
 
@@ -76,9 +106,15 @@ export function validateClaims(reply, ctx = {}) {
   if (NUMERIC_THRESHOLD.test(r) && !near(NUMERIC_THRESHOLD, THRESHOLD_BASIS))
     add("FABRICATED_THRESHOLD", "P7/P9", "prag numeric fara sursa/formula — spune conditional ('critic daca soldul reconciliat nu acopera obligatiile certe'), nu inventa cifra");
 
-  // 3. FOUNDER FILTER strict: sarcina operationala pe Adrian fara motiv de fondator.
-  if (FOUNDER_TASKING.test(r) && !FOUNDER_REASON.test(n))
-    add("FOUNDER_FILTER", "P5", "ii cere lui Adrian o sarcina operationala/follow-up pe care JARVIS o poate crea/rula sau o poate face alt owner — nu-l implica fara motiv de fondator");
+  // 3. FOUNDER FILTER (semantic, per-fraza): sarcina operationala pasata lui Adrian,
+  // indiferent de formulare, fara motiv de fondator. Al doilea strat = intentie.
+  for (const sent of r.split(/(?<=[.!?\n])/)) {
+    const ft = normalizeFounderTasking(sent);
+    if (ft.tasking && !FOUNDER_REASON.test(L(sent))) {
+      add("FOUNDER_FILTER", "P5", `ii paseaza lui Adrian o actiune operationala/de contact (${ft.matched}) pe care JARVIS o poate ruta/urmari sau alt owner o poate face — fara motiv de fondator`);
+      break;
+    }
+  }
 
   // 4. EXECUTIE fara receipt (plan prezentat ca executie).
   if (EXECUTION_LANG.test(r) && !(ctx.receipts?.length) && !CAPABILITY_LANG.test(n))

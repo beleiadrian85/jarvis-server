@@ -439,7 +439,7 @@ async function generalChat(channel, text) {
   // manageriala injectam principiile (interpreteaza/prioritizeaza/founder filter/
   // owner/UNKNOWN/actioneaza) + instructiunea de raspuns pe contract. Intrebarile
   // simple/factuale NU primesc structura (raman pe ruta rapida).
-  let _managerial = false, _assessment = null;
+  let _managerial = false, _assessment = null, _pipelineReceipts = [];
   try {
     const { detectIntents } = await import("./ceo/evidencePacket.js");
     _managerial = needsManagerialReasoning(text, detectIntents(text));
@@ -460,7 +460,12 @@ async function generalChat(channel, text) {
       // INAINTE de a propune munca manuala (P13 — root cause before process burden).
       try {
         const { asksPipeline, diagnoseSourcePipeline, pipelineForPrompt } = await import("./ceo/sourcePipeline.js");
-        if (asksPipeline(text)) system += "\n\n" + pipelineForPrompt(await diagnoseSourcePipeline({}));
+        if (asksPipeline(text)) {
+          const diag = await diagnoseSourcePipeline({ text });
+          system += "\n\n" + pipelineForPrompt(diag);
+          // Sursele verificate REAL = receipts: "am verificat X,Y,Z" devine adevarat.
+          _pipelineReceipts = diag.searched_sources.map((s) => ({ id: "checked:" + s, kind: "source_check" }));
+        }
       } catch { /* best-effort */ }
     }
   } catch { /* best-effort */ }
@@ -583,7 +588,7 @@ async function generalChat(channel, text) {
       const { finalizeManagerialOutput } = await import("./ceo/managerialFinalizer.js");
       const fin = await finalizeManagerialOutput({
         assessment: _assessment, draft: reply, channel: channel === "hud" ? "hud" : channel === "telegram" ? "telegram" : "chat",
-        trigger: "chat", executionReceipts: [], forFounder: true,
+        trigger: "chat", executionReceipts: _pipelineReceipts, forFounder: true,
         llm: ({ system: s, messages: m }) => callClaude({ model: CHAT_MODEL, system: s, messages: m, maxTokens: tokenBudgetFor(1, 900) }),
         system, messages,
       });

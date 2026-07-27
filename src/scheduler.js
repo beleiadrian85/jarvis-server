@@ -17,17 +17,30 @@ import { audit } from "./audit.js";
  *   17:00 → verificare task-uri cu DIFF fata de ultimul snapshot;
  *           trimite doar daca exista schimbari sau probleme.
  */
+// CANONICAL FINALIZER pentru rapoartele manageriale programate: trec prin acelasi
+// lant (Constitutie + Claim Validator + Quality Gate + traceability) inainte de
+// pushToOwner. Fara LLM = validare + adapter; loghează violarile (raport determinist).
+async function sendManagerial(draft, trigger) {
+  let text = String(draft || "");
+  try {
+    const { finalizeManagerialOutput } = await import("./ceo/managerialFinalizer.js");
+    const fin = await finalizeManagerialOutput({ assessment: { decision_context: trigger, unknowns: [] }, draft: text, channel: "telegram", trigger, forFounder: true });
+    if (fin.text) text = fin.text;
+  } catch { /* best-effort */ }
+  if (text.trim()) await pushToOwner(text);
+}
+
 export function startScheduler() {
   cron.schedule("0 9 * * *", async () => {
     // PROACTIVE MODE — CEO Home (Health Score + riscuri) intai: pagina de dimineata.
     if (hasOperational) {
       try {
-        await pushToOwner(await ceoHomeReport());
+        await sendManagerial(await ceoHomeReport(), "ceo_home_09");
       } catch (e) { console.error("[cron09-ceo]", e.message); }
     }
     try {
       const report = await buildMorningReport();
-      await pushToOwner(report);
+      await sendManagerial(report, "morning_report_09");
       await snapshotTasks(); // sincronizam snapshot-ul ca DIFF-ul de la 17:00 sa fie corect
       await audit("cron_raport_09", "CEO Home + raport complet trimise", "scheduler");
     } catch (e) {
@@ -53,10 +66,10 @@ export function startScheduler() {
   if (hasOpsDb) {
     cron.schedule("30 7 * * *", async () => {
       try {
-        await pushToOwner(await buildBriefing());
+        await sendManagerial(await buildBriefing(), "briefing_0730");
       } catch (e) { console.error("[supervisor]", e.message); }
       try {
-        await pushToOwner(await buildSalesReport());
+        await sendManagerial(await buildSalesReport(), "sales_report_0730");
       } catch (e) { console.error("[sales]", e.message); }
     }, { timezone: "Europe/Bucharest" });
     console.log("[supervisor] briefing + raport vânzări zilnic 07:30 activ (F1, read-only)");

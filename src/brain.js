@@ -439,14 +439,16 @@ async function generalChat(channel, text) {
   // manageriala injectam principiile (interpreteaza/prioritizeaza/founder filter/
   // owner/UNKNOWN/actioneaza) + instructiunea de raspuns pe contract. Intrebarile
   // simple/factuale NU primesc structura (raman pe ruta rapida).
-  let _managerial = false;
+  let _managerial = false, _assessment = null;
   try {
     const { detectIntents } = await import("./ceo/evidencePacket.js");
     _managerial = needsManagerialReasoning(text, detectIntents(text));
     if (_managerial) {
       system += "\n\n" + constitutionForPrompt({ scope: "compact" });
-      const assessment = buildManagerialAssessment({ text, intents: detectIntents(text) });
-      system += "\n\n" + assessmentInstruction(assessment);
+      let _srcTruth = null;
+      try { _srcTruth = await (await import("./ceo/sourceTruth.js")).buildSourceTruth({}); } catch { /* best-effort */ }
+      _assessment = buildManagerialAssessment({ text, intents: detectIntents(text), sourceTruth: _srcTruth });
+      system += "\n\n" + assessmentInstruction(_assessment);
       // DISCIPLINA AFIRMATIILOR: valorile din rubrici (termen/prag/owner/executie/
       // founder) trebuie sa aiba baza — nu fabricate. Repara continutul, nu formatul.
       const { CLAIM_DISCIPLINE_PROMPT } = await import("./ceo/managerialClaimValidator.js");
@@ -569,27 +571,21 @@ async function generalChat(channel, text) {
       `\n(raspunde: rezolvat #id / amana #id [zile] / ignora #id)`;
   }
 
-  // RESPONSE QUALITY GATE (Partea III): pe raspunsurile manageriale, valideaza
-  // determinist inainte de livrare; la esec MATERIAL → UN singur ciclu de corectie.
-  // Nu poate fi ocolit de fast-path/canned (acelea nu ajung aici cu _managerial).
-  if (_managerial) {
+  // CANONICAL FINALIZER (Partea I/II/III): pe raspunsurile manageriale, TOT
+  // outputul trece prin acelasi lant — Assessment → Founder Filter → Claim
+  // Validator → Quality Gate → traceability → (1 corectie). Nu poate fi ocolit
+  // de fast-path/canned (acelea nu ajung aici cu _managerial).
+  if (_managerial && _assessment) {
     try {
-      const gctx = { text, isManagerial: true, forFounder: channel === "telegram" || channel === "hud", unknowns: [], receipts: [] };
-      const check = checkManagerialResponse(reply, gctx);
-      if (!check.pass) {
-        const corrected = await callClaude({
-          model: CHAT_MODEL, system,
-          messages: [...messages, { role: "assistant", content: reply }, { role: "user", content: correctionInstruction(check) }],
-          maxTokens: tokenBudgetFor(1, 900),
-        });
-        if (corrected && corrected.trim()) {
-          const recheck = checkManagerialResponse(corrected, gctx);
-          // Pastreaza corectia doar daca chiar imbunatateste (mai putine violari materiale).
-          if (recheck.material <= check.material) reply = corrected.trim();
-        }
-      }
-      await audit("quality_gate", text.slice(0, 80), gateSummary(check)).catch(() => {});
-    } catch (e) { console.error("[qualityGate]", e.message); }
+      const { finalizeManagerialOutput } = await import("./ceo/managerialFinalizer.js");
+      const fin = await finalizeManagerialOutput({
+        assessment: _assessment, draft: reply, channel: channel === "hud" ? "hud" : channel === "telegram" ? "telegram" : "chat",
+        trigger: "chat", executionReceipts: [], forFounder: true,
+        llm: ({ system: s, messages: m }) => callClaude({ model: CHAT_MODEL, system: s, messages: m, maxTokens: tokenBudgetFor(1, 900) }),
+        system, messages,
+      });
+      if (fin.text && fin.text.trim()) reply = fin.text;
+    } catch (e) { console.error("[finalizer]", e.message); }
   }
 
   // INVATARE DIN CORECTIILE LUI ADRIAN (Partea VI): daca mesajul curent e o corectie

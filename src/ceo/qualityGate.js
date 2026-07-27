@@ -41,10 +41,16 @@ export function checkManagerialResponse(reply, ctx = {}) {
   if (c.unknowns?.length && !/(necunoscut|unknown|nu (stiu|am date|e confirmat)|neconfirmat|nereconciliat|daca se confirma)/i.test(n))
     add("facts_vs_assumptions", "P1", "exista necunoscute in context dar raspunsul nu le marcheaza");
 
-  // 3. Doar dashboard/enumerare fara interpretare (P2/P3).
+  // 3. Doar dashboard/enumerare fara interpretare (P2 — soft).
   const looksLikeList = (r.match(/^\s*[-•\d]/gm) || []).length >= 4;
-  if (looksLikeList && !/(inseamna|conteaza|priorit, |dominant|recomand|concluzie|ce conteaza acum|impact)/i.test(n))
-    add("interpret_not_report", "P2/P3", "lista lunga fara interpretare/prioritizare");
+  const interprets = /(inseamna|conteaza|priorit|dominant|recomand|concluzie|ce conteaza acum|impact)/i.test(n);
+  if (looksLikeList && !interprets)
+    add("interpret_not_report", "P2", "lista lunga fara interpretare/prioritizare");
+  // 3b. DASHBOARD DUMP la o intrebare de tip "ce conteaza acum" — MATERIAL (P3):
+  // enumera toate problemele fara issue dominant.
+  const asksWhatMatters = /(ce conteaza acum|cum stam|care (sunt|e) (riscul|riscurile)|ce e important|ce am pe cap|prioritati|situatia (generala|firmei))/i.test(L(c.text));
+  if (asksWhatMatters && looksLikeList && !/(dominant|cel mai (important|grav|urgent)|principalul|conteaza acum e|singurul care)/i.test(n))
+    add("dashboard_dump", "P3", "la o intrebare de tip 'ce conteaza acum' a enumerat toate problemele fara issue dominant");
 
   // 5. Sarcina operationala pusa pe Adrian (P5) — "tu sa ceri/faci/verifici" ce e delegabil.
   if (/\b(tu (sa )?(ceri|cere|faci|fa|verifici|verifica|trimiti|trimite|suni|suna)|ar trebui sa (ceri|faci|verifici))\b/i.test(n) && !/decizie|aprob|negoci|capital|strateg/i.test(n))
@@ -91,7 +97,7 @@ export function checkManagerialResponse(reply, ctx = {}) {
   const claim = validateClaims(r, { receipts: c.receipts, founderExpectation: c.founderExpectation, unknowns: c.unknowns });
   for (const cv of claim.violations) add(cv.type, cv.principle, cv.why);
 
-  const material = v.filter((x) => ["P1", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"].includes(String(x.principle).split("/")[0]));
+  const material = v.filter((x) => ["P1", "P3", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"].includes(String(x.principle).split("/")[0]));
   const score = Math.max(0, 100 - v.length * 12);
   return { pass: material.length === 0, violations: v, material: material.length, score, claim_violations: claim.violations };
 }

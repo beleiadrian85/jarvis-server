@@ -81,7 +81,18 @@ export async function deliverDailyDigest(opts = {}) {
       return { sent: false, reason: "nimic_relevant", points: 0 };
     }
 
-    const text = composeDigestMessage({ digest, candidates: material.candidates, episodes: material.episodes, extras: material.extras || {} });
+    let text = composeDigestMessage({ digest, candidates: material.candidates, episodes: material.episodes, extras: material.extras || {} });
+    // CANONICAL FINALIZER: digestul proactiv trece prin acelasi lant managerial
+    // (Constitutie + Claim Validator + Quality Gate + traceability). Fara LLM =
+    // validare + channel adapter (digestul e determinist, nu se regenereaza aici).
+    try {
+      const { finalizeManagerialOutput } = await import("../ceo/managerialFinalizer.js");
+      const fin = await finalizeManagerialOutput({
+        assessment: { decision_context: "daily ceo digest", unknowns: [], jarvis_actions: material.extras?.resolved || [] },
+        draft: text, channel: "digest", trigger: "daily_digest", forFounder: true, executionReceipts: material.extras?.resolved || [],
+      });
+      if (fin.text) text = fin.text;
+    } catch { /* best-effort — digestul continua */ }
     const hash = contentHash(text);
     if (st.lastHash === hash) return { sent: false, reason: "continut_neschimbat", points: digest.points };
 

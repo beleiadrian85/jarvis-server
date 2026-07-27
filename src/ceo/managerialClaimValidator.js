@@ -4,31 +4,47 @@
 // pe fondator cu motiv, stare emotionala cu sursa umana, proces manual doar dupa
 // root-cause. Quality Gate RESPINGE claim-urile fara baza. PUR + determinist.
 
-const L = (s) => String(s || "").toLowerCase();
+// Normalizare diacritice — altfel "vorbești/să/situația" ocolesc pattern-urile.
+const DIA = (s) => String(s || "").replace(/[ăâ]/gi, "a").replace(/[î]/gi, "i").replace(/[șş]/gi, "s").replace(/[țţ]/gi, "t");
+const L = (s) => DIA(s).toLowerCase();
 
 // Baze acceptate pentru un TERMEN (P: deadline_basis).
 const DEADLINE_BASIS = /(ai (spus|zis|cerut)|conform task|din task|scadent|scadenta|termen (legal|contractual)|contract|sla|pana la (incasarea|livrarea|semnarea)|calculat din|politica|deadline stabilit)/i;
-// Ore exacte / termene fabricate.
-const EXACT_TIME = /\b([01]?\d|2[0-3])[:.]([0-5]\d)\b|\bin\s+\d+\s*(min(ute)?|de minute|ore|h)\b|\bpana (azi|maine) la\s+\d/i;
+// Ore exacte / termene fabricate (inclusiv paraphrase semantice: "in urmatoarele
+// doua ore", "pana la pranz", "in cateva minute").
+const EXACT_TIME = /\b([01]?\d|2[0-3])[:.]([0-5]\d)\b|\bin\s+(\d+|cateva|urmatoarele\s+(\d+|doua|trei|cateva))\s*(min(ute)?|de minute|ore|h)\b|\bpana (azi|maine) la\s+\d|\bpana la (pranz|amiaza|amiază|seara|sfarsitul zilei|finalul zilei|ora \d)/i;
 
 // Baze acceptate pentru un PRAG numeric (threshold_basis).
 const THRESHOLD_BASIS = /(conform|formula|calculat din|obligatii (certe|de plata) de|suma scadenta|pe baza|model|buffer|acoperirea)/i;
 // Prag numeric financiar (sub/peste X lei/k/ron).
 const NUMERIC_THRESHOLD = /\b(sub|peste|mai (mic|mare) (de|decat)|<|>|daca (soldul|cash-ul)[^.]{0,30})\s*[\d][\d.\s]*\s*(k\b|mii|lei|ron|eur|€|000)/i;
 
-// Sarcina pe fondator = adresare directa + verb operational.
-const FOUNDER_TASKING = /\b(tu (sa )?(ceri|cere|intrebi|intreaba|verifici|verifica|suni|suna|trimiti|trimite|iei legatura|urmaresti|urmareste|reconciliezi|dai)|adrian,?\s+(cere|intreaba|verifica|suna|trimite)|(la\s+([01]?\d|2[0-3])[:.]\d\d)[^.]{0,40}(intreab|verific|cere|suna))\b/i;
+// Sarcina pe fondator = adresare directa + verb operational, INCLUSIV paraphrase
+// semantice soft ("ar fi util sa vorbesti cu Dana", "poate interventia ta",
+// "recomand sa verifici personal cu Nelu", "cel mai simplu ar fi sa ii ceri tu").
+const OP_VERB = "(ceri|cere|intrebi|intreaba|verifici|verifica|suni|suna|trimiti|trimite|iei legatura|contactezi|contacta|discuti|discuta|vorbesti|vorbeste|intervii|interveni|urmaresti|urmareste|reconciliezi|te ocupi|ocupa-te|dai|clarifici)";
+const FOUNDER_TASKING = new RegExp(
+  "\\b(" +
+  // adresare directa
+  `tu (sa )?${OP_VERB}|adrian,?\\s+(cere|intreaba|verifica|suna|trimite|vorbeste)|` +
+  // paraphrase soft: "ar fi util/bine sa vorbesti", "ai putea sa verifici", "merita sa ceri tu"
+  `(ar fi (util|bine|indicat|mai simplu)|ai putea|ai vrea|merita|cel mai (simplu|bine) (ar fi|e))\\s+(sa\\s+)?${OP_VERB}|` +
+  // "interventia ta", "cu ajutorul tau", "verifici personal", "sa ii ceri tu", "sa vorbesti tu personal"
+  `interventia ta|cu ajutorul tau|${OP_VERB} personal|(sa (ii )?${OP_VERB}) tu|` +
+  // ora exacta + verb operational
+  `(la\\s+([01]?\\d|2[0-3])[:.]\\d\\d)[^.]{0,40}(intreab|verific|cere|suna|vorbe)` +
+  ")\\b", "i");
 // Motiv legitim de fondator (capital/autoritate/negociere/strategie/decizie).
-const FOUNDER_REASON = /(decizie de capital|capital|aprobare|autoritate|negoci|strateg|risc (juridic|material)|angajament financiar|semnatura|deficit)/i;
+const FOUNDER_REASON = /(decizie de capital|capital|aprobare|autoritate|negoci|strateg|risc (juridic|material)|angajament financiar|semnatura|deficit|doar tu (poti|ai autoritatea))/i;
 
-// Limbaj de EXECUTIE (pretinde ca s-a facut/se face automat).
-const EXECUTION_LANG = /\b(pun (o )?observatie|am pus|alertez|am alertat|iau lista|am luat|am cerut|am trimis|am creat|am verificat|am contactat|verific zilnic|monitorizez zilnic|urmaresc zilnic|fac reconciliere)\b/i;
+// Limbaj de EXECUTIE (pretinde ca s-a facut/se face automat), inclusiv paraphrase:
+// "urmaresc situatia", "voi alerta", "ma asigur ca Dana raspunde", "am rezolvat".
+const EXECUTION_LANG = /\b(pun (o )?observatie|am pus|alertez|voi alerta|am alertat|iau lista|am luat|am cerut|am trimis|am creat|am verificat|am contactat|verific zilnic|monitorizez( zilnic)?|urmaresc (zilnic|situatia)|fac reconciliere|ma asigur ca .{0,20}(raspunde|face|rezolva)|am rezolvat|am inchis)\b/i;
 // Limbaj corect de capabilitate/propunere.
 const CAPABILITY_LANG = /(pot crea|pot trimite|pot urmari|propun|urmeaza sa|voi putea|nu pot (urmari|verifica) automat)/i;
 
 // Stare emotionala (interzis ca fapt).
-const EMOTION = /\b(demotiv|paraliz|dezinteres|neimplicat|incompeten|frustrat|lenes|isi pierde (motivatia|elanul)|nu mai are chef|delasa)\b/i;
-const EMOTION_HEDGE = /(pare|posibil|ipotez|s-ar putea|de verificat cu|nu pot sti starea)/i;
+const EMOTION = /(demotiv|paraliz|dezinteres|neimplica|incompeten|frustrat|lenes|isi pierde (motivati|elan|chef)|nu mai are (motivati|elan|chef)|pierdut (motivati|elan|chef)|delasa|descuraj)/i;
 
 // Recomandare de proces manual (rutina umana).
 const MANUAL_PROCESS = /\b(reconciliere manuala|manual zilnic|zilnic \d+ (min|minute)|\d+ (min|minute) zilnic|rutina (manuala|zilnica)|sa faca (zilnic|manual))\b/i;
@@ -43,8 +59,8 @@ const PERMISSION_ASSUMPTION = /\b(doar adrian (poate|valideaza)|numai adrian (po
  * ctx: { receipts:[], founderExpectation:bool, unknowns:[] }
  */
 export function validateClaims(reply, ctx = {}) {
-  const r = String(reply || "");
-  const n = L(r);
+  const r = DIA(String(reply || "")); // normalizat pe diacritice (patternurile ruleaza pe asta)
+  const n = L(reply);
   const violations = [];
   const add = (type, principle, why) => violations.push({ type, principle, why });
   const near = (rx, base) => { // are baza in aceeasi fraza?
@@ -68,9 +84,10 @@ export function validateClaims(reply, ctx = {}) {
   if (EXECUTION_LANG.test(r) && !(ctx.receipts?.length) && !CAPABILITY_LANG.test(n))
     add("EXECUTION_WITHOUT_RECEIPT", "P12", "limbaj de executie ('pun observatie/alertez/verific zilnic') fara receipt sau mecanism real — spune 'pot crea…' sau 'nu pot urmari automat pana cand…'");
 
-  // 5. STARE emotionala fara sursa umana.
-  if (EMOTION.test(n) && !EMOTION_HEDGE.test(n))
-    add("PSYCH_INFERENCE", "P10", "stare psihologica dedusa din task-uri ca fapt — permis doar cu sursa umana explicita sau ca efect ('lipsa validarii poate produce intarziere')");
+  // 5. STARE emotionala (chiar hedge-uita: "pare/probabil frustrat" ramane interzis).
+  //    Permis DOAR daca vine cu sursa umana explicita ("mi-a spus ca").
+  if (EMOTION.test(n) && !/(mi-a spus|a spus el|conform (lui|discutiei)|sursa umana|el a zis)/i.test(n))
+    add("PSYCH_INFERENCE", "P10", "stare psihologica ca (in)fapt — interzisa chiar hedge-uita ('pare/probabil frustrat'); descrie efectul factual ('lipsa validarii → reluare/intarziere'), nu emotia");
 
   // 6. PROCES manual inainte de root-cause.
   if (MANUAL_PROCESS.test(n) && !ROOTCAUSE_CHECKED.test(n))

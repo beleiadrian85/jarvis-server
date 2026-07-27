@@ -153,6 +153,9 @@ export const config = {
   // pentru Dana/Nelu. Acelasi Cognitive Kernel; need-to-know; comenzi TASKS-only
   // prin CommandBus. Implicit OFF pana la deploy validat.
   askCodex: ["on", "true"].includes(String(process.env.CODEX_ASK_ENABLED || "").toLowerCase()),
+  // Action Cards (propuneri executabile prin buton) + invatare + autonomie controlata.
+  // AUTO_EXECUTE doar reversibil/risc redus/TASKS-only; never-autonomous cere aprobare.
+  actionCards: ["on", "true"].includes(String(process.env.CEO_ACTION_CARDS_ENABLED || "").toLowerCase()),
   evolutionKill: ["on", "true"].includes(String(process.env.CEO_EVOLUTION_KILL_SWITCH || "").toLowerCase()),
   evolutionMaxBuildsPerDay: Number(process.env.CEO_EVOLUTION_MAX_BUILDS_PER_DAY || 0),
   evolutionMaxConcurrent: Number(process.env.CEO_EVOLUTION_MAX_CONCURRENT_BUILDS || 0),

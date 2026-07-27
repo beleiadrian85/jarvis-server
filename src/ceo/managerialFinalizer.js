@@ -61,7 +61,8 @@ const CHANNEL_ADAPTERS = {
 export async function finalizeManagerialOutput(p = {}) {
   const {
     assessment = {}, draft = "", channel = "chat", trigger = null,
-    executionReceipts = [], sourceChecks = [], confirmedFailures = [], forFounder = true, llm = null, system = null, messages = null,
+    executionReceipts = [], sourceChecks = [], confirmedFailures = [], actionCards = [], policyReferences = [],
+    forFounder = true, llm = null, system = null, messages = null,
   } = isObj(p) ? p : {};
 
   let text = String(draft || "");
@@ -95,8 +96,34 @@ export async function finalizeManagerialOutput(p = {}) {
   const adapt = CHANNEL_ADAPTERS[channel] || CHANNEL_ADAPTERS.chat;
   text = adapt(text);
 
-  await audit("managerial_finalize", `${channel}/${trigger || "-"}`, `${gateSummary(gate)} traceable=${trace.traceable} gaps=${trace.gaps.length} corrected=${corrected}`).catch(() => {});
-  return { text, gate, traceability: trace, corrected, channel };
+  // INVARIANT: fara actiuni ascunse in proza (trebuie card/receipt/info-request).
+  const hidden = assertNoHiddenActions(text, { actionCards, executionReceipts });
+
+  await audit("managerial_finalize", `${channel}/${trigger || "-"}`, `${gateSummary(gate)} traceable=${trace.traceable} gaps=${trace.gaps.length} corrected=${corrected} cards=${arr(actionCards).length} hidden=${!hidden.ok}`).catch(() => {});
+  // Contract structurat (Partea FINALIZER): mesaj + carduri + receipts + politici.
+  return {
+    message: text, action_cards: arr(actionCards), execution_receipts: arr(executionReceipts), policy_references: arr(policyReferences),
+    gate, traceability: trace, hidden_actions: hidden, corrected, channel,
+    text, // compat inapoi
+  };
+}
+
+/**
+ * INVARIANT: nicio actiune ascunsa in proza. Daca textul PROMITE/DIRECTIONEAZA o
+ * actiune (creeaza/trimite/verifica/aproba/alege/contacteaza/amana/anuleaza), ea
+ * trebuie sa existe structural ca Action Card, receipt de executie sau cerere de
+ * informatie. @returns {ok, hidden:[verb]}
+ */
+export function assertNoHiddenActions(text, { actionCards = [], executionReceipts = [] } = {}) {
+  const t = L(text);
+  const hasStructure = arr(actionCards).length > 0 || arr(executionReceipts).length > 0;
+  // Verbe de actiune ca DIRECTIVA/PROMISIUNE (nu descriere factuala).
+  const ACTION_VERBS = /\b(creez|creeaza|voi crea|trimit|voi trimite|aprob|alege intre|contactez|voi contacta|aman|voi amana|anulez|voi anula|programez follow)\b/i;
+  // "pot crea/pot trimite/pot verifica" = ABILITATE (nu directiva) — permis fara card.
+  const isAbility = /\b(pot |as putea |daca vrei|iti pot)\b/i.test(t);
+  if (ACTION_VERBS.test(t) && !hasStructure && !isAbility)
+    return { ok: false, hidden: (t.match(ACTION_VERBS) || []).slice(0, 1), why: "textul directioneaza/promite o actiune care nu exista ca buton/receipt/cerere de informatie" };
+  return { ok: true, hidden: [] };
 }
 
 /** True daca un output PROACTIV merita trimis (management by exception). Fara

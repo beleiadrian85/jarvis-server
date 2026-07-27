@@ -111,5 +111,14 @@ ok(!V("Dacă apare deficit confirmat după reconciliere, propun reeșalonare cu 
   const p = pipelineForPrompt({ verdict: "PIPELINE_NOT_OBSERVED", verdict_basis: "x", declared_event: "u", observed_events: [], searched_sources: ["a", "b"], confirmed_failures: [], next_system_action: "cauta", human_input_needed: true, confidence: "MEDIUM" });
   ok(/NU SUNT INCA OBSERVABILE/.test(p) && /TITLU IMPUS/.test(p) && /Fara explicatii cauzale/.test(p), "RANDARE: titlu impus din verdict + interdictie cauzala"); }
 
+// ══ SANITIZER DETERMINIST: garantie ca inferenta cauzala NU supravietuieste ══
+{ const { sanitizeManagerial } = await import("../src/ceo/managerialClaimValidator.js");
+  const s = sanitizeManagerial("Extrasele nu au intrat în sistem. Sunt într-un loc pe care sistemul nu-l scanează (probabil email la Dana).", { confirmedFailures: [] });
+  ok(!/nu au intrat|loc pe care sistemul|probabil email/i.test(s), "SANITIZER: frazele cauzale interzise inlocuite cu formulare sigura");
+  ok(sanitizeManagerial("Parserul nu le-a preluat — eroare confirmată.", { confirmedFailures: ["parse_error"] }).includes("Parserul"), "SANITIZER: cu confirmed_failures → neschimbat"); }
+// Finalizer end-to-end: draft cu cauzalitate, fara llm → sanitizat determinist.
+{ const fin = await finalizeManagerialOutput({ assessment: { decision_context: "pipeline" }, draft: "Extrasele nu au intrat în sistem.", channel: "chat", confirmedFailures: [] });
+  ok(!/nu au intrat/i.test(fin.text) && fin.corrected, "FINALIZER: sanitizeaza cauzalitatea chiar fara ciclu LLM (garantie de output)"); }
+
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " EȘUATE"} — semanticHardening`);
 process.exit(failed === 0 ? 0 : 1);

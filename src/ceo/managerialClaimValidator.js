@@ -7,6 +7,7 @@
 // Normalizare diacritice — altfel "vorbești/să/situația" ocolesc pattern-urile.
 const DIA = (s) => String(s || "").replace(/[ăâ]/gi, "a").replace(/[î]/gi, "i").replace(/[șş]/gi, "s").replace(/[țţ]/gi, "t");
 const L = (s) => DIA(s).toLowerCase();
+const arr = (v) => (Array.isArray(v) ? v : []);
 
 // Baze acceptate pentru un TERMEN (P: deadline_basis).
 const DEADLINE_BASIS = /(ai (spus|zis|cerut)|conform task|din task|scadent|scadenta|termen (legal|contractual)|contract|sla|pana la (incasarea|livrarea|semnarea)|calculat din|politica|deadline stabilit)/i;
@@ -158,6 +159,27 @@ export function validateClaims(reply, ctx = {}) {
     add("ESCALATION_WITHOUT_CHAIN", "P4/P7", "recomanda actiune de fondator (banca/reesalonare) fara lantul: sold reconciliat → obligatii certe → incasari confirmate → deficit confirmat → optiuni interne → abia apoi decizie de fondator");
 
   return { violations, count: violations.length };
+}
+
+/**
+ * SANITIZER DETERMINIST (ultima linie): dupa cele maxim UN ciclu de corectie, daca
+ * modelul tot lasa o inferenta cauzala nesustinuta, o INLOCUIM cu formularea sigura.
+ * Garanteaza ca frazele interzise NU supravietuiesc, indiferent de incapatanarea
+ * modelului. Se aplica DOAR cand nu exista confirmed_failures. PUR.
+ */
+export function sanitizeManagerial(text, { confirmedFailures = [] } = {}) {
+  if (arr(confirmedFailures).length) return String(text || ""); // cu log real, cauzalitatea e permisa
+  let t = String(text || "");
+  const rules = [
+    [/(extrasele|documentele|ele|acestea)\s+(sunt|raman|au ramas)\s+[iî]ntr-?un\s+loc[^.!?\n]*/gi, "nu sunt observabile in sursele pe care le verific"],
+    [/\b(nu au intrat|n-?au intrat|nu au ajuns|n-?au ajuns)\b[^.!?\n]*/gi, "nu sunt inca observabile in sursele verificate"],
+    [/parserul nu (le-a |a )?(preluat|luat|procesat|v[aă]zut)[^.!?\n]*/gi, "nu pot confirma starea procesarii"],
+    [/\b(au r[aă]mas blocate|s-au blocat|upload(ul)? a e[sș]uat|au picat)\b[^.!?\n]*/gi, "nu pot confirma daca au fost procesate"],
+    // speculatii de locatie ("probabil email la Dana, sau folder neconectat")
+    [/\(?\s*probabil\s+(email|folder|drive|un folder|in email)[^.!?\n)]*\)?/gi, ""],
+  ];
+  for (const [rx, repl] of rules) t = t.replace(rx, repl);
+  return t.replace(/[ \t]{2,}/g, " ").replace(/\s+\./g, ".").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** Instructiune de injectat: cum sa produca valori cu baza (nu fabricate). */

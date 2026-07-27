@@ -5,7 +5,7 @@
 // → traceability → channel formatting. Adaptoarele de canal schimba doar lungime/
 // emoji/limite, NU logica manageriala.
 import { checkManagerialResponse, correctionInstruction, gateSummary } from "./qualityGate.js";
-import { validateClaims } from "./managerialClaimValidator.js";
+import { validateClaims, sanitizeManagerial } from "./managerialClaimValidator.js";
 import { audit } from "../audit.js";
 
 const isObj = (v) => v != null && typeof v === "object" && !Array.isArray(v);
@@ -85,6 +85,11 @@ export async function finalizeManagerialOutput(p = {}) {
       }
     } catch { /* corectie best-effort */ }
   }
+
+  // SANITIZER DETERMINIST (dupa cele max 1 ciclu): garanteaza ca inferentele cauzale
+  // nesustinute NU supravietuiesc, chiar daca modelul le-a repetat.
+  const sanitized = sanitizeManagerial(text, { confirmedFailures: arr(confirmedFailures) });
+  if (sanitized !== text) { text = sanitized; corrected = true; trace = assertResponseTraceability(text, assessment, { receipts: executionReceipts }); }
 
   const adapt = CHANNEL_ADAPTERS[channel] || CHANNEL_ADAPTERS.chat;
   text = adapt(text);

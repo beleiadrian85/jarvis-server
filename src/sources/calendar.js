@@ -1,5 +1,5 @@
 import { config, hasCalendar } from "../config.js";
-import { gapi } from "../google.js";
+import { gapi, googleConnected } from "../google.js";
 
 /**
  * Calendar Google (readonly), prin OAuth-ul comun din google.js.
@@ -11,7 +11,7 @@ import { gapi } from "../google.js";
  * Intoarce array de {time, title} sau null.
  */
 export async function getTodayEvents() {
-  if (!hasCalendar) return null;
+  if (!(await googleConnected())) return null;
   try {
     const now = new Date();
     const end = new Date();
@@ -62,7 +62,7 @@ export async function createEvent({ title, startISO, endISO, description, remind
 
 /** Evenimente care incep in urmatoarele `withinMin` minute (pt notificari). */
 export async function getUpcomingEvents(withinMin = 30) {
-  if (!hasCalendar) return null;
+  if (!(await googleConnected())) return null;
   try {
     const now = new Date();
     const end = new Date(now.getTime() + withinMin * 60_000);

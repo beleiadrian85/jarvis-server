@@ -1,5 +1,5 @@
 import { config, hasGoogle } from "../config.js";
-import { gapi } from "../google.js";
+import { gapi, googleConnected } from "../google.js";
 import { addReminder } from "../reminders.js";
 
 /**
@@ -33,7 +33,7 @@ function header(msg, name) {
  * Cele importante intra si in reminders (dedupe pe gmail:<id>).
  */
 export async function getImportantEmails() {
-  if (!hasGoogle) return null;
+  if (!(await googleConnected())) return null;
   try {
     const list = await gapi(
       "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
@@ -64,7 +64,7 @@ export async function getImportantEmails() {
 
 /** Threaduri trimise de mine, fara raspuns de >3 zile lucratoare (max 15 threaduri verificate). */
 export async function getUnansweredSent() {
-  if (!hasGoogle) return null;
+  if (!(await googleConnected())) return null;
   try {
     const cutoff = businessDaysAgo(3);
     const list = await gapi(
@@ -127,7 +127,7 @@ export async function createDraft({ to, subject, body, threadId = null }) {
 
 /** Cauta fire dupa query Gmail (search_threads). Intoarce lista cu id+snippet+from+subject. */
 export async function searchThreads(query, pageSize = 25) {
-  if (!hasGoogle) return null;
+  if (!(await googleConnected())) return null;
   const list = await gapi(
     "https://gmail.googleapis.com/gmail/v1/users/me/threads?" +
       new URLSearchParams({ q: query, maxResults: String(Math.min(40, Math.max(5, pageSize))) })
@@ -151,7 +151,7 @@ export async function searchThreads(query, pageSize = 25) {
 
 /** Continutul COMPLET al unui fir (get_thread FULL_CONTENT) — corp, telefoane, atasamente. */
 export async function readThread(threadId) {
-  if (!hasGoogle) return null;
+  if (!(await googleConnected())) return null;
   const th = await gapi(
     `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`
   );
@@ -187,7 +187,7 @@ function collectAttachments(payload, acc = []) {
 
 /** Ultimul email care se potriveste unei cautari — pentru "draft raspuns la ...". */
 export async function findEmail(searchText) {
-  if (!hasGoogle) return null;
+  if (!(await googleConnected())) return null;
   const list = await gapi(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
       new URLSearchParams({ q: `in:inbox ${searchText}`, maxResults: "1" })

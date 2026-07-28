@@ -6,11 +6,11 @@ import { config } from "../../config.js";
 export const EMAIL_PERMISSIONS = [
   "EMAIL_SEARCH", "EMAIL_READ", "EMAIL_READ_ATTACHMENTS", "EMAIL_CREATE_DRAFT",
   "EMAIL_UPDATE_DRAFT", "EMAIL_SEND", "EMAIL_FORWARD", "EMAIL_ARCHIVE",
-  "EMAIL_DELETE", "EMAIL_LABEL",
+  "EMAIL_DELETE", "EMAIL_LABEL", "EMAIL_MODIFY",
 ];
 
-// Permisiuni care NU pot fi activate in aceasta faza, indiferent de env/model.
-export const PERMANENTLY_DISABLED = ["EMAIL_SEND", "EMAIL_FORWARD", "EMAIL_ARCHIVE", "EMAIL_DELETE"];
+// Permisiuni care NU pot fi activate, indiferent de env/model (inbox intact + zero send).
+export const PERMANENTLY_DISABLED = ["EMAIL_SEND", "EMAIL_FORWARD", "EMAIL_ARCHIVE", "EMAIL_DELETE", "EMAIL_MODIFY"];
 
 /**
  * Poate JARVIS folosi o permisiune de email? Verifica flags + gard hard pe

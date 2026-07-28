@@ -161,10 +161,19 @@ export const config = {
   taskIntelligence: ["on", "true"].includes(String(process.env.TASK_INTELLIGENCE_ENABLED || "").toLowerCase()),
   // Email + Internet/Regulatory Intelligence + monitorizare persistenta + notificari.
   // Email = READ-ONLY; drafturi doar la cerere; SEND dezactivat PERMANENT in aceasta faza.
-  emailIntel: { enabled: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_INTELLIGENCE_ENABLED || "").toLowerCase()),
-    attachments: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_ATTACHMENTS_ENABLED || "").toLowerCase()),
-    drafts: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_DRAFTS_ENABLED || "").toLowerCase()),
-    send: false }, // JARVIS_EMAIL_SEND_ENABLED ignorat — SEND ramane OFF prin design
+  emailIntel: (() => {
+    const enabled = ["on", "true"].includes(String(process.env.JARVIS_EMAIL_INTELLIGENCE_ENABLED || "").toLowerCase());
+    // Implicit ON cand Email Intelligence e activ (politica: read + attachments + drafturi);
+    // se pot dezactiva explicit cu =off. SEND ramane OFF prin design.
+    const on = (v, def) => v === undefined || v === "" ? def : !["off", "false", "0"].includes(String(v).toLowerCase());
+    return { enabled,
+      attachments: enabled && on(process.env.JARVIS_EMAIL_ATTACHMENTS_ENABLED, true),
+      drafts: enabled && on(process.env.JARVIS_EMAIL_DRAFTS_ENABLED, true),
+      send: false, ui: on(process.env.JARVIS_EMAIL_UI_ENABLED, true),
+      oauth: on(process.env.JARVIS_GMAIL_OAUTH_ENABLED, true) };
+  })(),
+  intelligenceFeed: ["on", "true"].includes(String(process.env.JARVIS_INTELLIGENCE_FEED_ENABLED || "").toLowerCase()),
+  personalWatchTopics: ["on", "true"].includes(String(process.env.JARVIS_PERSONAL_WATCH_TOPICS_ENABLED || "").toLowerCase()),
   infoResolver: ["on", "true"].includes(String(process.env.JARVIS_INFORMATION_RESOLVER_ENABLED || "").toLowerCase()),
   webMonitoring: ["on", "true"].includes(String(process.env.JARVIS_WEB_MONITORING_ENABLED || "").toLowerCase()),
   legislationMonitoring: ["on", "true"].includes(String(process.env.JARVIS_LEGISLATION_MONITORING_ENABLED || "").toLowerCase()),

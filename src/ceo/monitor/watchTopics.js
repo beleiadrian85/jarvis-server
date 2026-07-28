@@ -41,6 +41,40 @@ export function defaultTopics() {
   ];
 }
 
+/** Detecteaza cererea "Monitorizează X" din limbaj natural. @returns {isWatch, term} */
+export function detectWatchRequest(text) {
+  const m = String(text || "").match(/\b(monitorizeaz[aă]|urm[aă]re[sș]te|f[iî]i atent la|watch)\s+(.+)/i);
+  if (!m) return { isWatch: false };
+  const term = m[2].replace(/[.?!]+$/, "").trim().slice(0, 60);
+  return { isWatch: !!term, term };
+}
+
+/** Termeni care necesita DEFINIRE inainte de activare (ambigui). */
+const AMBIGUOUS = /^(ocpi|[a-z]{2,6})$/i;
+
+/**
+ * Creeaza un WatchTopic dintr-o cerere NL. Daca termenul e ambiguu → NEEDS_DEFINITION.
+ * @returns { topic, needs_definition, prompts? }
+ */
+export async function createWatchFromRequest(term, { store = null } = {}) {
+  const id = String(term || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30);
+  const ambiguous = AMBIGUOUS.test(String(term).trim()) || String(term).trim().length <= 6;
+  const topic = {
+    id, title: term, description: null, entities: [], keywords: [term], semantic_queries: [`${term} Romania`],
+    exclusions: [], geographic_scope: "Romania", industries: [], official_sources: [], secondary_sources: [],
+    relevance_rules: [], impact_dimensions: ["operational", "compliance"],
+    notification_threshold: "MEDIUM", digest_policy: "digest", check_frequency: "OFFICIAL_INSTITUTIONS",
+    owner: "adrian", enabled: !ambiguous, created_by: "adrian_nl", last_checked_at: null, last_material_change_at: null,
+    status: ambiguous ? "NEEDS_DEFINITION" : "ACTIVE",
+    activation_criteria: ambiguous ? ["definitie", "instituția", "aria geografica", "criteriul 'functional'", "surse oficiale", "pragul de notificare"] : [],
+  };
+  await upsertTopic(topic, { store });
+  return {
+    topic, needs_definition: ambiguous,
+    prompts: ambiguous ? ["Ce înseamnă exact „" + term + "”?", "Ce instituție?", "Ce arie geografică?", "Cum definești „devine funcțional”?", "Ce surse oficiale?", "Ce prag de notificare?"] : null,
+  };
+}
+
 export async function getTopics({ store = null } = {}) {
   const S = store || { get: getState, set: setState };
   const st = await S.get(KEY, null).catch(() => null);

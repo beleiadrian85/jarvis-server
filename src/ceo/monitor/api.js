@@ -59,6 +59,34 @@ export function registerMonitorApi(app) {
     catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // PATCH topic (editeaza) + run acum (validare live).
+  app.patch("/api/monitor/topics/:id", async (req, res) => {
+    try { const { upsertTopic } = await import("./watchTopics.js"); res.json(await upsertTopic({ id: req.params.id, ...(req.body || {}) }, {})); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/monitor/topics/:id/run", async (req, res) => {
+    if (!config.legislationMonitoring && !config.webMonitoring) return res.status(503).json({ error: "monitoring off" });
+    try { const { runWatch } = await import("./worker.js"); res.json(await runWatch({ topicFilter: req.params.id })); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Personal Watch Topic din limbaj natural ("Monitorizează X").
+  app.post("/api/monitor/watch-nl", async (req, res) => {
+    if (!config.personalWatchTopics) return res.status(503).json({ error: "personal watch topics off" });
+    try {
+      const { detectWatchRequest, createWatchFromRequest } = await import("./watchTopics.js");
+      const det = detectWatchRequest(req.body?.text || "");
+      if (!det.isWatch) return res.status(400).json({ error: "nu am detectat o cerere de monitorizare" });
+      res.json(await createWatchFromRequest(det.term, {}));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // INTELLIGENCE FEED (cronologie, management by exception).
+  app.get("/api/intelligence/feed", async (_req, res) => {
+    if (!config.intelligenceFeed) return res.status(503).json({ error: "Intelligence Feed off" });
+    try { const { buildFeed } = await import("../feed.js"); res.json(await buildFeed({})); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Matricea de permisiuni email (transparenta: ce e permis vs blocat).
   app.get("/api/monitor/email-permissions", (_req, res) => {
     res.json({ matrix: emailPermissionMatrix(), send_available: false, note: "read-only + drafturi la cerere; SEND dezactivat" });

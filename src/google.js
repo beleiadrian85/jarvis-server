@@ -47,13 +47,26 @@ export async function googleToken() {
   return cached.token;
 }
 
-// Setup unic OAuth: genereaza linkul de consimtamant si schimba codul pe tokeni.
-const SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.compose",
-  "https://www.googleapis.com/auth/calendar.events", // citire + SCRIERE evenimente
-  "https://www.googleapis.com/auth/drive.readonly",
-];
+// SCOPE-uri MINIME + SIGURE. IMPORTANT (verificat pe docs Google): gmail.compose
+// permite si TRIMITEREA de mesaje/drafturi — deci NU e in setul implicit. Implicit =
+// read-only pur (tokenul NU poate trimite, crea drafturi sau modifica inboxul).
+// Drafturile = OPT-IN explicit (JARVIS_EMAIL_DRAFTS_ENABLED=on) → adauga gmail.compose,
+// cu avertisment ca acel scope permite tehnic trimiterea (blocata structural in cod).
+export const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
+export const GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose"; // permite si send!
+export const DRIVE_READONLY = "https://www.googleapis.com/auth/drive.readonly";
+export const CALENDAR_READONLY = "https://www.googleapis.com/auth/calendar.readonly";
+export const CALENDAR_EVENTS = "https://www.googleapis.com/auth/calendar.events"; // permite scriere
+
+/** Construieste setul de scope-uri dupa politica (minim, read-only implicit). */
+export function buildScopes() {
+  const s = [GMAIL_READONLY, DRIVE_READONLY];
+  if (config.emailIntel?.drafts) s.push(GMAIL_COMPOSE); // drafturi = OPT-IN (permite tehnic send)
+  s.push(config.calendarWrite ? CALENDAR_EVENTS : CALENDAR_READONLY);
+  return s;
+}
+/** Politica declarata (pentru validare: tokenul nu trebuie sa depaseasca asta). */
+export function policyScopes() { return buildScopes(); }
 
 export async function buildAuthUrl(redirectUri) {
   const creds = await getGoogleCreds();
@@ -64,10 +77,34 @@ export async function buildAuthUrl(redirectUri) {
     response_type: "code",
     access_type: "offline",
     prompt: "consent",
-    include_granted_scopes: "true",
-    scope: SCOPES.join(" "),
+    // NU include_granted_scopes — ca sa nu acumuleze scope-uri mai largi din consimtaminte vechi.
+    scope: buildScopes().join(" "),
   });
   return "https://accounts.google.com/o/oauth2/v2/auth?" + p.toString();
+}
+
+/**
+ * Valideaza scope-urile REALE acordate de token fata de politica. Daca tokenul are
+ * permisiuni mai largi (ex. gmail.send/modify), semnaleaza — integrarea nu se declara
+ * read-only. @returns { ok, granted, extra, can_send, note }
+ */
+export function validateGrantedScopes(grantedScopeString) {
+  const granted = String(grantedScopeString || "").split(/\s+/).filter(Boolean);
+  const allowed = new Set([GMAIL_READONLY, GMAIL_COMPOSE, DRIVE_READONLY, CALENDAR_READONLY, CALENDAR_EVENTS,
+    "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile", "openid"]);
+  const dangerous = granted.filter((g) => /gmail\.(send|modify|insert|settings)|mail\.google\.com/.test(g));
+  const extra = granted.filter((g) => !allowed.has(g) && !dangerous.includes(g));
+  // gmail.compose acordat DAR drafturile nu sunt opt-in → mai larg decat politica.
+  const composeUnexpected = granted.includes(GMAIL_COMPOSE) && !config.emailIntel?.drafts;
+  const can_send = granted.includes(GMAIL_COMPOSE) || dangerous.some((g) => /gmail\.send|mail\.google\.com/.test(g));
+  return {
+    ok: dangerous.length === 0 && !composeUnexpected,
+    granted, extra, dangerous, can_send,
+    note: dangerous.length ? `Token cu scope-uri periculoase (${dangerous.join(", ")}) — integrarea NU se activeaza pana la remediere.` :
+      composeUnexpected ? "Token include gmail.compose (permite trimitere) desi drafturile nu sunt activate — remediaza." :
+      granted.includes(GMAIL_COMPOSE) ? "Drafturi activate: scope-ul gmail.compose permite tehnic trimiterea, blocata structural in cod." :
+      "Token strict read-only — nu poate trimite/crea drafturi/modifica.",
+  };
 }
 
 export async function exchangeCode(code, redirectUri) {

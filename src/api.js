@@ -67,9 +67,21 @@ export function registerApi(app) {
     try {
       const redirectUri = `https://${req.get("host")}/auth/google/callback`;
       const tok = await exchangeCode(req.query.code, redirectUri);
+      // VALIDARE SCOPE-uri REALE: daca tokenul poate trimite/modifica (mai larg decat
+      // politica read-only), NU declaram conexiunea sigura — semnalam.
+      const { validateGrantedScopes } = await import("./google.js");
+      const scopeCheck = validateGrantedScopes(tok.scope);
       if (tok.refresh_token) {
         // S1: nu logam NICIODATA refresh token-ul (secret in logurile cloud).
-        console.log("[google] OAuth reusit — refresh token obtinut (nelogat).");
+        console.log("[google] OAuth reusit — refresh token obtinut (nelogat). Scope check:", scopeCheck.ok ? "OK" : "WARN");
+        try {
+          const { getState: gs, setState: ss } = await import("./state.js");
+          const prevg = await gs("google:oauth", {}) || {};
+          await ss("google:oauth", { ...prevg, granted_scopes: scopeCheck.granted, scope_ok: scopeCheck.ok, scope_note: scopeCheck.note, can_send: scopeCheck.can_send });
+        } catch { /* best-effort */ }
+        if (scopeCheck.dangerous.length) {
+          return res.send(`<h2 style='font-family:sans-serif'>⚠️ Scope-uri prea largi</h2><p>Tokenul include permisiuni de trimitere/modificare (${scopeCheck.dangerous.join(", ")}). Integrarea NU se activeaza. Regenereaza OAuth clientul cu scope-urile read-only si reconecteaza.</p>`);
+        }
         // Wizard: salveaza in jarvis_state + propaga AUTOMAT in env Railway + redeploy.
         try {
           const { getState, setState } = await import("./state.js");

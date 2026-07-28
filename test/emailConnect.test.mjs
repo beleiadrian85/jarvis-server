@@ -47,6 +47,23 @@ ok(!detectWatchRequest("cate task-uri are Nelu?").isWatch, "intrebare normala !=
   const r2 = await createWatchFromRequest("Primaria Sibiu constructii", { store });
   ok(!r2.needs_definition && r2.topic.enabled && r2.topic.status === "ACTIVE", "termen clar → topic ACTIV"); }
 
+// ══ SCOPE SECURITY (corectie: gmail.compose permite send) ══
+{ const { buildScopes, validateGrantedScopes, GMAIL_COMPOSE, GMAIL_READONLY } = await import("../src/google.js");
+  config.emailIntel.drafts = false; config.calendarWrite = false;
+  const ro = buildScopes();
+  ok(ro.includes(GMAIL_READONLY) && !ro.includes(GMAIL_COMPOSE), "default (fara drafturi) → DOAR gmail.readonly (tokenul nu poate trimite)");
+  ok(ro.includes("https://www.googleapis.com/auth/calendar.readonly"), "calendar default = readonly (nu events)");
+  config.emailIntel.drafts = true;
+  ok(buildScopes().includes(GMAIL_COMPOSE), "drafturi OPT-IN → adauga gmail.compose (cu caveat)");
+  // Validare token: scope periculos → blocat.
+  const v1 = validateGrantedScopes("https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send");
+  ok(!v1.ok && v1.can_send && v1.dangerous.length >= 1, "token cu gmail.send → NEok + flag periculos");
+  const v2 = validateGrantedScopes("https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/calendar.readonly");
+  ok(v2.ok && !v2.can_send, "token strict read-only → ok, nu poate trimite");
+  config.emailIntel.drafts = false;
+  const v3 = validateGrantedScopes("https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose");
+  ok(!v3.ok && v3.can_send, "gmail.compose acordat dar drafturile OFF → NEok (mai larg decat politica)"); }
+
 // ══ INTELLIGENCE FEED (management by exception) ══
 { const store = mkStore();
   await store.set("ceo:notifications", { items: {

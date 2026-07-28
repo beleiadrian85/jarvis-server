@@ -168,10 +168,14 @@ export const config = {
     const on = (v, def) => v === undefined || v === "" ? def : !["off", "false", "0"].includes(String(v).toLowerCase());
     return { enabled,
       attachments: enabled && on(process.env.JARVIS_EMAIL_ATTACHMENTS_ENABLED, true),
-      drafts: enabled && on(process.env.JARVIS_EMAIL_DRAFTS_ENABLED, true),
+      // Drafturile = OPT-IN EXPLICIT (default OFF): activarea adauga scope-ul gmail.compose,
+      // care permite tehnic si trimiterea (blocata in cod). Default = read-only pur.
+      drafts: enabled && ["on", "true"].includes(String(process.env.JARVIS_EMAIL_DRAFTS_ENABLED || "").toLowerCase()),
       send: false, ui: on(process.env.JARVIS_EMAIL_UI_ENABLED, true),
       oauth: on(process.env.JARVIS_GMAIL_OAUTH_ENABLED, true) };
   })(),
+  // Scriere in Calendar (creare evenimente) — OPT-IN; implicit doar citire calendar.
+  calendarWrite: ["on", "true"].includes(String(process.env.JARVIS_CALENDAR_WRITE_ENABLED || "").toLowerCase()),
   intelligenceFeed: ["on", "true"].includes(String(process.env.JARVIS_INTELLIGENCE_FEED_ENABLED || "").toLowerCase()),
   personalWatchTopics: ["on", "true"].includes(String(process.env.JARVIS_PERSONAL_WATCH_TOPICS_ENABLED || "").toLowerCase()),
   infoResolver: ["on", "true"].includes(String(process.env.JARVIS_INFORMATION_RESOLVER_ENABLED || "").toLowerCase()),

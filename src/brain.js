@@ -273,9 +273,10 @@ export async function handleMessage(channel, text) {
     return { reply: preview + "\n\nRaspunde: da / nu", confirmId: id };
   }
 
-  // 5.5) Calendar / alarma (cu confirmare). Necesita Google conectat.
+  // 5.5) Calendar / alarma (cu confirmare). Necesita Google conectat (env SAU state).
   if (isCalendarTopic(text)) {
-    if (!hasGoogle) {
+    const gConn = await (await import("./google.js")).googleConnected().catch(() => hasGoogle);
+    if (!gConn) {
       return { reply: "Calendarul nu e conectat încă. Conectează Google (link-ul de setup) și pot crea evenimente și alarme care apar pe telefon." };
     }
     try {
@@ -288,7 +289,8 @@ export async function handleMessage(channel, text) {
 
   // 5.7) Email: cautare + citire + sinteza (read-only; trimiterea NU se face).
   if (isEmailTopic(text)) {
-    if (!hasGoogle) {
+    const gConn = await (await import("./google.js")).googleConnected().catch(() => hasGoogle);
+    if (!gConn) {
       return { reply: "Emailul nu e conectat încă. Conectează Google (link-ul de setup) și pot căuta, citi și pregăti drafturi (nu trimit nimic fără tine)." };
     }
     return { reply: await handleEmailQuery(channel, text) };

@@ -76,14 +76,15 @@ export async function buildSourceTruth({ nowMs = Date.now() } = {}) {
     evidence: "niciun connector bancar in cod",
   });
 
-  // ── GMAIL / CALENDAR (Google OAuth) ──
-  const googleOk = !!(config.google?.clientId && config.google?.refreshToken);
+  // ── GMAIL / CALENDAR (Google OAuth) — conectarea reala din env SAU state ──
+  let googleOk = !!(config.google?.clientId && config.google?.refreshToken);
+  try { googleOk = await (await import("../google.js")).googleConnected(); } catch { /* fallback pe env */ }
   for (const [name, domains] of [["Gmail", ["emails", "email_drafts"]], ["Google Calendar", ["events", "meetings"]]]) {
     sources.push({
       source: name,
       status: googleOk ? "CONNECTED" : "NOT_CONNECTED",
-      read: googleOk ? "da" : "NONE (OAuth Google neconectat)",
-      write: googleOk ? "draft only" : "NONE",
+      read: googleOk ? "da (read-only)" : "NONE (OAuth Google neconectat)",
+      write: googleOk ? "draft only (send OFF)" : "NONE",
       data_domains: domains,
       freshness: googleOk ? "live" : "-",
       confidence: googleOk ? "medium" : "none",

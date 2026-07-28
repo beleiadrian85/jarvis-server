@@ -30,6 +30,11 @@ export async function getGoogleCreds() {
   return null;
 }
 
+/** Gmail/Calendar conectat efectiv? (client + refresh token, din env SAU state). */
+export async function googleConnected() {
+  try { const c = await getGoogleCreds(); return !!(c?.clientId && c?.refreshToken); } catch { return false; }
+}
+
 export async function googleToken() {
   const creds = await getGoogleCreds();
   if (!creds) throw new Error("Google neconfigurat.");

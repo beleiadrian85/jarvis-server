@@ -62,6 +62,19 @@ export function startScheduler() {
     timezone: "Europe/Bucharest",
   });
 
+  // TASK INTELLIGENCE — ciclu zilnic de invatare din task-urile finalizate (read-only,
+  // idempotent). Doar observa/invata; nu executa/modifica. Gated.
+  if (config.taskIntelligence) {
+    cron.schedule("40 4 * * *", async () => {
+      try {
+        const { runLearningCycle } = await import("./ceo/taskIntel/index.js");
+        const r = await runLearningCycle({});
+        await audit("taskintel_daily", `indexed=${r.indexed} knowledge=${r.knowledge_built} patterns=${r.patterns}`, "", true);
+      } catch (e) { console.error("[taskintel]", e.message); }
+    }, { timezone: "Europe/Bucharest" });
+    console.log("[taskintel] ciclu de invatare zilnic 04:40 activ (read-only)");
+  }
+
   // PERSISTENT WATCHER legislativ/web (worker pe scheduler, NU bucla model). La
   // fiecare 3h in zile lucratoare; inregistreaza health; produce notificari. Gated.
   if (config.legislationMonitoring || config.webMonitoring) {

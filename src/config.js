@@ -156,6 +156,9 @@ export const config = {
   // Action Cards (propuneri executabile prin buton) + invatare + autonomie controlata.
   // AUTO_EXECUTE doar reversibil/risc redus/TASKS-only; never-autonomous cere aprobare.
   actionCards: ["on", "true"].includes(String(process.env.CEO_ACTION_CARDS_ENABLED || "").toLowerCase()),
+  // Task Intelligence Engine V2: JARVIS invata din task-urile Operational (read-only,
+  // observa/invata/coreleaza/recomanda — NU executa/modifica/decide). Scrie doar jarvis_state.
+  taskIntelligence: ["on", "true"].includes(String(process.env.TASK_INTELLIGENCE_ENABLED || "").toLowerCase()),
   // Email + Internet/Regulatory Intelligence + monitorizare persistenta + notificari.
   // Email = READ-ONLY; drafturi doar la cerere; SEND dezactivat PERMANENT in aceasta faza.
   emailIntel: { enabled: ["on", "true"].includes(String(process.env.JARVIS_EMAIL_INTELLIGENCE_ENABLED || "").toLowerCase()),

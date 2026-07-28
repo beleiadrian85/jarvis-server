@@ -50,6 +50,9 @@ registerActionApi(app);
 // EMAIL + MONITOR + NOTIFICATION CENTER (read + config), gated pe flags.
 const { registerMonitorApi } = await import("./ceo/monitor/api.js");
 registerMonitorApi(app);
+// TASK INTELLIGENCE V2 — JARVIS invata din task-uri (read-only, recomanda). Gated.
+const { registerTaskIntelApi } = await import("./ceo/taskIntel/api.js");
+registerTaskIntelApi(app);
 
 // CEO OS e noul UI implicit: radacina (start_url "/" al PWA instalat) duce la
 // /os.html. UI-ul vechi ramane accesibil direct la /index.html si /ceo.html

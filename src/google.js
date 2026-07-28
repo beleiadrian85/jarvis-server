@@ -14,14 +14,17 @@ let cached = { token: null, exp: 0 };
  * Aditiv si retro-compatibil: cu env setat, comportamentul e identic.
  */
 export async function getGoogleCreds() {
-  if (config.google.clientId && config.google.clientSecret && config.google.refreshToken) {
-    return { clientId: config.google.clientId, clientSecret: config.google.clientSecret, refreshToken: config.google.refreshToken, source: "env" };
+  // clientId + clientSecret sunt suficiente pt. faza de CONSIMTAMANT (buildAuthUrl/
+  // exchangeCode). refreshToken e necesar DOAR pt. apelurile API (googleToken) si e
+  // marcat separat — altfel primul CONNECT ar fi blocat (ou-si-gaina).
+  if (config.google.clientId && config.google.clientSecret) {
+    return { clientId: config.google.clientId, clientSecret: config.google.clientSecret, refreshToken: config.google.refreshToken || null, source: "env" };
   }
   try {
     const { getState } = await import("./state.js");
     const st = await getState("google:oauth", null);
-    if (st?.client_id && st?.client_secret && st?.refresh_token) {
-      return { clientId: st.client_id, clientSecret: st.client_secret, refreshToken: st.refresh_token, source: "state" };
+    if (st?.client_id && st?.client_secret) {
+      return { clientId: st.client_id, clientSecret: st.client_secret, refreshToken: st.refresh_token || null, source: "state" };
     }
   } catch { /* fara stare */ }
   return null;
@@ -30,6 +33,7 @@ export async function getGoogleCreds() {
 export async function googleToken() {
   const creds = await getGoogleCreds();
   if (!creds) throw new Error("Google neconfigurat.");
+  if (!creds.refreshToken) throw new Error("Google neconectat (client salvat, dar fara consimtamant/refresh token — apasa CONNECT GOOGLE).");
   if (cached.token && Date.now() < cached.exp - 60_000) return cached.token;
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",

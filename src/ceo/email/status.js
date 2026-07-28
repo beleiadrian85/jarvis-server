@@ -1,7 +1,7 @@
 // EMAIL CONNECTION STATUS — sursa de adevar despre conectarea Gmail. ONEST:
 // neconectat pana exista refresh_token real. Nu pretinde conectat inainte de OAuth.
 import { config } from "../../config.js";
-import { buildScopes, GMAIL_COMPOSE } from "../../google.js";
+import { buildScopes, GMAIL_COMPOSE, getGoogleCreds } from "../../google.js";
 
 const SCOPE_LABELS = {
   "https://www.googleapis.com/auth/gmail.readonly": "Citire + căutare email (read-only)",
@@ -19,14 +19,14 @@ export function missingEnv() {
   return missing;
 }
 
-/** Este Gmail conectat efectiv? (client + refresh token reale). */
-export function isConnected() {
-  return !!(config.google?.clientId && config.google?.refreshToken);
+/** Este Gmail conectat efectiv? (client + refresh token reale — din env SAU state). */
+export async function isConnected() {
+  try { const c = await getGoogleCreds(); return !!(c?.clientId && c?.refreshToken); } catch { return false; }
 }
 
-/** Statusul complet pentru UI (fara secrete). */
-export function emailStatus() {
-  const connected = isConnected();
+/** Statusul complet pentru UI (fara secrete). ASYNC — verifica si starea. */
+export async function emailStatus() {
+  const connected = await isConnected();
   const missing = missingEnv();
   return {
     provider: "gmail",

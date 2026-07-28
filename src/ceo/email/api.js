@@ -14,10 +14,10 @@ const arr = (v) => (Array.isArray(v) ? v : []);
 
 export function registerEmailApi(app) {
   const guard = (res) => { if (!config.emailIntel?.enabled) { res.status(503).json({ error: "Email Intelligence off (JARVIS_EMAIL_INTELLIGENCE_ENABLED)" }); return true; } return false; };
-  const needConn = (res) => { if (!isConnected()) { res.status(409).json({ error: "Gmail neconectat", missing_env: missingEnv(), status: emailStatus() }); return true; } return false; };
+  const needConn = async (res) => { if (!(await isConnected())) { res.status(409).json({ error: "Gmail neconectat", missing_env: missingEnv(), status: await emailStatus() }); return true; } return false; };
 
   // Status conexiune (vizibil si neconectat).
-  app.get("/api/email/status", (_req, res) => { if (guard(res)) return; res.json(emailStatus()); });
+  app.get("/api/email/status", async (_req, res) => { if (guard(res)) return; res.json(await emailStatus()); });
   app.get("/api/email/permissions", (_req, res) => { res.json({ matrix: emailPermissionMatrix(), send_available: false, note: "read-only + drafturi; SEND dezactivat structural" }); });
 
   // Conectare: porneste OAuth existent (redirect). Nu incepe daca lipsesc env.
@@ -40,7 +40,7 @@ export function registerEmailApi(app) {
 
   // Test de conectare read-only (identitate + o cautare limitata).
   app.post("/api/email/test", async (_req, res) => {
-    if (guard(res)) return; if (needConn(res)) return;
+    if (guard(res)) return; if (await needConn(res)) return;
     try {
       const r = await searchEmail(buildSearchPlan({ intent: "CONNECTION_TEST", terms: ["test"], has_attachment: false }), { ctx: {} });
       await audit("email_test", "test conexiune read-only", `ok=${r.ok}`, true).catch(() => {});
@@ -50,7 +50,7 @@ export function registerEmailApi(app) {
 
   // Cautare (read-only). Intrebari naturale → plan de cautare.
   app.post("/api/email/search", async (req, res) => {
-    if (guard(res)) return; if (needConn(res)) return;
+    if (guard(res)) return; if (await needConn(res)) return;
     try {
       const { query = "", people = [], terms = [], has_attachment = null, intent = "SEARCH" } = req.body || {};
       const plan = buildSearchPlan({ intent, relevant_people: people, terms: terms.length ? terms : String(query).split(/\s+/).slice(0, 6), has_attachment });
@@ -58,7 +58,7 @@ export function registerEmailApi(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   app.get("/api/email/thread/:id", async (req, res) => {
-    if (guard(res)) return; if (needConn(res)) return;
+    if (guard(res)) return; if (await needConn(res)) return;
     try { res.json(await readEmailThread(req.params.id, { ctx: {} })); } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -69,7 +69,7 @@ export function registerEmailApi(app) {
     res.json({ drafts: arr(st.drafts) });
   });
   app.post("/api/email/drafts", async (req, res) => {
-    if (guard(res)) return; if (needConn(res)) return;
+    if (guard(res)) return; if (await needConn(res)) return;
     const perm = canEmail("EMAIL_CREATE_DRAFT", { explicitRequest: true });
     if (!perm.allowed) return res.status(403).json({ error: perm.reason });
     try {
@@ -84,7 +84,7 @@ export function registerEmailApi(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   app.patch("/api/email/drafts/:id", async (req, res) => {
-    if (guard(res)) return; if (needConn(res)) return;
+    if (guard(res)) return; if (await needConn(res)) return;
     const perm = canEmail("EMAIL_UPDATE_DRAFT", { explicitRequest: true });
     if (!perm.allowed) return res.status(403).json({ error: perm.reason });
     // Actualizarea reala prin provider — reutilizeaza createEmailDraft cu acelasi thread.
@@ -100,8 +100,8 @@ export function registerEmailApi(app) {
   });
 
   // Health email (subset din monitoring health).
-  app.get("/api/email/health", (_req, res) => {
-    const conn = isConnected();
+  app.get("/api/email/health", async (_req, res) => {
+    const conn = await isConnected();
     res.json({ gmail_oauth: conn ? "ok" : "not_connected", token_valid: conn, send_enabled: false,
       degraded: !conn, reason: conn ? null : "Gmail neconectat — reautorizare necesara pentru a citi emailurile" });
   });

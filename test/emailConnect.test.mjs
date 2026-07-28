@@ -28,12 +28,12 @@ ok(PERMANENTLY_DISABLED.includes("EMAIL_MODIFY") && PERMANENTLY_DISABLED.include
 
 // ══ STATUS CONEXIUNE (onest: neconectat) ══
 config.google.clientId = ""; config.google.refreshToken = "";
-{ const s = emailStatus();
+{ const s = await emailStatus();
   ok(!s.connected && s.send_enabled === false && /neconectat|neconfigurat/i.test(s.status.toLowerCase()) === false ? s.connected === false : true, "status: neconectat cand nu exista token");
   ok(s.missing_env.includes("GOOGLE_CLIENT_ID"), "status: raporteaza env lipsa (fara valori)");
-  ok(!isConnected(), "isConnected=false fara token"); }
+  ok(!(await isConnected()), "isConnected=false fara token"); }
 config.google.clientId = "cid"; config.google.clientSecret = "sec"; config.google.refreshToken = "rt";
-{ const s = emailStatus();
+{ const s = await emailStatus();
   ok(s.connected && s.scopes.length >= 2 && s.send_enabled === false, "status: conectat (cu token) → scopes vizibile, send tot OFF");
   ok(s.scopes.every((x) => !/send/.test(x.scope)), "scopes NU includ send (gmail.readonly+compose)"); }
 config.google.clientId = ""; config.google.refreshToken = ""; // reset

@@ -135,6 +135,7 @@ const routes = {
   work: () => import("./views/work.js"),
   organism: () => import("./views/organism.js"),
   board: () => import("./views/board.js"),
+  memory: () => import("./views/memory.js"),
 };
 
 let routeSeq = 0;

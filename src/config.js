@@ -68,6 +68,11 @@ export const config = {
 
   // C7 — model OpenAI pentru strategie (folosit DOAR cand STRATEGY_ROUTING=on).
   strategyModel: process.env.OPENAI_STRATEGY_MODEL || "gpt-4o",
+  // Multi-Model: credentiale optionale (implicit goale → providerii raman inactivi).
+  googleAiKey: process.env.GOOGLE_AI_API_KEY || "",
+  googleModel: process.env.GOOGLE_MODEL || "gemini-1.5-pro",
+  privateModelUrl: process.env.PRIVATE_MODEL_URL || "",
+  privateModel: process.env.PRIVATE_MODEL_NAME || "local",
 
   // FAZA FINALA — pipeline integrat live. Implicit ON; kill-switch: PIPELINE=off.
   pipeline: process.env.PIPELINE !== "off",
@@ -179,6 +184,37 @@ export const config = {
   intelligenceFeed: ["on", "true"].includes(String(process.env.JARVIS_INTELLIGENCE_FEED_ENABLED || "").toLowerCase()),
   personalWatchTopics: ["on", "true"].includes(String(process.env.JARVIS_PERSONAL_WATCH_TOPICS_ENABLED || "").toLowerCase()),
   infoResolver: ["on", "true"].includes(String(process.env.JARVIS_INFORMATION_RESOLVER_ENABLED || "").toLowerCase()),
+  // LONG-TERM MEMORY + MULTI-MODEL (§27) — JARVIS DETINE memoria; modelele externe
+  // primesc doar context temporar. TOTUL implicit OFF pana la configurare (memoria
+  // intai, apoi modelele). Nu porni cinci provideri inainte ca memoria sa fie stabila.
+  memory: (() => {
+    const on = (v, d = false) => (v == null || v === "" ? d : ["on", "true", "1"].includes(String(v).toLowerCase()));
+    return {
+      longTerm: on(process.env.JARVIS_LONG_TERM_MEMORY_ENABLED),
+      episodic: on(process.env.JARVIS_EPISODIC_MEMORY_ENABLED),
+      semantic: on(process.env.JARVIS_SEMANTIC_MEMORY_ENABLED),
+      document: on(process.env.JARVIS_DOCUMENT_MEMORY_ENABLED),
+      decision: on(process.env.JARVIS_DECISION_MEMORY_ENABLED),
+      relationshipGraph: on(process.env.JARVIS_RELATIONSHIP_GRAPH_ENABLED),
+      ui: on(process.env.JARVIS_MEMORY_UI_ENABLED),
+      import: on(process.env.JARVIS_MEMORY_IMPORT_ENABLED),
+    };
+  })(),
+  multiModel: (() => {
+    const on = (v, d = false) => (v == null || v === "" ? d : ["on", "true", "1"].includes(String(v).toLowerCase()));
+    return {
+      enabled: on(process.env.JARVIS_MULTI_MODEL_ENABLED),
+      openai: on(process.env.JARVIS_OPENAI_MODEL_ENABLED),
+      anthropic: on(process.env.JARVIS_ANTHROPIC_MODEL_ENABLED),
+      google: on(process.env.JARVIS_GOOGLE_MODEL_ENABLED),
+      privateModel: on(process.env.JARVIS_PRIVATE_MODEL_ENABLED),
+      reviewer: on(process.env.JARVIS_MODEL_REVIEWER_ENABLED),
+      arbiter: on(process.env.JARVIS_MODEL_ARBITER_ENABLED),
+      costGuard: on(process.env.JARVIS_COST_GUARD_ENABLED),
+      dataRouting: on(process.env.JARVIS_DATA_ROUTING_ENABLED),
+      maxCostUsdPerDay: Number(process.env.JARVIS_MODEL_MAX_COST_USD_PER_DAY || 0),
+    };
+  })(),
   webMonitoring: ["on", "true"].includes(String(process.env.JARVIS_WEB_MONITORING_ENABLED || "").toLowerCase()),
   legislationMonitoring: ["on", "true"].includes(String(process.env.JARVIS_LEGISLATION_MONITORING_ENABLED || "").toLowerCase()),
   notificationCenter: ["on", "true"].includes(String(process.env.JARVIS_NOTIFICATION_CENTER_ENABLED || "").toLowerCase()),

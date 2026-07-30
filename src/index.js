@@ -56,6 +56,10 @@ registerTaskIntelApi(app);
 // EMAIL — wizard conectare + read-only + drafturi (SEND off structural).
 const { registerEmailApi } = await import("./ceo/email/api.js");
 registerEmailApi(app);
+// MEMORY + MULTI-MODEL — memoria proprie JARVIS (read + write prin Write Gate) +
+// modele ca motoare de rationament (gated, fail-closed). Totul OFF implicit.
+const { registerMemoryApi } = await import("./ceo/memory/api.js");
+registerMemoryApi(app);
 
 // CEO OS e noul UI implicit: radacina (start_url "/" al PWA instalat) duce la
 // /os.html. UI-ul vechi ramane accesibil direct la /index.html si /ceo.html

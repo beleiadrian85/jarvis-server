@@ -99,6 +99,22 @@ export function registerEmailApi(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // INVESTIGATIE multi-sursa (Operational + Email + web) — read-only.
+  app.post("/api/investigate", async (req, res) => {
+    if (!config.infoResolver) return res.status(503).json({ error: "Information Resolver off" });
+    try {
+      const { investigate } = await import("../resolverSources.js");
+      const inv = await investigate(String(req.body?.question || ""), { intent: req.body?.intent || "GENERIC", evidence_requirements: req.body?.evidence_requirements || [] });
+      res.json(inv);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Mapare persoana → email (ca sa caut precis 'from:adresa').
+  app.post("/api/email/person-map", async (req, res) => {
+    if (guard(res)) return;
+    try { const { setPersonEmail } = await import("../resolverSources.js"); res.json({ ok: true, map: await setPersonEmail(req.body?.name, req.body?.email, {}) }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Health email (subset din monitoring health).
   app.get("/api/email/health", async (_req, res) => {
     const conn = await isConnected();

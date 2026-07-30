@@ -296,6 +296,25 @@ export async function handleMessage(channel, text) {
     return { reply: await handleEmailQuery(channel, text) };
   }
 
+  // 5.8) INVESTIGATIE MULTI-SURSA — JARVIS cauta SINGUR in Operational + Email +
+  // atasamente + web INAINTE de a declara ceva, coreleaza si separa gasit/confirmat/
+  // contradictie. Gated. Read-only pe toate sursele.
+  if (config.infoResolver) {
+    try {
+      const { needsInvestigation, investigate } = await import("./ceo/resolverSources.js");
+      if (needsInvestigation(text)) {
+        const inv = await investigate(text, {});
+        const lines = [`🔎 Am investigat: ${inv.sources_checked.join(", ") || "surse limitate"}.`];
+        if (inv.evidence.length) { lines.push("\nAm găsit:"); for (const e of inv.evidence.slice(0, 6)) lines.push(`• ${e.note || e.claim}`); }
+        if (inv.contradictions.length) lines.push(`\n⚠️ Contradicții: ${inv.contradictions.map((c) => c.claim).join(", ")}.`);
+        if (inv.unresolved_unknowns.length) lines.push(`\nÎncă necunoscut: ${inv.unresolved_unknowns.join(", ")}.`);
+        const conc = { NOT_OBSERVED: "Nu am observat asta în sursele verificate (nu înseamnă că nu există).", UNKNOWN: "Nu am putut verifica sursele acum.", FOUND_PARTIAL: "Găsit parțial — lipsesc dovezi ca să confirm complet.", CONTRADICTION: "Surse contradictorii — trebuie clarificat.", FOUND_NOT_YET_CONFIRMED: "Am găsit, dar nu e confirmat oficial." }[inv.conclusion] || inv.conclusion;
+        lines.push(`\nConcluzie: ${conc}`);
+        return { reply: lines.join("\n") };
+      }
+    } catch (e) { console.error("[investigate]", e.message); }
+  }
+
   // 6) Cautare in Drive.
   const drv = text.match(/caut[aă]\s+[iî]n\s+drive[:\s]+(.+)/i);
   if (drv) {

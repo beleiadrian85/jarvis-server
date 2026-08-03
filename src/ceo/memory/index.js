@@ -2,7 +2,7 @@
 // JARVIS DETINE memoria. Scrierea trece prin Write Gate; recall e read-only cu
 // provenienta; contextul pentru modele e temporar si filtrat prin Data Classification.
 import { config } from "../../config.js";
-import { remember as _remember, supersede, revoke, list, getById, stats, correct, corrections, exportAll, restore } from "./store.js";
+import { remember as _remember, supersede, revoke, list, listShadow, promote, getById, stats, correct, corrections, exportAll, restore } from "./store.js";
 import { recall as _recall, why } from "./retrieval.js";
 import { assembleContext as _assembleContext } from "./contextAssembler.js";
 import { classifyWrite } from "./writeGate.js";
@@ -83,4 +83,4 @@ export async function assembleContext(query, opts = {}) {
 /** Ce s-ar intampla cu o informatie candidata (fara a scrie) — pentru UI/preview. */
 export function classifyOnly(cand) { return classifyWrite(cand); }
 
-export { supersede, revoke, list, getById, stats, why, correct, corrections, exportAll, restore, neighbors, graphPath, edges, graphStats };
+export { supersede, revoke, list, listShadow, promote, getById, stats, why, correct, corrections, exportAll, restore, neighbors, graphPath, edges, graphStats };

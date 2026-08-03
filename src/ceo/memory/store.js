@@ -4,6 +4,22 @@
 // pe tip ca sa nu creasca nemarginit. Store injectabil pentru teste.
 import { buildMemoryItem, validateMemoryItem, provenanceOf } from "./schema.js";
 import { classifyWrite, persistsToLongTerm, redactSecrets, containsSecret } from "./writeGate.js";
+import { config } from "../../config.js";
+
+// Modul per tip de memorie (§3): 'on' | 'off' | 'shadow'. POLICY/WORKING mereu 'on'
+// (politica trece prin gate cu aprobare; nu se pune in shadow).
+function typeMode(memory_type) {
+  const m = config.memory || {};
+  switch (memory_type) {
+    case "EPISODIC": return m.episodic || "on";
+    case "SEMANTIC": return m.semantic || "on";
+    case "DOCUMENT": return m.document || "on";
+    case "DECISION": return m.decision || "on";
+    case "PREFERENCE": return m.preference || "on";
+    case "RELATIONSHIP": return m.relationshipGraph || "on";
+    default: return "on";
+  }
+}
 
 const KEY = "ceo:memory:v1";
 const CORR_KEY = "ceo:memory:corrections"; // JarvisMemoryCorrection log (audit uitare/corectii)
@@ -74,7 +90,13 @@ export async function remember(cand = {}, opts = {}) {
   const explicit = String(cand.memory_type || "").toUpperCase();
   if (["RELATIONSHIP", "PREFERENCE"].includes(explicit) && gate.category !== "STORE_POLICY_ONLY_WITH_APPROVAL") memory_type = explicit;
 
+  // Rollout controlat per tip (§3): OFF → nu se stocheaza; SHADOW → candidat (exclus din
+  // recall/raspuns, promovabil din UI). 'promote'/opts.forceActive ignora shadow.
+  const mode = opts.forceActive ? "on" : typeMode(memory_type);
+  if (mode === "off") return { stored: false, category: gate.category, reason: `tipul ${memory_type} e OFF (rollout controlat)`, item: null };
+
   const item = buildMemoryItem({ ...cand, memory_type }, { nowISO: opts.nowISO });
+  if (mode === "shadow") item.shadow = true;
   item.fingerprint = fingerprint(item);
   // A DOUA BARIERA: scaneaza campurile de CONTINUT ale itemului construit (nu campurile
   // generate de sistem — id/timestamp au serii lungi de cifre care ar da fals-pozitiv pe
@@ -125,14 +147,36 @@ export async function revoke(id, reason = "revocat de fondator", opts = {}) {
   return { ok: true };
 }
 
-/** Listeaza memorii active (exclude SUPERSEDED/REVOKED implicit). Izolare pe tenant. */
-export async function list({ type = null, includeInactive = false, limit = 100, store, tenant_id = null } = {}) {
+/** Listeaza memorii active (exclude SUPERSEDED/REVOKED + SHADOW implicit). Tenant-izolat.
+ *  Candidatii shadow NU apar in recall/context — doar cu includeShadow (Memory UI). */
+export async function list({ type = null, includeInactive = false, includeShadow = false, limit = 100, store, tenant_id = null } = {}) {
   const db = await load(store);
   let items = db.items;
   if (tenant_id) items = items.filter((x) => (x.tenant_id || "profi-concept") === tenant_id);
   if (type) items = items.filter((x) => x.memory_type === String(type).toUpperCase());
   if (!includeInactive) items = items.filter((x) => x.verification_status !== "SUPERSEDED" && x.verification_status !== "REVOKED");
+  if (!includeShadow) items = items.filter((x) => x.shadow !== true);
   return items.slice(0, limit);
+}
+
+/** Candidatii shadow (pentru Memory UI). */
+export async function listShadow({ type = null, limit = 200, store, tenant_id = null } = {}) {
+  const db = await load(store);
+  let items = db.items.filter((x) => x.shadow === true && x.verification_status !== "REVOKED");
+  if (tenant_id) items = items.filter((x) => (x.tenant_id || "profi-concept") === tenant_id);
+  if (type) items = items.filter((x) => x.memory_type === String(type).toUpperCase());
+  return items.slice(0, limit);
+}
+
+/** Promoveaza un candidat shadow → memorie activa (decizia fondatorului, §9). */
+export async function promote(id, opts = {}) {
+  const db = await load(opts.store);
+  const it = db.items.find((x) => x.id === id);
+  if (!it) return { ok: false, reason: "inexistent" };
+  if (!it.shadow) return { ok: false, reason: "nu e in shadow" };
+  it.shadow = false; it.updated_at = new Date().toISOString(); it.promoted_at = it.updated_at;
+  await save(db, opts.store);
+  return { ok: true, item: it };
 }
 
 /** Corectare: inregistreaza corectia (audit) + inlocuieste cu versiune noua. */
@@ -179,8 +223,9 @@ export async function stats({ store } = {}) {
   const db = await load(store);
   const by = {};
   for (const x of db.items) by[x.memory_type] = (by[x.memory_type] || 0) + 1;
-  const active = db.items.filter((x) => x.verification_status !== "SUPERSEDED" && x.verification_status !== "REVOKED").length;
-  return { total: db.items.length, active, by_type: by, updated_at: db.updated_at };
+  const active = db.items.filter((x) => x.verification_status !== "SUPERSEDED" && x.verification_status !== "REVOKED" && x.shadow !== true).length;
+  const shadow = db.items.filter((x) => x.shadow === true && x.verification_status !== "REVOKED").length;
+  return { total: db.items.length, active, shadow, by_type: by, updated_at: db.updated_at };
 }
 
 export { provenanceOf, redactSecrets };

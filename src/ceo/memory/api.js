@@ -3,7 +3,7 @@
 // (fondatorul isi poate salva decizii/preferinte/politici — politica cere aprobare
 // explicita). Modelele: status + consultare gated (fail-closed daca OFF).
 import { config } from "../../config.js";
-import { remember, recall, list, stats, why, revoke, classifyOnly, memoryEnabled, correct, corrections, exportAll, restore, addRelation, neighbors, graphPath, edges, graphStats } from "./index.js";
+import { remember, recall, list, listShadow, promote, stats, why, revoke, classifyOnly, memoryEnabled, correct, corrections, exportAll, restore, addRelation, neighbors, graphPath, edges, graphStats } from "./index.js";
 import { detectContradictions } from "./contradiction.js";
 
 export function registerMemoryApi(app) {
@@ -58,6 +58,17 @@ export function registerMemoryApi(app) {
     if (!req.body?.id) return res.status(400).json({ error: "id lipsa" });
     res.json(await revoke(req.body.id, req.body.reason || "revocat de fondator"));
   });
+  // Shadow candidates (§3, §9): listare + promovare (decizia fondatorului).
+  app.get("/api/memory/shadow", async (req, res) => {
+    if (memGuard(res)) return;
+    res.json({ candidates: await listShadow({ type: req.query.type || null, limit: Math.min(200, Number(req.query.limit || 100)) }) });
+  });
+  app.post("/api/memory/promote", async (req, res) => {
+    if (memGuard(res)) return;
+    if (!req.body?.id) return res.status(400).json({ error: "id lipsa" });
+    res.json(await promote(req.body.id, {}));
+  });
+
   // Corectare + restore (§9).
   app.post("/api/memory/correct", async (req, res) => {
     if (memGuard(res)) return;
@@ -83,7 +94,8 @@ export function registerMemoryApi(app) {
     const unverified = active.filter((x) => ["UNVERIFIED", "DECLARED"].includes(x.verification_status)).length;
     const contradictions = detectContradictions(active).length;
     const expired = active.filter((x) => x.valid_until && Date.parse(x.valid_until) < Date.now()).length;
-    res.json({ ...st, unverified, no_source: noSource, contradictions, expired, corrections_recent: (await corrections({ limit: 10 })).length, graph: await graphStats({}) });
+    const shadow = (await listShadow({ limit: 500 })).length;
+    res.json({ ...st, unverified, no_source: noSource, contradictions, expired, shadow, modes: { episodic: config.memory?.episodic, semantic: config.memory?.semantic, document: config.memory?.document, decision: config.memory?.decision, preference: config.memory?.preference, relationshipGraph: config.memory?.relationshipGraph }, corrections_recent: (await corrections({ limit: 10 })).length, graph: await graphStats({}) });
   });
 
   // Import selectiv (§18).

@@ -189,15 +189,20 @@ export const config = {
   // intai, apoi modelele). Nu porni cinci provideri inainte ca memoria sa fie stabila.
   memory: (() => {
     const on = (v, d = false) => (v == null || v === "" ? d : ["on", "true", "1"].includes(String(v).toLowerCase()));
+    // Tri-stare per tip (§3): 'on' | 'off' | 'shadow'. Neset = 'on' (compat inapoi).
+    // 'shadow' = se genereaza candidati, exclusi din recall/raspuns, promovabili din UI.
+    const mode = (v) => { const s = String(v == null ? "" : v).toLowerCase(); if (s === "shadow") return "shadow"; if (["off", "false", "0", "no"].includes(s)) return "off"; return "on"; };
     return {
       longTerm: on(process.env.JARVIS_LONG_TERM_MEMORY_ENABLED),
-      episodic: on(process.env.JARVIS_EPISODIC_MEMORY_ENABLED),
-      semantic: on(process.env.JARVIS_SEMANTIC_MEMORY_ENABLED),
-      document: on(process.env.JARVIS_DOCUMENT_MEMORY_ENABLED),
-      decision: on(process.env.JARVIS_DECISION_MEMORY_ENABLED),
-      relationshipGraph: on(process.env.JARVIS_RELATIONSHIP_GRAPH_ENABLED),
+      episodic: mode(process.env.JARVIS_EPISODIC_MEMORY_ENABLED),
+      semantic: mode(process.env.JARVIS_SEMANTIC_MEMORY_ENABLED),
+      document: mode(process.env.JARVIS_DOCUMENT_MEMORY_ENABLED),
+      decision: mode(process.env.JARVIS_DECISION_MEMORY_ENABLED),
+      preference: mode(process.env.JARVIS_PREFERENCE_MEMORY_ENABLED),
+      relationshipGraph: mode(process.env.JARVIS_RELATIONSHIP_GRAPH_ENABLED),
       ui: on(process.env.JARVIS_MEMORY_UI_ENABLED),
       import: on(process.env.JARVIS_MEMORY_IMPORT_ENABLED),
+      vectorProvider: process.env.JARVIS_VECTOR_PROVIDER || "local",
     };
   })(),
   multiModel: (() => {

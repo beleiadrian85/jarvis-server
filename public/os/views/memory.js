@@ -53,6 +53,22 @@ export async function render(root, ctx) {
           tile("entități", dash.graph?.entities || 0))));
     }
 
+    // Shadow candidates (§3, §9) — generați dar excluși din recall/răspuns; se promovează manual.
+    if (dash && (dash.shadow || 0) > 0) {
+      const shadowWrap = h("div", { class: "dim" }, "se încarcă…");
+      async function loadShadow() {
+        const sc = (await api.get("/api/memory/shadow?limit=50", { fresh: true }).catch(() => ({ candidates: [] }))).candidates || [];
+        shadowWrap.replaceChildren(sc.length ? h("div", {}, ...sc.map((it) => h("div", { class: "card", style: "margin-top:8px" },
+          h("div", { class: "form-row", style: "justify-content:space-between;align-items:flex-start" },
+            h("div", {}, h("b", {}, it.title || "(fără titlu)"), h("div", { class: "form-row", style: "gap:4px;margin-top:4px" }, pill(TYPE_LABEL[it.memory_type] || it.memory_type, "sys"), pill("candidat", "warn"))),
+            h("button", { class: "btn", onclick: async () => { await api.post("/api/memory/promote", { id: it.id }); loadShadow(); } }, "Promovează"))))) : emptyCalm("Fără candidați shadow", "nimic de revizuit"));
+      }
+      await loadShadow();
+      nodes.push(card(`Candidați shadow (${dash.shadow}) — de revizuit`,
+        h("p", { class: "dim", style: "margin-bottom:4px" }, "Generați în shadow (Semantic/Document/Relații), excluși din recall și din răspunsuri. Nu se promovează automat — decizi tu."),
+        shadowWrap));
+    }
+
     // Recall (read-only).
     const q = h("input", { placeholder: "Ce știe JARVIS despre…?", "aria-label": "Caută în memorie" });
     const out = h("div", { class: "recall-out" });

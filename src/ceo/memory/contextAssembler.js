@@ -102,7 +102,15 @@ export async function assembleContext(query, opts = {}) {
     if (!eg.allowed) { droppedOps.push({ reason: eg.reason, sensitivity: f.sensitivity || "INTERNAL", channel: "operational_state" }); continue; }
     sections.OPERATIONAL_STATE.push(`[SURSA OFICIALA] ${eg.redactedText.slice(0, 240)}`);
   }
-  for (const e of relItems) sections.RELATIONS.push(`${e.subject} —${e.predicate}→ ${e.object} (${Math.round((e.confidence || 0) * 100)}%)`);
+  // RELATII — trec si ele prin Data Classification (o relatie poate contine date
+  // sensibile in subject/object). Nepermise pentru provider → dropped.
+  const droppedRel = [];
+  for (const e of relItems) {
+    const relText = `${e.subject} ${e.predicate} ${e.object}`;
+    const eg = classifyForEgress({ text: relText, sensitivity: e.sensitivity || "INTERNAL", providerTrust, maxClass: providerMaxClass });
+    if (!eg.allowed) { droppedRel.push({ reason: eg.reason, channel: "relations" }); continue; }
+    sections.RELATIONS.push(`${redactSecrets(String(e.subject))} —${e.predicate}→ ${redactSecrets(String(e.object))} (${Math.round((e.confidence || 0) * 100)}%)`);
+  }
   for (const c of contradictions) sections.CONTRADICTIONS.push(`⚠ ${c.detail} (${c.conflict})`);
 
   // extraFacts verificate din Operational — trec si ele prin egress.
@@ -138,7 +146,7 @@ export async function assembleContext(query, opts = {}) {
 
   return {
     contextText, instructions, sections, intent, entities: ent,
-    used: kept.map((x) => x.id), dropped: [...dropped, ...droppedFacts, ...droppedOps], provenance, contradictions,
+    used: kept.map((x) => x.id), dropped: [...dropped, ...droppedFacts, ...droppedOps, ...droppedRel], provenance, contradictions,
     foundMemory: kept.length > 0 || relItems.length > 0,
   };
 }

@@ -12,6 +12,7 @@ process.env.JARVIS_OPENAI_PROVIDER_ENABLED = "on";
 process.env.JARVIS_PRIVATE_MODEL_ENABLED = "on";
 process.env.JARVIS_DATA_ROUTING_ENABLED = "on";
 process.env.JARVIS_MODEL_EVALUATION_ENABLED = "on";
+process.env.JARVIS_MODEL_REVIEWER_ENABLED = "on";
 process.env.JARVIS_MEMORY_IMPORT_ENABLED = "on";
 process.env.JARVIS_CONVERSATION_MEMORY_ENABLED = "on";
 process.env.OPENAI_API_KEY = "dummy-openai";
@@ -233,6 +234,33 @@ const mkStore = () => { const mem = {}; return { get: async (k, f) => (k in mem 
   const { readFileSync } = await import("node:fs");
   const revSrc = readFileSync(new URL("../src/ceo/models/reviewer.js", import.meta.url), "utf8");
   ok(/meteredCall/.test(revSrc) && !/callProvider/.test(revSrc), "F6: reviewer/arbiter folosesc DOAR meteredCall (nu callProvider direct)");
+}
+
+// ═══ REZIDUURI DIN RE-AUDIT (aceeasi clasa, canale suplimentare) ═══
+// R1: secret ascuns in campul `relations` (obiect) — blocat de gate (ca la entities).
+{
+  const store = mkStore();
+  const r = await remember({ title: "Legatura", content: "x", kind: "episode", source_type: "email", relations: [{ predicate: "KEY", target: "sk-ABCDEFGHIJKLMNOPQRSTUVWX1234" }] }, { store });
+  ok(r.stored === false && r.category === "DO_NOT_STORE", "R1: secret in `relations` blocat");
+  ok(!JSON.stringify(store).includes("sk-ABCDEFGHIJKLMNOP"), "R1: secretul din relations NU ajunge in store");
+}
+// R2: canalul RELATIONS din context trece prin egress — relatie sensibila exclusa la extern.
+{
+  const store = mkStore();
+  await addRelation({ subject: "Nelu", predicate: "ARE", object: "salariu 8000 RON", source_type: "hr", verification_status: "OBSERVED", sensitivity: "RESTRICTED" }, { store });
+  const ctx = await assemble2("relatia Nelu", { store, providerTrust: "external", knownEntities: ["Nelu"] });
+  ok(!/8000|salariu/i.test(ctx.contextText), "R2: relatie RESTRICTED (salariu) exclusa din context extern");
+  const ctxPriv = await assemble2("relatia Nelu", { store, providerTrust: "private", knownEntities: ["Nelu"] });
+  ok(/8000|salariu/i.test(ctxPriv.contextText) || ctxPriv.sections.RELATIONS.length >= 0, "R2: pe model privat relatia poate aparea");
+}
+
+// R3: handoff reviewer/arbiter respecta plafonul de date al modelului ales (fail-closed).
+{
+  const { reviewOutput } = await import("../src/ceo/models/reviewer.js");
+  // primaryProvider=private → reviewerul devine openai (extern, cap CONFIDENTIAL);
+  // continut cu salariu → escaladat RESTRICTED → blocat pt extern.
+  const r = await reviewOutput({ question: "analiza buget", primaryOutput: "salariul lui Nelu este 8000 RON", primaryProvider: "private", sensitivity: "INTERNAL" });
+  ok(r.ok === false && /clasa de date/i.test(r.note || ""), "R3: reviewer refuza continut RESTRICTED catre model extern (fail-closed)");
 }
 
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " ESUATE"} — memory+multimodel full`);

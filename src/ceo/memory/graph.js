@@ -35,7 +35,7 @@ export async function addRelation(p = {}, opts = {}) {
 /** Toate relatiile active (edges) din memorie. */
 export async function edges({ store, tenant_id = null } = {}) {
   const rels = await list({ type: "RELATIONSHIP", limit: 5000, store, tenant_id });
-  return rels.map((r) => ({ id: r.id, ...(r.structured_data || {}), confidence: r.confidence, verification_status: r.verification_status, source_type: r.source_type, source_reference: r.source_reference, created_at: r.created_at }))
+  return rels.map((r) => ({ id: r.id, ...(r.structured_data || {}), confidence: r.confidence, verification_status: r.verification_status, sensitivity: r.sensitivity, source_type: r.source_type, source_reference: r.source_reference, created_at: r.created_at }))
     .filter((e) => e.subject && e.predicate && e.object);
 }
 

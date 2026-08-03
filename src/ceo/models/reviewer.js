@@ -5,6 +5,14 @@ import { config } from "../../config.js";
 import { route } from "./router.js";
 import { meteredCall } from "./meteredCall.js";
 import { redactSecrets } from "../memory/writeGate.js";
+import { classifyForEgress } from "../memory/dataPolicy.js";
+import { PROVIDERS, providerMaxClass } from "./registry.js";
+
+// Poarta de egress pentru handoff-ul reviewer/arbiter: continutul efectiv trimis celui
+// de-al doilea/treilea model trebuie sa respecte plafonul SPECIFIC al acelui provider.
+function egressForReviewer(providerId, text, sensitivity) {
+  return classifyForEgress({ text: String(text || ""), sensitivity: sensitivity || "INTERNAL", providerTrust: PROVIDERS[providerId]?.trust || "external", maxClass: providerMaxClass(providerId) });
+}
 
 export function reviewerEnabled() { return config.multiModel?.enabled === true && config.multiModel?.reviewer === true; }
 
@@ -20,6 +28,9 @@ export async function reviewOutput(p = {}) {
   const candidates = (r.candidates || []).filter((id) => id !== p.primaryProvider);
   const reviewer = candidates[0] || null;
   if (!reviewer) return { ok: false, note: "niciun al doilea model disponibil pentru review" };
+  // Continutul de verificat nu poate depasi plafonul de date al reviewer-ului (fail-closed).
+  const egr = egressForReviewer(reviewer, `${p.question} ${p.primaryOutput}`, p.sensitivity);
+  if (!egr.allowed) return { ok: false, note: `reviewer indisponibil pentru clasa de date (${egr.reason})` };
 
   const system = [
     "Esti recenzent critic. Verifica raspunsul altui model DOAR pe baza contextului dat.",
@@ -51,6 +62,8 @@ export async function arbitrate(p = {}) {
   // Prefera un al treilea provider; daca nu exista, foloseste primul admisibil.
   const third = (r.candidates || []).find((id) => id !== p.primaryProvider && id !== p.reviewerProvider) || r.provider;
   if (!third) return { ok: false, note: "niciun arbitru disponibil" };
+  const egr = egressForReviewer(third, `${p.question} ${p.primaryOutput} ${p.reviewText} ${p.contextText}`, p.sensitivity);
+  if (!egr.allowed) return { ok: false, note: `arbitru indisponibil pentru clasa de date (${egr.reason})` };
   const system = "Esti arbitru. Doua modele sunt in dezacord. Pe baza DOAR a contextului, spune care pozitie e mai bine sustinuta de dovezi si CE dovada lipseste. Nu inventa. Format: BETTER_SUPPORTED: ... ; MISSING_EVIDENCE: ... ; CONFIDENCE: low/med/high.";
   const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 600)}\n\nPOZITIA A (primary):\n${String(p.primaryOutput || "").slice(0, 1200)}\n\nPOZITIA B (reviewer):\n${String(p.reviewText || "").slice(0, 800)}\n\nCONTEXT:\n${String(p.contextText || "").slice(0, 2000)}`;
   const call = await meteredCall(third, { system, messages: [{ role: "user", content: user }], maxTokens: 400, purpose: "arbiter", store: p.store });

@@ -37,9 +37,9 @@ export async function remember(cand = {}, opts = {}) {
   const gate = classifyWrite({
     // Scaneaza TOT candidatul (inclusiv structured_data/entities), nu doar titlul —
     // un secret ascuns intr-un camp structurat NU trebuie sa scape de gate.
-    // entities se serializeaza cu JSON.stringify (NU .join): un obiect-entitate ar da
+    // entities/relations se serializeaza cu JSON.stringify (NU .join): un obiect ar da
     // "[object Object]" cu .join si ar ascunde secretul de scanare.
-    text: `${cand.title || ""} ${cand.content || ""} ${cand.structured_data ? JSON.stringify(cand.structured_data) : ""} ${Array.isArray(cand.entities) ? JSON.stringify(cand.entities) : ""}`.trim(),
+    text: `${cand.title || ""} ${cand.content || ""} ${cand.structured_data ? JSON.stringify(cand.structured_data) : ""} ${Array.isArray(cand.entities) ? JSON.stringify(cand.entities) : ""} ${Array.isArray(cand.relations) ? JSON.stringify(cand.relations) : ""}`.trim(),
     kind: cand.kind, source_type: cand.source_type, verification_status: cand.verification_status,
     from_model: opts.from_model === true || cand.is_inference === true,
     founder_approved: opts.founder_approved === true || cand.founder_approved === true,

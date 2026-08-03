@@ -116,8 +116,13 @@ export async function assembleContext(query, opts = {}) {
   // dar ascundem detaliul (managerial e important sa stii ca e o contradictie).
   for (const c of contradictions) {
     const eg = classifyForEgress({ text: String(c.detail || ""), sensitivity: "INTERNAL", providerTrust, maxClass: providerMaxClass });
-    if (!eg.allowed) sections.CONTRADICTIONS.push(`⚠ conflict pe „${redactSecrets(String(c.entity || "o entitate")).slice(0, 40)}" (${c.conflict}) [detaliu ascuns — clasa de date]`);
-    else sections.CONTRADICTIONS.push(`⚠ ${eg.redactedText.slice(0, 200)} (${c.conflict})`);
+    if (!eg.allowed) {
+      // Chiar si numele entitatii trece prin egress (poate fi RESTRICTED: salariu/IBAN/CNP);
+      // daca nu e permis, pastram doar SEMNALUL, cu entitate neutra.
+      const entEg = classifyForEgress({ text: String(c.entity || ""), sensitivity: "INTERNAL", providerTrust, maxClass: providerMaxClass });
+      const safeEnt = entEg.allowed ? entEg.redactedText.slice(0, 40) : "o entitate";
+      sections.CONTRADICTIONS.push(`⚠ conflict pe „${safeEnt}" (${c.conflict}) [detaliu ascuns — clasa de date]`);
+    } else sections.CONTRADICTIONS.push(`⚠ ${eg.redactedText.slice(0, 200)} (${c.conflict})`);
   }
 
   // extraFacts verificate din Operational — trec si ele prin egress.

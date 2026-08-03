@@ -15,12 +15,19 @@ let _seq = 0;
  * Construieste un MemoryItem canonic cu provenienta obligatorie. NICIODATA o
  * concluzie fara sursa + timestamp + nivel de verificare + evidence.
  */
+// Campurile de control acceptate de la caller se COERCITIONEAZA la tipuri sigure, ca sa
+// NU poata gazdui text liber (deci nici secrete): id/supersedes doar format `mem:`,
+// version numeric, valid_from/valid_until doar date ISO valide. Astfel premisa
+// denylist-ului din Write Gate ("aceste campuri sunt id/numerice") devine adevarata.
+const idOk = (v) => (typeof v === "string" && /^mem:[0-9]{1,20}:[0-9]{1,4}$/.test(v) ? v : null);
+const isoOrNull = (v) => (v != null && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : null);
+
 export function buildMemoryItem(p = {}, { nowISO = null } = {}) {
   const c = isObj(p) ? p : {};
   const now = nowISO || new Date().toISOString();
   const memory_type = MEMORY_TYPES.includes(String(c.memory_type).toUpperCase()) ? String(c.memory_type).toUpperCase() : "EPISODIC";
   return {
-    id: c.id || `mem:${now.replace(/[^0-9]/g, "").slice(0, 17)}:${(_seq++) % 1000}`,
+    id: idOk(c.id) || `mem:${now.replace(/[^0-9]/g, "").slice(0, 17)}:${(_seq++) % 1000}`,
     memory_type, tenant_id: c.tenant_id || "profi-concept", owner_user_id: c.owner_user_id || "adrian",
     title: String(c.title || "").slice(0, 200), content: String(c.content || "").slice(0, 4000),
     structured_data: isObj(c.structured_data) ? c.structured_data : {},
@@ -35,9 +42,9 @@ export function buildMemoryItem(p = {}, { nowISO = null } = {}) {
     // Marcaj AI_INFERENCE: orice provenienta de model conteaza ca inferenta, nu fapt.
     // Sursele umane/de sistem cunoscute NU sunt inferente.
     is_inference: c.is_inference === true || (!!c.extracted_by && !/^(human|founder|adrian|operational|rule|system|manual)$/i.test(String(c.extracted_by).trim())),
-    valid_from: c.valid_from || now, valid_until: c.valid_until || null,
-    supersedes: c.supersedes || null, superseded_by: null,
-    retention_policy: c.retention_policy || "default", version: c.version || 1,
+    valid_from: isoOrNull(c.valid_from) || now, valid_until: isoOrNull(c.valid_until),
+    supersedes: idOk(c.supersedes), superseded_by: null,
+    retention_policy: c.retention_policy || "default", version: Number.isFinite(Number(c.version)) ? Number(c.version) : 1,
     created_at: now, updated_at: now,
   };
 }

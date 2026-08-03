@@ -303,5 +303,28 @@ const mkStore = () => { const mem = {}; return { get: async (k, f) => (k in mem 
   ok(!/Salariu Ion (ne)?platit/i.test(ctx.contextText), "D4: titlurile RESTRICTED nu apar in contextText extern");
 }
 
+// ═══ INCHIDERE STRUCTURALA (coercitie campuri control + entity in contradictii) ═══
+// C1: secret in campuri de control (valid_until/supersedes/id/version) — coercite la tip sigur.
+{
+  const { buildMemoryItem } = await import("../src/ceo/memory/schema.js");
+  const it = buildMemoryItem({ title: "x", content: "y", valid_until: "GOCSPX-AbCdEf1234567890secretvalue", supersedes: "GOCSPX-secret", id: "sk-injectedid1234567890", version: "GOCSPX-v" });
+  ok(it.valid_until === null, "C1: valid_until non-data → null (nu poate gazdui secret)");
+  ok(it.supersedes === null, "C1: supersedes format invalid → null");
+  ok(it.id.startsWith("mem:") && !it.id.includes("sk-inject"), "C1: id caller invalid → regenerat mem:");
+  ok(typeof it.version === "number", "C1: version coercit numeric");
+  // capat-la-capat: un secret in valid_until nu se persista.
+  const store = mkStore();
+  const r = await remember({ title: "Note", content: "plan", kind: "episode", source_type: "email", valid_until: "GOCSPX-AbCdEf1234567890secret" }, { store });
+  ok(!JSON.stringify(store).includes("GOCSPX-AbCdEf"), "C1: secret in valid_until NU ajunge in store (coercit la null)");
+}
+// C2: entity dintr-o contradictie RESTRICTED nu iese la extern (nici numele).
+{
+  const store = mkStore();
+  await remember({ title: "IBAN RO49AAAA1B31007593840000 valabil", content: "-", kind: "fact", source_type: "bank", verification_status: "OBSERVED", entities: ["RO49AAAA1B31007593840000"] }, { store });
+  await remember({ title: "IBAN RO49AAAA1B31007593840000 expirat", content: "-", kind: "fact", source_type: "bank", verification_status: "OBSERVED", entities: ["RO49AAAA1B31007593840000"] }, { store });
+  const ctx = await assemble2("stare IBAN", { store, providerTrust: "external", knownEntities: ["RO49AAAA1B31007593840000"] });
+  ok(!/RO49AAAA1B31007593840000/.test(ctx.contextText), "C2: IBAN dintr-o contradictie NU apare in contextText extern (nici ca entitate)");
+}
+
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " ESUATE"} — memory+multimodel full`);
 process.exit(failed === 0 ? 0 : 1);

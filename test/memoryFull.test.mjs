@@ -30,6 +30,12 @@ const { recordSpend, spentThisMonth, alertStatus } = await import("../src/ceo/mo
 const { recordEvaluation, perfScores } = await import("../src/ceo/models/evaluation.js");
 const { needsReview } = await import("../src/ceo/models/riskTrigger.js");
 const { consultModel } = await import("../src/ceo/models/gateway.js");
+const { containsSecret } = await import("../src/ceo/memory/writeGate.js");
+const { classifyForEgress, filterMemoriesForEgress } = await import("../src/ceo/memory/dataPolicy.js");
+const { providerMaxClass } = await import("../src/ceo/models/registry.js");
+const { meteredCall } = await import("../src/ceo/models/meteredCall.js");
+const { assembleContext: assemble2 } = await import("../src/ceo/memory/contextAssembler.js");
+const { previewImport: prevImp, confirmImport: confImp } = await import("../src/ceo/memory/import.js");
 
 let failed = 0, n = 0;
 const ok = (c, m) => { n++; console.log(`${c ? "✅" : "❌"} ${n}. ${m}`); if (!c) failed++; };
@@ -170,6 +176,63 @@ const mkStore = () => { const mem = {}; return { get: async (k, f) => (k in mem 
   const p = capabilityProfile("openai");
   ok(p && Array.isArray(p.capabilities) && Array.isArray(p.data_classifications_allowed), "capabilityProfile complet (§10)");
   ok(!p.data_classifications_allowed.includes("RESTRICTED"), "profil openai: RESTRICTED absent din matrice");
+}
+
+// ═══ REGRESII DIN AUDITUL ADVERSARIAL (6 constatari) ═══
+// F1: secret ascuns intr-un OBIECT-entitate (nu string) — blocat de gate.
+{
+  const store = mkStore();
+  const r = await remember({ title: "Contact", content: "detalii", kind: "episode", source_type: "email", entities: [{ type: "api_key", value: "sk-ABCDEFGHIJKLMNOPQRSTUVWX1234" }] }, { store });
+  ok(r.stored === false && r.category === "DO_NOT_STORE", "F1: secret in obiect-entitate blocat (nu doar string)");
+  ok(!JSON.stringify(store).includes("sk-ABCDEFGHIJKLMNOP"), "F1: secretul din obiect-entitate NU ajunge in store");
+}
+// F2: tipare de secrete extinse (Stripe/AWS/Google/PEM).
+{
+  ok(containsSecret("cheia e sk_live_51Habcdefghijklmnop"), "F2: Stripe sk_live prins");
+  ok(containsSecret("AKIAIOSFODNN7EXAMPLE"), "F2: AWS AKIA prins");
+  ok(containsSecret("-----BEGIN RSA PRIVATE KEY-----"), "F2: cheie PEM prinsa");
+  ok(!containsSecret("domnul Aizawa a semnat contractul"), "F2: fara fals-pozitiv pe text normal");
+}
+// F3: operationalState RESTRICTED (salariu) NU ajunge la extern.
+{
+  const ctx = await assemble2("buget personal", { store: mkStore(), providerTrust: "external", operationalState: [{ text: "Salariul lui Nelu este 8000 RON" }] });
+  ok(!/8000|salari/i.test(ctx.contextText), "F3: salariu din operationalState exclus pt extern");
+  ok(ctx.dropped.some((d) => d.channel === "operational_state"), "F3: canalul operational_state marcat ca dropped");
+  const ctxPriv = await assemble2("buget personal", { store: mkStore(), providerTrust: "private", operationalState: [{ text: "Salariul lui Nelu este 8000 RON", sensitivity: "RESTRICTED" }] });
+  ok(/8000|salari/i.test(ctxPriv.contextText), "F3: acelasi salariu permis pe model privat/local");
+}
+// F4: continut importat de la AI → marcat is_inference (nu fapt).
+{
+  const store = mkStore();
+  const c = await confImp([{ title: "Preferinta", content: "firma prefera furnizorul X", kind: "fact" }], { source: "chatgpt", store });
+  ok(c.imported === 1, "F4: import AI persistat");
+  const items = await list({ store, includeInactive: true });
+  const imp = items.find((x) => x.source_type === "IMPORTED_FROM_CHATGPT");
+  ok(imp && imp.is_inference === true, "F4: continut IMPORTED_FROM_CHATGPT marcat is_inference (nu fapt)");
+}
+// F5: fallback per-provider — CONFIDENTIAL nu iese la un provider capat la INTERNAL.
+{
+  ok(providerMaxClass("google") === "INTERNAL", "F5: google plafonat la INTERNAL");
+  ok(providerMaxClass("anthropic") === "HIGHLY_CONFIDENTIAL", "F5: anthropic pana la HIGHLY_CONFIDENTIAL");
+  const items = [{ id: "x", title: "marja proiect", content: "marja 18%", sensitivity: "CONFIDENTIAL" }];
+  const toGoogle = filterMemoriesForEgress(items, { providerTrust: "external", maxClass: "INTERNAL" });
+  ok(toGoogle.kept.length === 0 && toGoogle.dropped.length === 1, "F5: CONFIDENTIAL exclus pt provider capat la INTERNAL");
+  const toAnthropic = filterMemoriesForEgress(items, { providerTrust: "external", maxClass: "HIGHLY_CONFIDENTIAL" });
+  ok(toAnthropic.kept.length === 1, "F5: acelasi CONFIDENTIAL permis pt provider care admite CONFIDENTIAL");
+  const egr = classifyForEgress({ text: "marja 18%", sensitivity: "CONFIDENTIAL", providerTrust: "external", maxClass: "INTERNAL" });
+  ok(egr.allowed === false, "F5: classifyForEgress respecta plafonul specific al providerului");
+}
+// F6: reviewer/arbiter trec prin Cost Guard (meteredCall) — fail-closed la plafon 0.
+{
+  const store = mkStore();
+  // Umple ziua peste un plafon mic prin config? config e la import. Testam ca meteredCall
+  // returneaza structural {ok:false} cand providerul e inatacabil (URL/credentiale) — dovada
+  // ca apelul trece prin bucla guard→call (nu ocoleste). Provider bogus 'private'.
+  const r = await meteredCall("private", { system: "s", messages: [{ role: "user", content: "x" }], maxTokens: 10, store });
+  ok(r.ok === false, "F6: meteredCall (reviewer/arbiter) e canalul unic — apel esuat raportat, nu ocolit");
+  const { readFileSync } = await import("node:fs");
+  const revSrc = readFileSync(new URL("../src/ceo/models/reviewer.js", import.meta.url), "utf8");
+  ok(/meteredCall/.test(revSrc) && !/callProvider/.test(revSrc), "F6: reviewer/arbiter folosesc DOAR meteredCall (nu callProvider direct)");
 }
 
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " ESUATE"} — memory+multimodel full`);

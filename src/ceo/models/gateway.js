@@ -10,7 +10,7 @@ import { config } from "../../config.js";
 import { assembleContext } from "../memory/contextAssembler.js";
 import { classifyForEgress } from "../memory/dataPolicy.js";
 import { redactSecrets } from "../memory/writeGate.js";
-import { PROVIDERS, providerAllowsClass, estimateCost } from "./registry.js";
+import { PROVIDERS, providerAllowsClass, providerMaxClass, estimateCost } from "./registry.js";
 import { route } from "./router.js";
 import { callProvider } from "./providers.js";
 import { wouldExceed, recordSpend } from "./costGuard.js";
@@ -46,7 +46,10 @@ export async function consultModel(p = {}) {
     // Prompt cu date RESTRICTED nu merge la extern.
     if (!promptEgress.allowed && trust === "external") { lastReason = "prompt cu date RESTRICTED nu poate merge la model extern (fail-closed)"; continue; }
 
-    const ctx = await assembleContext(p.query || "", { providerTrust: trust, maxItems: p.maxItems || 6, extraFacts: p.extraFacts || [], store: p.store, operationalState: p.operationalState || [], tenant_id: p.tenant_id });
+    // Plafonul SPECIFIC al acestui provider (ex. google=INTERNAL) — nu doar trust-ul,
+    // ca fallback-ul sa nu trimita CONFIDENTIAL unui provider care admite doar INTERNAL.
+    const maxClass = providerMaxClass(providerId);
+    const ctx = await assembleContext(p.query || "", { providerTrust: trust, providerMaxClass: maxClass, maxItems: p.maxItems || 6, extraFacts: p.extraFacts || [], store: p.store, operationalState: p.operationalState || [], tenant_id: p.tenant_id });
 
     const est = estimateCost(providerId, { inTokens: Math.ceil((ctx.contextText.length + String(p.query).length) / 4), outTokens: p.maxTokens || 800 });
     const guard = await wouldExceed(est, { store: p.store, nowISO: p.nowISO });

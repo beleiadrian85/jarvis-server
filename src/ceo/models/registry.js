@@ -65,6 +65,13 @@ export function providerAllowsClass(id, sensitivity) {
   return p.data_classifications_allowed.includes(String(sensitivity || "INTERNAL").toUpperCase());
 }
 
+const _ORDER = { PUBLIC: 0, INTERNAL: 1, CONFIDENTIAL: 2, HIGHLY_CONFIDENTIAL: 3, RESTRICTED: 4 };
+/** Clasa MAXIMA de date admisa de un provider (pentru plafonarea egress-ului). */
+export function providerMaxClass(id) {
+  const p = PROVIDERS[id]; if (!p) return "PUBLIC";
+  return p.data_classifications_allowed.reduce((mx, c) => (_ORDER[c] > _ORDER[mx] ? c : mx), "PUBLIC");
+}
+
 /** E activat providerul? (flag global multi-model + flag specific + credentiale). */
 export function providerEnabled(id) {
   const mm = config.multiModel || {};

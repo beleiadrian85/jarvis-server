@@ -13,8 +13,11 @@ const RESTRICTED_HINTS = [
 ];
 
 /**
- * Poate acest continut sa fie trimis unui model extern de categoria `providerClass`?
- * @param {object} p { text, sensitivity, providerTrust ('external'|'private'|'local') }
+ * Poate acest continut sa fie trimis unui model? Respecta si clasa MAXIMA admisa de
+ * providerul SPECIFIC (nu doar nivelul de trust) — ca un provider care admite doar
+ * PUBLIC/INTERNAL sa NU primeasca CONFIDENTIAL.
+ * @param {object} p { text, sensitivity, providerTrust ('external'|'private'|'local'),
+ *   maxClass (clasa maxima admisa de provider, ex. "INTERNAL") }
  * @returns { allowed, redactedText, reason, effectiveSensitivity }
  */
 export function classifyForEgress(p = {}) {
@@ -25,6 +28,16 @@ export function classifyForEgress(p = {}) {
   if (containsSecret(text) && CLASS_ORDER[sensitivity] < CLASS_ORDER.RESTRICTED) sensitivity = "RESTRICTED";
 
   const trust = p.providerTrust || "external";
+  const lvl = CLASS_ORDER[sensitivity] ?? 1;
+
+  // Plafonul SPECIFIC al providerului: orice peste clasa admisa e blocat (fail-closed).
+  if (p.maxClass != null) {
+    const maxLvl = CLASS_ORDER[String(p.maxClass).toUpperCase()] ?? 4;
+    if (lvl > maxLvl) {
+      if (trust === "external") return { allowed: false, redactedText: null, reason: `clasa ${sensitivity} peste plafonul providerului (${p.maxClass})`, effectiveSensitivity: sensitivity };
+      // privat/local: permis dar redactat, chiar peste plafon nominal.
+    }
+  }
 
   // RESTRICTED: nu paraseste sistemul catre modele externe. Doar local/privat, redactat.
   if (sensitivity === "RESTRICTED") {
@@ -39,11 +52,11 @@ export function classifyForEgress(p = {}) {
   return { allowed: true, redactedText: redactSecrets(text), reason: "permis (redactat de siguranta)", effectiveSensitivity: sensitivity };
 }
 
-/** Filtreaza o lista de memorii pentru egress catre un provider dat. */
-export function filterMemoriesForEgress(items, { providerTrust = "external" } = {}) {
+/** Filtreaza o lista de memorii pentru egress catre un provider dat (cu plafon specific). */
+export function filterMemoriesForEgress(items, { providerTrust = "external", maxClass = null } = {}) {
   const kept = [], dropped = [];
   for (const it of items || []) {
-    const r = classifyForEgress({ text: `${it.title} ${it.content}`, sensitivity: it.sensitivity, providerTrust });
+    const r = classifyForEgress({ text: `${it.title} ${it.content}`, sensitivity: it.sensitivity, providerTrust, maxClass });
     if (r.allowed) kept.push({ ...it, _egressText: r.redactedText, _egressSensitivity: r.effectiveSensitivity });
     else dropped.push({ id: it.id, reason: r.reason, sensitivity: it.sensitivity });
   }

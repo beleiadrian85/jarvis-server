@@ -3,7 +3,7 @@
 // Rezultatul reviewer-ului e tot inferenta (nu fapt). Fondatorul/JARVIS decid.
 import { config } from "../../config.js";
 import { route } from "./router.js";
-import { callProvider } from "./providers.js";
+import { meteredCall } from "./meteredCall.js";
 import { redactSecrets } from "../memory/writeGate.js";
 
 export function reviewerEnabled() { return config.multiModel?.enabled === true && config.multiModel?.reviewer === true; }
@@ -29,9 +29,8 @@ export async function reviewOutput(p = {}) {
   ].filter(Boolean).join("\n\n");
   const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 800)}\n\nRASPUNS DE VERIFICAT:\n${redactSecrets(String(p.primaryOutput || "")).slice(0, 2000)}`;
 
-  let call;
-  try { call = await callProvider(reviewer, { system, messages: [{ role: "user", content: user }], maxTokens: 400 }); }
-  catch (e) { return { ok: false, note: `review esuat: ${e.message}` }; }
+  const call = await meteredCall(reviewer, { system, messages: [{ role: "user", content: user }], maxTokens: 400, purpose: "reviewer", store: p.store });
+  if (!call.ok) return { ok: false, note: call.blocked ? call.reason : `review esuat: ${call.reason}` };
 
   const txt = call.text || "";
   const agree = /AGREE:\s*(yes|da)/i.test(txt);
@@ -54,7 +53,7 @@ export async function arbitrate(p = {}) {
   if (!third) return { ok: false, note: "niciun arbitru disponibil" };
   const system = "Esti arbitru. Doua modele sunt in dezacord. Pe baza DOAR a contextului, spune care pozitie e mai bine sustinuta de dovezi si CE dovada lipseste. Nu inventa. Format: BETTER_SUPPORTED: ... ; MISSING_EVIDENCE: ... ; CONFIDENCE: low/med/high.";
   const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 600)}\n\nPOZITIA A (primary):\n${String(p.primaryOutput || "").slice(0, 1200)}\n\nPOZITIA B (reviewer):\n${String(p.reviewText || "").slice(0, 800)}\n\nCONTEXT:\n${String(p.contextText || "").slice(0, 2000)}`;
-  let call; try { call = await callProvider(third, { system, messages: [{ role: "user", content: user }], maxTokens: 400 }); }
-  catch (e) { return { ok: false, note: `arbitraj esuat: ${e.message}` }; }
+  const call = await meteredCall(third, { system, messages: [{ role: "user", content: user }], maxTokens: 400, purpose: "arbiter", store: p.store });
+  if (!call.ok) return { ok: false, note: call.blocked ? call.reason : `arbitraj esuat: ${call.reason}` };
   return { ok: true, arbiter: third, raw: (call.text || "").slice(0, 800), is_inference: true };
 }

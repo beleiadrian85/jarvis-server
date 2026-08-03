@@ -48,7 +48,12 @@ function freshnessOk(item, { maxAgeDays = null } = {}) {
  */
 export async function assembleContext(query, opts = {}) {
   const providerTrust = opts.providerTrust || "external";
-  const maxLvl = providerTrust === "external" ? CLASS_ORDER.CONFIDENTIAL : CLASS_ORDER.RESTRICTED;
+  // Plafonul SPECIFIC al providerului (ex. google = INTERNAL) — nu doar trust-ul.
+  const providerMaxClass = opts.providerMaxClass || (providerTrust === "external" ? "CONFIDENTIAL" : "RESTRICTED");
+  const maxLvl = Math.min(
+    providerTrust === "external" ? CLASS_ORDER.CONFIDENTIAL : CLASS_ORDER.RESTRICTED,
+    CLASS_ORDER[String(providerMaxClass).toUpperCase()] ?? CLASS_ORDER.CONFIDENTIAL,
+  );
 
   const intent = detectIntent(query);
   const ent = resolveEntities(query, opts.knownEntities || []);
@@ -73,8 +78,8 @@ export async function assembleContext(query, opts = {}) {
   // 4) Contradictii intre candidatii semantici.
   const contradictions = detectContradictions(semItems);
 
-  // 5) Egress: filtreaza dupa clasificarea providerului.
-  const { kept, dropped } = filterMemoriesForEgress(semItems.slice(0, opts.maxItems || 8), { providerTrust });
+  // 5) Egress: filtreaza dupa clasificarea providerului (trust + plafon specific).
+  const { kept, dropped } = filterMemoriesForEgress(semItems.slice(0, opts.maxItems || 8), { providerTrust, maxClass: providerMaxClass });
 
   // 6) Sectiuni (§6) — instructiunile NU se amesteca cu documentele.
   const sections = { VERIFIED_FACTS: [], OPERATIONAL_STATE: [], RELEVANT_EPISODES: [], DOCUMENT_EVIDENCE: [], USER_PREFERENCES: [], RELATIONS: [], UNKNOWNS: [], CONTRADICTIONS: [] };
@@ -89,14 +94,21 @@ export async function assembleContext(query, opts = {}) {
     else if (it.memory_type === "EPISODIC") sections.RELEVANT_EPISODES.push(line);
     else sections.VERIFIED_FACTS.push(line);
   }
-  for (const f of opts.operationalState || []) sections.OPERATIONAL_STATE.push(`[SURSA OFICIALA] ${redactSecrets(String(f.text || f)).slice(0, 240)}`);
+  // Stare operationala (sursa oficiala) — trece si ea prin Data Classification: un fapt
+  // RESTRICTED (ex. salarii) NU ajunge la un model extern nici pe acest canal.
+  const droppedOps = [];
+  for (const f of opts.operationalState || []) {
+    const eg = classifyForEgress({ text: String(f.text || f), sensitivity: f.sensitivity || "INTERNAL", providerTrust, maxClass: providerMaxClass });
+    if (!eg.allowed) { droppedOps.push({ reason: eg.reason, sensitivity: f.sensitivity || "INTERNAL", channel: "operational_state" }); continue; }
+    sections.OPERATIONAL_STATE.push(`[SURSA OFICIALA] ${eg.redactedText.slice(0, 240)}`);
+  }
   for (const e of relItems) sections.RELATIONS.push(`${e.subject} —${e.predicate}→ ${e.object} (${Math.round((e.confidence || 0) * 100)}%)`);
   for (const c of contradictions) sections.CONTRADICTIONS.push(`⚠ ${c.detail} (${c.conflict})`);
 
   // extraFacts verificate din Operational — trec si ele prin egress.
   const droppedFacts = [];
   for (const f of opts.extraFacts || []) {
-    const eg = classifyForEgress({ text: String(f.text || ""), sensitivity: f.sensitivity || "INTERNAL", providerTrust });
+    const eg = classifyForEgress({ text: String(f.text || ""), sensitivity: f.sensitivity || "INTERNAL", providerTrust, maxClass: providerMaxClass });
     if (!eg.allowed) { droppedFacts.push({ reason: eg.reason, sensitivity: f.sensitivity || "INTERNAL" }); continue; }
     sections.VERIFIED_FACTS.push(`[FAPT/${f.verification_status || "OBSERVED"}] ${eg.redactedText.slice(0, 300)} (sursa: ${f.source || "operational"})`);
   }
@@ -126,7 +138,7 @@ export async function assembleContext(query, opts = {}) {
 
   return {
     contextText, instructions, sections, intent, entities: ent,
-    used: kept.map((x) => x.id), dropped: [...dropped, ...droppedFacts], provenance, contradictions,
+    used: kept.map((x) => x.id), dropped: [...dropped, ...droppedFacts, ...droppedOps], provenance, contradictions,
     foundMemory: kept.length > 0 || relItems.length > 0,
   };
 }

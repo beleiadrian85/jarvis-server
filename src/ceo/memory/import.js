@@ -53,7 +53,15 @@ export async function confirmImport(items = [], { source = "chatgpt", store, sel
   const chosen = preview.candidates.filter((c, i) => c.importable && (!selectedIndexes || selectedIndexes.includes(i)));
   const stored = [];
   for (const c of chosen) {
-    const r = await remember({ title: c.title, content: c.content, kind: c.kind, source_type: c.provenance, verification_status: "DECLARED", confidence: 0.3, structured_data: { imported: true, provenance: c.provenance } }, { store });
+    // Continut de origine AI (ChatGPT/alt model) = INFERENTA, nu fapt confirmat (§5).
+    // Marcam prin `extracted_by` (schema deriva is_inference=true) — NU prin is_inference
+    // pe candidat, care ar declansa regula "opinie de model → working only" a gate-ului
+    // si ar impiedica persistarea ceruta explicit la import.
+    const aiOrigin = c.provenance === "IMPORTED_FROM_CHATGPT" || c.provenance === "IMPORTED_FROM_OTHER_AI";
+    const r = await remember({ title: c.title, content: c.content, kind: c.kind, source_type: c.provenance,
+      verification_status: "DECLARED", confidence: 0.3,
+      extracted_by: aiOrigin ? c.provenance : null,
+      structured_data: { imported: true, provenance: c.provenance, ai_inference: aiOrigin } }, { store });
     if (r.stored) stored.push(r.item.id);
   }
   const s = store || { get: getState, set: setState };

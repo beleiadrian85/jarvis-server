@@ -26,10 +26,10 @@ export async function ask(p = {}) {
 
   let review = null, arbiter = null;
   if (risk.review && reviewerEnabled()) {
-    review = await reviewOutput({ question: p.query, primaryOutput: primary.output, primaryProvider: primary.provider, sensitivity: p.sensitivity }).catch(() => null);
+    review = await reviewOutput({ question: p.query, primaryOutput: primary.output, primaryProvider: primary.provider, sensitivity: p.sensitivity, store: p.store }).catch(() => null);
     // Dezacord material → arbitru (daca activat).
     if (review?.ok && review.agree === false && arbiterEnabled()) {
-      arbiter = await arbitrate({ question: p.query, primaryOutput: primary.output, primaryProvider: primary.provider, reviewerProvider: review.reviewer, reviewText: review.raw, sensitivity: p.sensitivity }).catch(() => null);
+      arbiter = await arbitrate({ question: p.query, primaryOutput: primary.output, primaryProvider: primary.provider, reviewerProvider: review.reviewer, reviewText: review.raw, sensitivity: p.sensitivity, store: p.store }).catch(() => null);
     }
   }
   return { ...primary, review_triggered: risk.review, review_reasons: risk.reasons, review, arbiter };

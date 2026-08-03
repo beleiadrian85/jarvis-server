@@ -12,7 +12,12 @@ export const WRITE_CATEGORIES = [
 const SECRET_PATTERNS = [
   /\b(GOCSPX-[A-Za-z0-9_-]+)\b/,                               // Google client secret
   /\b(sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b/,     // API keys (OpenAI/Slack)
-  /\b(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,    // GitHub tokens
+  /\bsk[-_](proj|live|test|ant)[-_][A-Za-z0-9_-]{10,}\b/i,      // OpenAI proj / Stripe live-test / Anthropic
+  /\b[rp]k_(live|test)_[A-Za-z0-9]{10,}\b/,                     // Stripe secret/restricted keys (underscore)
+  /\bAKIA[0-9A-Z]{16}\b/,                                       // AWS access key id
+  /\bAIza[0-9A-Za-z_-]{30,}/,                                   // Google API key
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,                        // chei private PEM
+  /\b(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,})\b/, // GitHub/GitLab tokens
   /\bBearer\s+[A-Za-z0-9._-]{20,}\b/i,                          // bearer tokens
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/, // JWT
   /\b(parola|password|passwd|pwd|pin|otp|cod (de )?(verificare|autentificare)|api[_ ]?key|secret|token|refresh_token|client_secret)\b\s*[:=]\s*\S+/i,

@@ -76,13 +76,13 @@ export async function finalizeManagerialOutput(p = {}) {
   // COMPRESIE (§9): tinta 80–180 cuvinte pentru raspunsuri manageriale uzuale. Peste
   // ~200 cuvinte declanseaza acelasi UNIC ciclu de corectie cu instructiune de comprimare.
   const wordCount = (s) => String(s || "").trim().split(/\s+/).filter(Boolean).length;
-  const tooLong = forFounder && wordCount(text) > 200;
+  const tooLong = forFounder && wordCount(text) > 180;
 
   // UN singur ciclu de corectie (daca avem cu ce regenera si e material SAU prea lung).
   if ((!gate.pass || !trace.traceable || tooLong) && typeof llm === "function") {
     const fixMsg = (correctionInstruction(gate) || "Rescrie raspunsul managerial.") +
       (trace.gaps.length ? "\nTRASABILITATE — afirmatii fara suport (elimina-le sau leaga-le de fapte reale):\n" + trace.gaps.map((g) => `- ${g.claim}: ${g.why}`).join("\n") : "") +
-      (tooLong ? "\nCOMPRIMARE: raspunsul e prea lung. Rescrie in 80–180 de cuvinte: o concluzie dominanta, maximum 3 puncte, o opinie clara (separata de fapt), o singura actiune/decizie. Fara sectiuni repetitive, fara notificari (DIGI/ANAF), fara emoji excesive." : "");
+      (tooLong ? "\nCOMPRIMARE (obligatoriu): raspunsul e prea lung. Rescrie in MAXIM 180 de cuvinte: o concluzie dominanta la inceput, maximum 3 puncte, o opinie clara (separata de fapt), o singura actiune/decizie. ELIMINA tabelele daca nu sunt strict necesare, sectiunile repetitive, notificarile (DIGI/ANAF) si emoji-urile in exces. Scurt si executabil." : "");
     try {
       const regen = await llm({ system: system || "", messages: [...arr(messages), { role: "assistant", content: text }, { role: "user", content: fixMsg }] });
       if (regen && String(regen).trim()) {

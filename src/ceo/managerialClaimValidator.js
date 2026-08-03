@@ -76,6 +76,10 @@ const CAPABILITY_LANG = /(pot crea|pot trimite|pot urmari|propun|urmeaza sa|voi 
 
 // Stare emotionala (interzis ca fapt).
 const EMOTION = /(demotiv|paraliz|dezinteres|neimplica|incompeten|frustrat|lenes|isi pierde (motivati|elan|chef)|nu mai are (motivati|elan|chef)|pierdut (motivati|elan|chef)|delasa|descuraj)/i;
+// Concluzii despre COMPORTAMENTUL oamenilor fara sursa umana (§8): "nu comunica",
+// "echipa aude panica", "nu are incredere", "delegare pasiva", "oamenii cred".
+const PEOPLE_CLAIM = /\b(nu comunica|nu (mai )?raspunde (la timp|deloc)|nu se implica|delegare pasiva|echipa (aude|simte|percepe|e in) (panica|stres|haos)|nu are incredere|oamenii cred|toata lumea (stie|crede)|(nu (e|este)|nici) (o )?problema (cu|la)|evita responsabilitatea|se eschiveaza)\b/i;
+const HUMAN_SOURCE = /(mi-a spus|a spus el|a spus ea|conform (lui|ei|discutiei)|sursa umana|el a zis|ea a zis|in sedinta|dupa discutie|pattern (repetat|observat) in|de \d+ ori)/i;
 
 // Recomandare de proces manual (rutina umana).
 const MANUAL_PROCESS = /\b(reconciliere manuala|manual zilnic|zilnic \d+ (min|minute)|\d+ (min|minute) zilnic|rutina (manuala|zilnica)|sa faca (zilnic|manual))\b/i;
@@ -94,6 +98,20 @@ const ROOTCAUSE_CHECKED = /(upload|incarcat|detectat|parsat|import|pipeline|inte
 
 // Presupunere de permisiune (validare = doar Adrian) — regula reala: CREATORUL valideaza.
 const PERMISSION_ASSUMPTION = /\b(doar adrian (poate|valideaza)|numai adrian (poate|valideaza)|adrian (trebuie sa )?valideaza (toate|task))\b/i;
+
+// ── FIXES 3 aug — esecuri reale observate live ──
+// UNKNOWN prezentat ca negativ/criza CERT (§3): "intra in criza", "probabil incert".
+const CRISIS_AS_FACT = /\b(intra in criza|e in criza|criza confirmata|colaps (financiar|iminent)|blocaj financiar confirmat|intra in incapacitate|probabil (incert|va esua|nu (va )?incaseaz)|esec probabil|risc mare de esec|va intra in deficit)\b/i;
+// Conditionare corecta (scenariu, nu certitudine).
+const CONDITIONAL = /\b(daca|in cazul in care|conditionat|scenariu|presupunand|s-ar putea|ar aparea (un )?deficit daca|in scenariul)\b/i;
+// Cronologie de criza inventata (§2/§3): "72 de ore/X ore/zile pana la criza/colaps".
+const CRISIS_TIMELINE = /\b\d+\s*(ore|h|zile|de ore|de zile)\s+(pana la|inainte de|si intram in|si apare)\s*(criza|colaps|blocaj|incapacitate|deficit|faliment)\b/i;
+// Prag NE-monetar inventat (§4): "minimum patru avansuri", "cel putin N rate/unitati".
+const NONMONEY_THRESHOLD = /\b(minim(um)?|cel putin|macar|nevoie de|iti trebuie|ai nevoie de)\s+(un|doi|doua|trei|patru|cinci|sase|sapte|opt|noua|zece|\d+)\s+(avansuri|avans|rate|unitati|apartamente|clienti|vanzari|contracte|incasari)\b/i;
+// Capabilitate INEXISTENTA (§6): JARVIS NU poate suna/telefona.
+const NONEXISTENT_CAP = /\b(te sun\b|te apelez|te voi suna|iti dau (un )?telefon|iti voi da telefon|te contactez telefonic|te caut telefonic|vorbim la telefon|te sun eu)\b/i;
+// Email "analiza completa" fara search real (§7).
+const EMAIL_COMPLETE_CLAIM = /\bemailuri?\s*[—–-]\s*analiz[aă] complet|analiz[aă] complet[aă] (a )?(inboxului|emailurilor|mailurilor)|am auditat (tot )?inboxul|toate (email|mail)urile (au fost )?(analizate|verificate|citite|auditate)|inbox(ul)? (analizat|auditat|verificat) complet\b/i;
 
 /**
  * Valideaza substanta unui raspuns managerial. @returns {claims[], violations[]}
@@ -170,6 +188,31 @@ export function validateClaims(reply, ctx = {}) {
   if (BANK_ESCALATION.test(n) && !ESCALATION_CHAIN.test(n))
     add("ESCALATION_WITHOUT_CHAIN", "P4/P7", "recomanda actiune de fondator (banca/reesalonare) fara lantul: sold reconciliat → obligatii certe → incasari confirmate → deficit confirmat → optiuni interne → abia apoi decizie de fondator");
 
+  // 11. UNKNOWN prezentat ca scenariu negativ CERT/probabil (nu conditional).
+  if (CRISIS_AS_FACT.test(r) && !CONDITIONAL.test(r))
+    add("UNKNOWN_AS_NEGATIVE", "P1/P8", "prezinta un scenariu negativ/criza ca probabil/cert dintr-un UNKNOWN — foloseste conditional ('DACA incasarea X nu se confirma si lichiditatea nu acopera obligatiile certe, apare un deficit'), nu 'intra in criza'/'probabil incert'");
+
+  // 12. Cronologie de criza inventata ('72 de ore pana la criza').
+  if (CRISIS_TIMELINE.test(r) && !near(CRISIS_TIMELINE, THRESHOLD_BASIS))
+    add("FABRICATED_CRISIS_TIMELINE", "P7", "pune un ceas inventat pe o incertitudine ('72 de ore pana la criza') fara model/baza — nu cronometra un UNKNOWN");
+
+  // 13. Prag NE-monetar inventat ('minimum patru avansuri').
+  if (NONMONEY_THRESHOLD.test(r) && !near(NONMONEY_THRESHOLD, THRESHOLD_BASIS))
+    add("FABRICATED_THRESHOLD", "P7/P9", "prag inventat ('minimum patru avansuri') fara sursa/model — nu inventa numarul de avansuri/rate/unitati");
+
+  // 14. Capabilitate INEXISTENTA (JARVIS nu poate suna).
+  if (NONEXISTENT_CAP.test(r))
+    add("NONEXISTENT_CAPABILITY", "P12", "promite o capabilitate inexistenta (JARVIS nu poate suna/telefona) — nu spune 'te sun'; propune o cale reala (mesaj, task, notificare)");
+
+  // 15. Email 'analiza completa' fara search/read real.
+  const hasEmailSearch = arr(ctx.emailReceipts).length > 0 || arr(ctx.sourceChecks).some((x) => /email|gmail|inbox|thread|attachment/i.test(JSON.stringify(x || "")));
+  if (EMAIL_COMPLETE_CLAIM.test(r) && !hasEmailSearch)
+    add("EMAIL_COMPLETENESS_UNVERIFIED", "P11", "declara 'analiza completa' a emailului fara search/read/thread real — spune 'nu am auditat inboxul complet; vad doar alertele memorate (DIGI, ANAF)'");
+
+  // 16. Concluzie despre comportamentul oamenilor fara sursa umana/pattern (§8).
+  if (PEOPLE_CLAIM.test(n) && !HUMAN_SOURCE.test(n))
+    add("PEOPLE_CLAIM_UNSUPPORTED", "P10", "concluzie despre oameni ('nu comunica'/'echipa aude panica'/'nu are incredere') fara sursa umana sau pattern verificabil — spune factual ('sistemul nu contine actualizari suficiente pentru a explica intarzierea')");
+
   return { violations, count: violations.length };
 }
 
@@ -181,6 +224,11 @@ export function validateClaims(reply, ctx = {}) {
  */
 export function sanitizeManagerial(text, { confirmedFailures = [], hasActionReceipt = false } = {}) {
   let t = String(text || "");
+  // MEREU (indiferent de confirmedFailures): capabilitati inexistente + criza-ca-fapt.
+  t = t.replace(/\bte sun eu\b[^.!?\n]*/gi, "pot pregati mesajul catre client (nu pot suna)")
+       .replace(/\b(te sun|te apelez|te voi suna|te contactez telefonic|te caut telefonic)\b[^.!?\n]*/gi, "pot pregati mesajul (nu pot suna)")
+       .replace(/\b(intra in criza|e in criza|va intra in deficit)\b/gi, "ar putea aparea un deficit DACA incasarile nu se confirma")
+       .replace(/\bprobabil (incert|va esua|nu (va )?incaseaz[a-z]*)\b/gi, "neconfirmat inca (de verificat la sursa)");
   // Receipt fabricat de task: fara actiune reala, scoate ID-ul + 'EXECUTAT' inventat.
   if (!hasActionReceipt) {
     t = t.replace(/[✅🔴🟢]?\s*\*{0,2}executat[.!:]?\*{0,2}/gi, "")
@@ -213,4 +261,11 @@ export const CLAIM_DISCIPLINE_PROMPT =
   "• PROMISIUNI: nu promite rezultat/ora viitoare ('verific imediat', 'pana diseara stiu', 'transmit Danei', 'ma ocup') fara task/job/receipt real. Spune 'dupa ce identific sursa, pot verifica…' / 'pot crea solicitarea catre Dana'.\n" +
   "• ESCALADARE BANCA: nu recomanda 'suna banca/reesalonare' dintr-o cifra izolata. Lant: sold reconciliat → obligatii certe → incasari confirmate → deficit confirmat → optiuni interne → abia apoi decizie de fondator (cu founder_reason).\n" +
   "• INCASARI DECLARATE: '1,5M din Marsa' = clasifica dupa dovada reala — founder-declared expectation / receivable planned / contract confirmed / invoice issued / bank receipt confirmed. Fara dovada bancara/contract: e ASTEPTARE, nu fapt financiar.\n" +
-  "• VALIDARE: in Operational CREATORUL task-ului valideaza, nu doar Adrian.";
+  "• VALIDARE: in Operational CREATORUL task-ului valideaza, nu doar Adrian.\n" +
+  "• UNKNOWN ≠ NEGATIV: un necunoscut NU e criza/esec/neplata. Scenariul negativ se spune DOAR conditional ('DACA incasarea Marsa nu se confirma si lichiditatea nu acopera obligatiile certe, apare un deficit'), niciodata 'intra in criza'/'probabil incert'.\n" +
+  "• FARA CEAS PE INCERTITUDINE: nu spune '72 de ore pana la criza' sau alte cronologii inventate. Fara model, nu pune termen pe un UNKNOWN.\n" +
+  "• PRAGURI NE-MONETARE: nu inventa 'minimum patru avansuri' sau alte numere fara sursa.\n" +
+  "• CAPABILITATI: NU spune 'te sun' — JARVIS nu poate telefona. Propune mesaj/task/notificare.\n" +
+  "• EMAIL: nu titra 'analiza completa' fara search/read real. Daca vezi doar alerte memorate: 'nu am auditat inboxul complet; vad doar DIGI si ANAF'.\n" +
+  "• TEMPORAL: o scadenta din trecut NU e viitoare; calculeaza din data curenta; nu confunda 30 iulie cu 30 august. Un singur adevar temporal per raspuns; daca ai valori contradictorii, spune-le si nu alege una drept adevar pana la reconciliere.\n" +
+  "• LUNGIME: 80–180 cuvinte, o concluzie dominanta, max 3 puncte, o actiune. Fara notificari repetate (DIGI/ANAF) dupa fiecare raspuns.";

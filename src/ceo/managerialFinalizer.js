@@ -73,17 +73,27 @@ export async function finalizeManagerialOutput(p = {}) {
   let trace = assertResponseTraceability(text, assessment, { receipts: executionReceipts });
   let corrected = false;
 
-  // UN singur ciclu de corectie (daca avem cu ce regenera si e material).
-  if ((!gate.pass || !trace.traceable) && typeof llm === "function") {
-    const fixMsg = correctionInstruction(gate) + (trace.gaps.length ? "\nTRASABILITATE — afirmatii fara suport (elimina-le sau leaga-le de fapte reale):\n" + trace.gaps.map((g) => `- ${g.claim}: ${g.why}`).join("\n") : "");
+  // COMPRESIE (§9): tinta 80–180 cuvinte pentru raspunsuri manageriale uzuale. Peste
+  // ~200 cuvinte declanseaza acelasi UNIC ciclu de corectie cu instructiune de comprimare.
+  const wordCount = (s) => String(s || "").trim().split(/\s+/).filter(Boolean).length;
+  const tooLong = forFounder && wordCount(text) > 200;
+
+  // UN singur ciclu de corectie (daca avem cu ce regenera si e material SAU prea lung).
+  if ((!gate.pass || !trace.traceable || tooLong) && typeof llm === "function") {
+    const fixMsg = (correctionInstruction(gate) || "Rescrie raspunsul managerial.") +
+      (trace.gaps.length ? "\nTRASABILITATE — afirmatii fara suport (elimina-le sau leaga-le de fapte reale):\n" + trace.gaps.map((g) => `- ${g.claim}: ${g.why}`).join("\n") : "") +
+      (tooLong ? "\nCOMPRIMARE: raspunsul e prea lung. Rescrie in 80–180 de cuvinte: o concluzie dominanta, maximum 3 puncte, o opinie clara (separata de fapt), o singura actiune/decizie. Fara sectiuni repetitive, fara notificari (DIGI/ANAF), fara emoji excesive." : "");
     try {
       const regen = await llm({ system: system || "", messages: [...arr(messages), { role: "assistant", content: text }, { role: "user", content: fixMsg }] });
       if (regen && String(regen).trim()) {
         const cand = String(regen).trim();
         const g2 = checkManagerialResponse(cand, gctx);
         const t2 = assertResponseTraceability(cand, assessment, { receipts: executionReceipts });
-        // Pastreaza corectia doar daca imbunatateste (mai putine violari materiale + gaps).
-        if (g2.material + t2.gaps.length <= gate.material + trace.gaps.length) { text = cand; gate = g2; trace = t2; corrected = true; }
+        // Pastreaza corectia daca imbunatateste (mai putine violari + gaps) SAU, pentru
+        // compresie, daca ramane curata (0 violari materiale + 0 gaps) si e mai scurta.
+        const better = g2.material + t2.gaps.length <= gate.material + trace.gaps.length;
+        const cleanerShorter = tooLong && g2.material === 0 && t2.gaps.length === 0 && wordCount(cand) < wordCount(text);
+        if (better || cleanerShorter) { text = cand; gate = g2; trace = t2; corrected = true; }
       }
     } catch { /* corectie best-effort */ }
   }

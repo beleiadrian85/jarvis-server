@@ -606,13 +606,10 @@ async function generalChat(channel, text) {
   }
   _metrics.record({ provider: providerUsed, ms: T.claude, ok: true, tokens: estimateTokens(system + "\n" + text) });
 
-  // Modul "nu ma lasa sa uit": reamintire la fiecare interactiune.
-  if (reminders.length) {
-    reply +=
-      `\n\n⏰ Nerezolvate (${reminders.length}):\n` +
-      formatReminders(reminders.slice(0, 3)) +
-      `\n(raspunde: rezolvat #id / amana #id [zile] / ignora #id)`;
-  }
+  // §11 — NU mai atasa notificarile (DIGI/ANAF) dupa fiecare raspuns. Se afiseaza DOAR
+  // cand utilizatorul le cere explicit (nerezolvate/remindere/ce am de facut) sau in
+  // Notification Center. Atasarea se face DUPA finalizer (o singura data, necontaminat).
+  const _wantsReminders = /\b(nerezolvat|remind|reminder|notificari|notific[aă]ri|ce am (de f[aă]cut|pe cap)|ce (mai )?am de rezolvat|inbox|task-?uri deschise|ce e (deschis|nerezolvat))\b/i.test(text || "");
 
   // CANONICAL FINALIZER (Partea I/II/III): pe raspunsurile manageriale, TOT
   // outputul trece prin acelasi lant — Assessment → Founder Filter → Claim
@@ -629,6 +626,13 @@ async function generalChat(channel, text) {
       });
       if (fin.text && fin.text.trim()) reply = fin.text;
     } catch (e) { console.error("[finalizer]", e.message); }
+  }
+
+  // §11 — remindere DOAR la cerere explicita, o singura data, dupa finalizer. Deduplicat
+  // (slice 0,3). Restul timpului: Notification Center (badge 🔔), nu dupa fiecare raspuns.
+  if (reminders.length && _wantsReminders) {
+    reply += `\n\n⏰ Nerezolvate (${reminders.length}):\n` + formatReminders(reminders.slice(0, 3)) +
+      `\n(raspunde: rezolvat #id / amana #id [zile] / ignora #id)`;
   }
 
   // INVATARE DIN CORECTIILE LUI ADRIAN (Partea VI): daca mesajul curent e o corectie

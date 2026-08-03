@@ -28,15 +28,16 @@ export async function reviewOutput(p = {}) {
   const candidates = (r.candidates || []).filter((id) => id !== p.primaryProvider);
   const reviewer = candidates[0] || null;
   if (!reviewer) return { ok: false, note: "niciun al doilea model disponibil pentru review" };
-  // Continutul de verificat nu poate depasi plafonul de date al reviewer-ului (fail-closed).
-  const egr = egressForReviewer(reviewer, `${p.question} ${p.primaryOutput}`, p.sensitivity);
+  // Continutul de verificat (INCLUSIV contextText, care e trimis modelului) nu poate
+  // depasi plafonul de date al reviewer-ului (fail-closed).
+  const egr = egressForReviewer(reviewer, `${p.question} ${p.primaryOutput} ${p.contextText || ""}`, p.sensitivity);
   if (!egr.allowed) return { ok: false, note: `reviewer indisponibil pentru clasa de date (${egr.reason})` };
 
   const system = [
     "Esti recenzent critic. Verifica raspunsul altui model DOAR pe baza contextului dat.",
     "Marcheaza afirmatiile nesustinute de context (posibile halucinatii). Nu adauga fapte noi.",
     "Raspunde compact: CONCERNS: ... ; UNSUPPORTED: ... ; AGREE: yes/no.",
-    p.contextText ? `CONTEXT:\n${String(p.contextText).slice(0, 3000)}` : "",
+    p.contextText ? `CONTEXT:\n${redactSecrets(String(p.contextText)).slice(0, 3000)}` : "",
   ].filter(Boolean).join("\n\n");
   const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 800)}\n\nRASPUNS DE VERIFICAT:\n${redactSecrets(String(p.primaryOutput || "")).slice(0, 2000)}`;
 
@@ -65,7 +66,7 @@ export async function arbitrate(p = {}) {
   const egr = egressForReviewer(third, `${p.question} ${p.primaryOutput} ${p.reviewText} ${p.contextText}`, p.sensitivity);
   if (!egr.allowed) return { ok: false, note: `arbitru indisponibil pentru clasa de date (${egr.reason})` };
   const system = "Esti arbitru. Doua modele sunt in dezacord. Pe baza DOAR a contextului, spune care pozitie e mai bine sustinuta de dovezi si CE dovada lipseste. Nu inventa. Format: BETTER_SUPPORTED: ... ; MISSING_EVIDENCE: ... ; CONFIDENCE: low/med/high.";
-  const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 600)}\n\nPOZITIA A (primary):\n${String(p.primaryOutput || "").slice(0, 1200)}\n\nPOZITIA B (reviewer):\n${String(p.reviewText || "").slice(0, 800)}\n\nCONTEXT:\n${String(p.contextText || "").slice(0, 2000)}`;
+  const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 600)}\n\nPOZITIA A (primary):\n${redactSecrets(String(p.primaryOutput || "")).slice(0, 1200)}\n\nPOZITIA B (reviewer):\n${redactSecrets(String(p.reviewText || "")).slice(0, 800)}\n\nCONTEXT:\n${redactSecrets(String(p.contextText || "")).slice(0, 2000)}`;
   const call = await meteredCall(third, { system, messages: [{ role: "user", content: user }], maxTokens: 400, purpose: "arbiter", store: p.store });
   if (!call.ok) return { ok: false, note: call.blocked ? call.reason : `arbitraj esuat: ${call.reason}` };
   return { ok: true, arbiter: third, raw: (call.text || "").slice(0, 800), is_inference: true };

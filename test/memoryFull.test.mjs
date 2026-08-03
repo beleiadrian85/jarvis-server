@@ -263,5 +263,22 @@ const mkStore = () => { const mem = {}; return { get: async (k, f) => (k in mem 
   ok(r.ok === false && /clasa de date/i.test(r.note || ""), "R3: reviewer refuza continut RESTRICTED catre model extern (fail-closed)");
 }
 
+// ═══ REZIDUURI ADANCI (scanare completa, nu allowlist) ═══
+// D1: secret in source_reference / evidence_references / extracted_by — blocat (scan integral).
+{
+  const store = mkStore();
+  const r1 = await remember({ title: "Sursa", content: "ceva", kind: "episode", source_type: "web", source_reference: "https://x/?token=GOCSPX-abcdefghijklmnopqrstuvwxyz" }, { store });
+  ok(r1.stored === false, "D1: secret in source_reference blocat");
+  const r2 = await remember({ title: "Dovezi", content: "x", kind: "episode", source_type: "web", evidence_references: [{ url: "sk-ABCDEFGHIJKLMNOPQRSTUVWX1234" }] }, { store });
+  ok(r2.stored === false, "D1: secret in evidence_references blocat");
+  ok(!JSON.stringify(store).includes("GOCSPX-abcdefghij") && !JSON.stringify(store).includes("sk-ABCDEFGHIJKLMNOP"), "D1: niciun secret in store (scan integral candidat + item)");
+}
+// D2: reviewOutput gateaza si contextText (nu doar question+primaryOutput).
+{
+  const { reviewOutput } = await import("../src/ceo/models/reviewer.js");
+  const r = await reviewOutput({ question: "analiza", primaryOutput: "raspuns curat", contextText: "salariul lui X este 8000 RON", primaryProvider: "private", sensitivity: "INTERNAL" });
+  ok(r.ok === false && /clasa de date/i.test(r.note || ""), "D2: reviewer refuza cand contextText contine RESTRICTED (nu doar primaryOutput)");
+}
+
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " ESUATE"} — memory+multimodel full`);
 process.exit(failed === 0 ? 0 : 1);

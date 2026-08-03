@@ -3,10 +3,23 @@
 // OBLIGATORIU prin Write Gate. Suporta versionare (supersede) fara stergere. Plafoane
 // pe tip ca sa nu creasca nemarginit. Store injectabil pentru teste.
 import { buildMemoryItem, validateMemoryItem, provenanceOf } from "./schema.js";
-import { classifyWrite, persistsToLongTerm, redactSecrets } from "./writeGate.js";
+import { classifyWrite, persistsToLongTerm, redactSecrets, containsSecret } from "./writeGate.js";
 
 const KEY = "ceo:memory:v1";
 const CORR_KEY = "ceo:memory:corrections"; // JarvisMemoryCorrection log (audit uitare/corectii)
+
+// Campuri de CONTROL/sistem excluse din scanarea de secrete (au id-uri/timestamp-uri cu
+// serii lungi de cifre → fals-pozitiv pe tiparul de card). Orice ALT camp (inclusiv unul
+// nou) e scanat implicit — denylist, nu allowlist.
+const SCAN_SKIP = new Set(["id", "supersedes", "superseded_by", "created_at", "updated_at", "valid_from", "valid_until", "version", "fingerprint", "confidence", "memory_type", "tenant_id", "owner_user_id", "store", "nowISO"]);
+/** Serializeaza campurile de continut ale candidatului pentru scanarea de secrete. */
+function serializeCandidate(cand) {
+  try {
+    const clone = {};
+    for (const [k, v] of Object.entries(cand || {})) if (!SCAN_SKIP.has(k)) clone[k] = v;
+    return `${cand.title || ""} ${cand.content || ""} ${JSON.stringify(clone)}`.trim();
+  } catch { return `${cand.title || ""} ${cand.content || ""} ${cand.structured_data ? JSON.stringify(cand.structured_data) : ""} ${Array.isArray(cand.entities) ? JSON.stringify(cand.entities) : ""} ${Array.isArray(cand.relations) ? JSON.stringify(cand.relations) : ""} ${cand.source_reference || ""} ${Array.isArray(cand.evidence_references) ? JSON.stringify(cand.evidence_references) : ""} ${cand.extracted_by || ""}`.trim(); }
+}
 
 /** Amprenta pentru deduplicare (acelasi continut, aceeasi sursa, acelasi tenant). */
 function fingerprint(it) {
@@ -35,11 +48,12 @@ async function save(db, store) { const s = store || defaultStore(); db.updated_a
  */
 export async function remember(cand = {}, opts = {}) {
   const gate = classifyWrite({
-    // Scaneaza TOT candidatul (inclusiv structured_data/entities), nu doar titlul —
-    // un secret ascuns intr-un camp structurat NU trebuie sa scape de gate.
-    // entities/relations se serializeaza cu JSON.stringify (NU .join): un obiect ar da
-    // "[object Object]" cu .join si ar ascunde secretul de scanare.
-    text: `${cand.title || ""} ${cand.content || ""} ${cand.structured_data ? JSON.stringify(cand.structured_data) : ""} ${Array.isArray(cand.entities) ? JSON.stringify(cand.entities) : ""} ${Array.isArray(cand.relations) ? JSON.stringify(cand.relations) : ""}`.trim(),
+    // Scaneaza INTREG candidatul serializat (nu un allowlist de campuri) — orice camp
+    // liber (source_reference, evidence_references, extracted_by, structured_data nested,
+    // entities/relations obiect) poate ascunde un secret. Serializarea completa inchide
+    // clasa: nimic persistat nu scapa de scanare. Fallback pe concatenare daca serializarea
+    // esueaza (ref. circulare improbabile la un candidat JSON).
+    text: serializeCandidate(cand),
     kind: cand.kind, source_type: cand.source_type, verification_status: cand.verification_status,
     from_model: opts.from_model === true || cand.is_inference === true,
     founder_approved: opts.founder_approved === true || cand.founder_approved === true,
@@ -60,6 +74,11 @@ export async function remember(cand = {}, opts = {}) {
 
   const item = buildMemoryItem({ ...cand, memory_type }, { nowISO: opts.nowISO });
   item.fingerprint = fingerprint(item);
+  // A DOUA BARIERA: scaneaza campurile de CONTINUT ale itemului construit (nu campurile
+  // generate de sistem — id/timestamp au serii lungi de cifre care ar da fals-pozitiv pe
+  // tiparul de card). Prinde orice camp liber persistat.
+  const scanItem = JSON.stringify({ title: item.title, content: item.content, structured_data: item.structured_data, entities: item.entities, relations: item.relations, source_reference: item.source_reference, evidence_references: item.evidence_references, extracted_by: item.extracted_by, source_type: item.source_type });
+  if (containsSecret(scanItem)) return { stored: false, category: "DO_NOT_STORE", reason: "secret detectat in itemul construit (a doua bariera de siguranta)", item: null };
   const v = validateMemoryItem(item);
   if (!v.ok) return { stored: false, category: gate.category, reason: `validare esuata: ${v.errors.join("; ")}`, item: null };
 

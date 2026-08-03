@@ -39,3 +39,22 @@ export async function reviewOutput(p = {}) {
   const unsupported = (txt.match(/UNSUPPORTED:\s*([^\n]+)/i)?.[1] || "").trim();
   return { ok: true, reviewer, agree, concerns: concerns ? [concerns] : [], unsupported_claims: unsupported && !/none|niciun|-/i.test(unsupported) ? [unsupported] : [], raw: txt.slice(0, 800), is_inference: true };
 }
+
+export function arbiterEnabled() { return config.multiModel?.enabled === true && config.multiModel?.arbiter === true; }
+
+/**
+ * ARBITER (§12) — se cheama DOAR daca primary si reviewer sunt in dezacord material.
+ * Nu decide singur o actiune; produce o sinteza a dezacordului pentru JARVIS/fondator.
+ */
+export async function arbitrate(p = {}) {
+  if (!arbiterEnabled()) return { ok: false, note: "Arbiter OFF" };
+  const r = route({ task: "reasoning", sensitivity: p.sensitivity || "INTERNAL" });
+  // Prefera un al treilea provider; daca nu exista, foloseste primul admisibil.
+  const third = (r.candidates || []).find((id) => id !== p.primaryProvider && id !== p.reviewerProvider) || r.provider;
+  if (!third) return { ok: false, note: "niciun arbitru disponibil" };
+  const system = "Esti arbitru. Doua modele sunt in dezacord. Pe baza DOAR a contextului, spune care pozitie e mai bine sustinuta de dovezi si CE dovada lipseste. Nu inventa. Format: BETTER_SUPPORTED: ... ; MISSING_EVIDENCE: ... ; CONFIDENCE: low/med/high.";
+  const user = `INTREBARE: ${redactSecrets(String(p.question || "")).slice(0, 600)}\n\nPOZITIA A (primary):\n${String(p.primaryOutput || "").slice(0, 1200)}\n\nPOZITIA B (reviewer):\n${String(p.reviewText || "").slice(0, 800)}\n\nCONTEXT:\n${String(p.contextText || "").slice(0, 2000)}`;
+  let call; try { call = await callProvider(third, { system, messages: [{ role: "user", content: user }], maxTokens: 400 }); }
+  catch (e) { return { ok: false, note: `arbitraj esuat: ${e.message}` }; }
+  return { ok: true, arbiter: third, raw: (call.text || "").slice(0, 800), is_inference: true };
+}

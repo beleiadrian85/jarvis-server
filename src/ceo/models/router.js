@@ -1,39 +1,47 @@
-// MODEL ROUTER (§10, §17-§19) — alege providerul dupa: (1) clasa datelor implicate
-// (RESTRICTED nu merge la externi), (2) potrivirea pe task, (3) disponibilitate.
-// Deterministic. Daca nimic nu se potriveste in siguranta → nu ruteaza (fail-closed).
-import { PROVIDERS, enabledProviders } from "./registry.js";
+// MODEL ROUTER (§10-§11, §17-§19) — alege providerul dupa: clasa datelor (matrice de
+// acces; RESTRICTED nu la externi), potrivirea pe task/capabilitate, cost, latenta,
+// disponibilitate si performanta istorica. Returneaza un LANT de fallback ordonat, toti
+// admisibili pentru clasa de date. Deterministic. Fail-closed daca nimic sigur.
+import { PROVIDERS, enabledProviders, providerAllowsClass, capabilityProfile } from "./registry.js";
 import { config } from "../../config.js";
 
-const CLASS_ORDER = { PUBLIC: 0, INTERNAL: 1, CONFIDENTIAL: 2, HIGHLY_CONFIDENTIAL: 3, RESTRICTED: 4 };
-
-/** Providerul are voie sa vada aceasta clasa de date? */
-function providerAllowsClass(id, sensitivity) {
-  const p = PROVIDERS[id];
-  const lvl = CLASS_ORDER[sensitivity] ?? 1;
-  if (p.trust === "external") return lvl <= CLASS_ORDER.HIGHLY_CONFIDENTIAL; // RESTRICTED niciodata la extern
-  return true; // private/local pot vedea orice (redactat)
-}
+const COST_RANK = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
+const TASK_CAP = { managerial: "managerial", strategy: "strategy", research: "research", draft: "drafting", reasoning: "reasoning", brainstorm: "brainstorm", document: "document_analysis", classify: "reasoning" };
 
 /**
- * @param {object} p { task ('managerial'|'strategy'|'research'|'draft'|'reasoning'),
- *   sensitivity, prefer (id optional) }
- * @returns { provider|null, reason, candidates[] }
+ * @param {object} p { task, sensitivity, prefer, needsTools, needsSchema, perf (map id→scor) }
+ * @returns { provider|null, reason, candidates[] (lant fallback, admisibili) }
  */
 export function route(p = {}) {
   const mm = config.multiModel || {};
   if (!mm.enabled) return { provider: null, reason: "Multi-Model OFF", candidates: [] };
-  if (mm.dataRouting === false && (p.sensitivity === "RESTRICTED")) return { provider: null, reason: "Data Routing OFF dar date RESTRICTED — refuz egress (fail-closed)", candidates: [] };
 
-  const sensitivity = p.sensitivity || "INTERNAL";
-  const avail = enabledProviders().filter((id) => providerAllowsClass(id, sensitivity));
-  if (!avail.length) return { provider: null, reason: sensitivity === "RESTRICTED" ? "date RESTRICTED si niciun model privat/local activ" : "niciun provider activ pentru clasa de date", candidates: [] };
+  const sensitivity = String(p.sensitivity || "INTERNAL").toUpperCase();
+  if (mm.dataRouting === false && sensitivity === "RESTRICTED")
+    return { provider: null, reason: "Data Routing OFF dar date RESTRICTED — refuz egress (fail-closed)", candidates: [] };
 
-  // Preferinta explicita, daca e valida.
-  if (p.prefer && avail.includes(p.prefer)) return { provider: p.prefer, reason: "preferinta explicita", candidates: avail };
+  // Admisibili: activi + au voie sa vada clasa de date + capabilitati necesare.
+  let avail = enabledProviders().filter((id) => providerAllowsClass(id, sensitivity));
+  if (p.needsTools) avail = avail.filter((id) => PROVIDERS[id].supports_tools);
+  if (p.needsSchema) avail = avail.filter((id) => PROVIDERS[id].supports_json_schema);
+  if (!avail.length) return { provider: null, reason: sensitivity === "RESTRICTED" ? "date RESTRICTED si niciun model privat/local activ" : "niciun provider admisibil pentru clasa de date/capabilitati", candidates: [] };
 
-  // Potrivire pe task (strengths).
-  const taskMap = { managerial: "managerial", strategy: "strategy", research: "research", draft: "drafting", reasoning: "reasoning", brainstorm: "brainstorm" };
-  const want = taskMap[p.task] || "reasoning";
-  const ranked = avail.slice().sort((a, b) => (PROVIDERS[b].strengths.includes(want) ? 1 : 0) - (PROVIDERS[a].strengths.includes(want) ? 1 : 0));
-  return { provider: ranked[0], reason: `potrivit pe task=${p.task || "reasoning"} (${want})`, candidates: ranked };
+  const want = TASK_CAP[p.task] || "reasoning";
+  const perf = p.perf || {};
+  const score = (id) => {
+    const P = PROVIDERS[id];
+    let s = 0;
+    if (P.capabilities.includes(want)) s += 100;                 // potrivire pe task
+    s += (3 - (COST_RANK[P.cost_class] ?? 2)) * 5;               // mai ieftin = mai bine
+    if (P.trust === "private" && sensitivity !== "PUBLIC" && sensitivity !== "INTERNAL") s += 20; // date sensibile → prefera privat
+    if (typeof perf[id] === "number") s += perf[id] * 10;        // performanta istorica (§22)
+    return s;
+  };
+  const ranked = avail.slice().sort((a, b) => score(b) - score(a));
+
+  // Preferinta explicita, daca e admisibila → in fata lantului.
+  let chain = ranked;
+  if (p.prefer && ranked.includes(p.prefer)) chain = [p.prefer, ...ranked.filter((id) => id !== p.prefer)];
+
+  return { provider: chain[0], reason: `task=${p.task || "reasoning"} (${want}), clasa=${sensitivity}, lant=${chain.join(">")}`, candidates: chain, profiles: chain.map(capabilityProfile) };
 }

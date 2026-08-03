@@ -37,6 +37,22 @@ export async function render(root, ctx) {
       h("div", { class: "form-row", style: "flex-wrap:wrap;gap:6px" }, ...(chips.length ? chips : [h("span", { class: "dim" }, "încă nimic memorat")])),
       h("p", { class: "dim", style: "margin-top:8px" }, `${st.active || 0} memorii active din ${st.total || 0} (versiunile vechi și cele revocate rămân în audit, dar nu în recall).`)));
 
+    // Dashboard (§16) — sănătatea memoriei.
+    const dash = await api.get("/api/memory/dashboard", { fresh: true }).catch(() => null);
+    if (dash && ctx.navToken === token) {
+      const tile = (label, val, tone) => h("div", { class: "mem-tile" }, h("b", { "data-tone": tone || null }, String(val)), h("span", {}, label));
+      nodes.push(card("Sănătatea memoriei",
+        h("div", { class: "mem-tiles" },
+          tile("total", dash.total || 0),
+          tile("active", dash.active || 0, "ok"),
+          tile("neconfirmate", dash.unverified || 0, dash.unverified ? "warn" : null),
+          tile("fără sursă", dash.no_source || 0, dash.no_source ? "warn" : null),
+          tile("contradicții", dash.contradictions || 0, dash.contradictions ? "bad" : null),
+          tile("expirate", dash.expired || 0, dash.expired ? "warn" : null),
+          tile("relații", dash.graph?.relations || 0),
+          tile("entități", dash.graph?.entities || 0))));
+    }
+
     // Recall (read-only).
     const q = h("input", { placeholder: "Ce știe JARVIS despre…?", "aria-label": "Caută în memorie" });
     const out = h("div", { class: "recall-out" });

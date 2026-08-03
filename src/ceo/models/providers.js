@@ -10,8 +10,10 @@ export async function callProvider(id, { system, messages, maxTokens = 800 } = {
   const inTokens = Math.ceil((String(system || "").length + JSON.stringify(messages || []).length) / 4);
 
   if (id === "openai") {
+    const { getProviderKey } = await import("./keyStore.js");
+    const apiKey = (await getProviderKey("openai").catch(() => null)) || config.openaiKey;
     const { callOpenAI } = await import("../../openai.js");
-    const text = await callOpenAI({ system, messages, maxTokens, model: config.strategyModel });
+    const text = await callOpenAI({ system, messages, maxTokens, model: config.strategyModel, apiKey });
     return { ok: true, text, usage: { inTokens, outTokens: Math.ceil(text.length / 4) } };
   }
   if (id === "anthropic") {
@@ -22,8 +24,10 @@ export async function callProvider(id, { system, messages, maxTokens = 800 } = {
     return { ok: true, text: String(text || "").trim(), usage: { inTokens, outTokens: Math.ceil(String(text || "").length / 4) } };
   }
   if (id === "google") {
-    if (!config.googleAiKey) throw new Error("GOOGLE_AI_API_KEY lipsa");
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.googleModel)}:generateContent?key=${config.googleAiKey}`;
+    const { getProviderKey } = await import("./keyStore.js");
+    const gKey = (await getProviderKey("google").catch(() => null)) || config.googleAiKey;
+    if (!gKey) throw new Error("GOOGLE_AI_API_KEY lipsa");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.googleModel)}:generateContent?key=${gKey}`;
     const contents = [{ role: "user", parts: [{ text: `${system}\n\n${messages.map((m) => m.content).join("\n")}` }] }];
     const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: maxTokens } }) });
     if (!res.ok) throw new Error(`Google ${res.status}: ${(await res.text()).slice(0, 160)}`);

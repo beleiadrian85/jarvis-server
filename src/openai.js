@@ -10,14 +10,15 @@ import { config } from "./config.js";
 
 const API_URL = "https://api.openai.com/v1/chat/completions";
 
-export async function callOpenAI({ system, messages, maxTokens = 900, model }) {
-  if (!config.openaiKey) throw new Error("OPENAI_API_KEY nesetat.");
+export async function callOpenAI({ system, messages, maxTokens = 900, model, apiKey }) {
+  const key = apiKey || config.openaiKey;
+  if (!key) throw new Error("OPENAI_API_KEY nesetat.");
   const t0 = Date.now();
   const res = await fetch(API_URL, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: "Bearer " + config.openaiKey,
+      authorization: "Bearer " + key,
     },
     body: JSON.stringify({
       model: model || config.strategyModel,

@@ -60,6 +60,8 @@ registerEmailApi(app);
 // modele ca motoare de rationament (gated, fail-closed). Totul OFF implicit.
 const { registerMemoryApi } = await import("./ceo/memory/api.js");
 registerMemoryApi(app);
+// Incarca in cache ce chei de provider sunt stocate criptat (fara a le decripta).
+import("./ceo/models/keyStore.js").then((m) => m.primeKeyCache()).catch(() => {});
 
 // CEO OS e noul UI implicit: radacina (start_url "/" al PWA instalat) duce la
 // /os.html. UI-ul vechi ramane accesibil direct la /index.html si /ceo.html

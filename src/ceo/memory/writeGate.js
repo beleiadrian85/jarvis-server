@@ -16,6 +16,9 @@ const SECRET_PATTERNS = [
   /\bBearer\s+[A-Za-z0-9._-]{20,}\b/i,                          // bearer tokens
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/, // JWT
   /\b(parola|password|passwd|pwd|pin|otp|cod (de )?(verificare|autentificare)|api[_ ]?key|secret|token|refresh_token|client_secret)\b\s*[:=]\s*\S+/i,
+  // Forma naturala "parola mea e Secret123" — valoarea trebuie sa arate a credential
+  // (contine cifra), ca sa nu bifam proza normala ("parola este importanta").
+  /\b(parol[ae]|password|pin)\b[^\n]{0,14}?\b(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,}\b/i,
   /\b(?:\d[ -]?){13,19}\b/,                                     // card numbers (13-19 cifre)
   /\b(iban)\b[:\s]*[A-Z]{2}\d{2}[A-Z0-9]{10,}/i,               // IBAN complet (sensibil)
 ];

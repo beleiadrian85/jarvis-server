@@ -6,6 +6,14 @@ import { buildMemoryItem, validateMemoryItem, provenanceOf } from "./schema.js";
 import { classifyWrite, persistsToLongTerm, redactSecrets } from "./writeGate.js";
 
 const KEY = "ceo:memory:v1";
+const CORR_KEY = "ceo:memory:corrections"; // JarvisMemoryCorrection log (audit uitare/corectii)
+
+/** Amprenta pentru deduplicare (acelasi continut, aceeasi sursa, acelasi tenant). */
+function fingerprint(it) {
+  const base = `${it.tenant_id || ""}|${it.memory_type}|${String(it.title || "").trim().toLowerCase()}|${String(it.content || "").trim().toLowerCase()}|${it.source_reference || ""}`;
+  let h = 0; for (let i = 0; i < base.length; i++) { h = (h * 31 + base.charCodeAt(i)) | 0; }
+  return `fp${h}`;
+}
 // Plafoane per tip (episodicele se roteste; semantice/decizii/politici mai putine dar stabile).
 const CAPS = { EPISODIC: 500, SEMANTIC: 300, DOCUMENT: 300, DECISION: 200, RELATIONSHIP: 200, PREFERENCE: 100, POLICY: 60, WORKING: 0 };
 
@@ -39,16 +47,24 @@ export async function remember(cand = {}, opts = {}) {
     return { stored: false, category: gate.category, reason: gate.reason, item: null };
   }
 
-  const memory_type = gate.category === "STORE_DECISION" ? "DECISION"
+  let memory_type = gate.category === "STORE_DECISION" ? "DECISION"
     : gate.category === "STORE_DOCUMENT_REFERENCE" ? "DOCUMENT"
     : gate.category === "STORE_POLICY_ONLY_WITH_APPROVAL" ? "POLICY"
     : gate.category === "STORE_SEMANTIC_CANDIDATE" ? "SEMANTIC" : "EPISODIC";
+  // RELATIONSHIP/PREFERENCE nu au mapare din gate (nu sunt secrete/politici) → respecta
+  // tipul explicit cerut, dar NICIODATA pentru categoria de politica (aceea ramane POLICY).
+  const explicit = String(cand.memory_type || "").toUpperCase();
+  if (["RELATIONSHIP", "PREFERENCE"].includes(explicit) && gate.category !== "STORE_POLICY_ONLY_WITH_APPROVAL") memory_type = explicit;
 
   const item = buildMemoryItem({ ...cand, memory_type }, { nowISO: opts.nowISO });
+  item.fingerprint = fingerprint(item);
   const v = validateMemoryItem(item);
   if (!v.ok) return { stored: false, category: gate.category, reason: `validare esuata: ${v.errors.join("; ")}`, item: null };
 
   const db = await load(opts.store);
+  // Deduplicare: acelasi continut+sursa+tenant, inca activ → nu duplicam.
+  const dup = db.items.find((x) => x.fingerprint === item.fingerprint && x.verification_status !== "SUPERSEDED" && x.verification_status !== "REVOKED");
+  if (dup && !opts.allowDuplicate) return { stored: false, deduped: true, category: gate.category, reason: "memorie identica exista deja (deduplicata)", item: dup };
   db.items.unshift(item);
   // Rotatie per tip (pastreaza cele mai recente pana la plafon).
   const cap = CAPS[memory_type] || 200;
@@ -86,13 +102,53 @@ export async function revoke(id, reason = "revocat de fondator", opts = {}) {
   return { ok: true };
 }
 
-/** Listeaza memorii active (exclude SUPERSEDED/REVOKED implicit). */
-export async function list({ type = null, includeInactive = false, limit = 100, store } = {}) {
+/** Listeaza memorii active (exclude SUPERSEDED/REVOKED implicit). Izolare pe tenant. */
+export async function list({ type = null, includeInactive = false, limit = 100, store, tenant_id = null } = {}) {
   const db = await load(store);
   let items = db.items;
+  if (tenant_id) items = items.filter((x) => (x.tenant_id || "profi-concept") === tenant_id);
   if (type) items = items.filter((x) => x.memory_type === String(type).toUpperCase());
   if (!includeInactive) items = items.filter((x) => x.verification_status !== "SUPERSEDED" && x.verification_status !== "REVOKED");
   return items.slice(0, limit);
+}
+
+/** Corectare: inregistreaza corectia (audit) + inlocuieste cu versiune noua. */
+export async function correct(oldId, cand = {}, opts = {}) {
+  const s = opts.store || defaultStore();
+  const before = await getById(oldId, opts);
+  const res = await supersede(oldId, cand, opts);
+  if (res.stored) {
+    const log = (await s.get(CORR_KEY, null)) || { corrections: [] };
+    log.corrections = [{ old_id: oldId, new_id: res.item.id, at: new Date().toISOString(), reason: opts.reason || cand.reason || "corectat de fondator", before_title: before?.title || null }, ...(log.corrections || [])].slice(0, 500);
+    await s.set(CORR_KEY, log);
+  }
+  return res;
+}
+
+/** Jurnalul de corectii (audit). */
+export async function corrections({ store, limit = 100 } = {}) {
+  const s = store || defaultStore();
+  const log = (await s.get(CORR_KEY, null)) || { corrections: [] };
+  return (log.corrections || []).slice(0, limit);
+}
+
+/** Export complet (portabilitate). Include istoricul (superseded/revoked). */
+export async function exportAll({ store, tenant_id = null } = {}) {
+  const db = await load(store);
+  let items = db.items;
+  if (tenant_id) items = items.filter((x) => (x.tenant_id || "profi-concept") === tenant_id);
+  return { exported_at: new Date().toISOString(), count: items.length, items };
+}
+
+/** Restore o memorie revocata/superseded (daca politica permite). */
+export async function restore(id, opts = {}) {
+  const db = await load(opts.store);
+  const it = db.items.find((x) => x.id === id);
+  if (!it) return { ok: false, reason: "inexistenta" };
+  if (it.superseded_by) return { ok: false, reason: "are o versiune mai noua — restaureaza acolo" };
+  it.verification_status = it._prev_status || "DECLARED"; it.updated_at = new Date().toISOString();
+  await save(db, opts.store);
+  return { ok: true, item: it };
 }
 
 export async function getById(id, { store } = {}) { const db = await load(store); return db.items.find((x) => x.id === id) || null; }

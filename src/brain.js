@@ -440,6 +440,19 @@ async function generalChat(channel, text) {
     const { buildSourceTruth, sourceTruthForPrompt } = await import("./ceo/sourceTruth.js");
     system += "\n\n" + sourceTruthForPrompt(await buildSourceTruth({}));
   } catch { /* daca esueaza, chat-ul continua fara harta */ }
+  // MEMORIE INTERNA JARVIS (§3/§6): grounding READ-ONLY din memoria proprie (doar recall,
+  // niciodata scriere). NU e sursa oficiala — Operational ramane adevarul. Candidatii
+  // shadow sunt exclusi automat (recall foloseste list care ii sare). Best-effort.
+  try {
+    if (config.memory?.longTerm) {
+      const { recall } = await import("./ceo/memory/retrieval.js");
+      const mem = await recall(text, { limit: 5 });
+      if (mem.found && mem.items.length) {
+        const lines = mem.items.map((it) => `- [${it.is_inference ? "INFERENTA" : "FAPT"}/${it.verification_status}] ${it.title}${it.content ? ": " + String(it.content).slice(0, 160) : ""} (sursa: ${it.source_type}, ${String(it.created_at).slice(0, 10)}, incredere ${Math.round((it.confidence || 0) * 100)}%)`);
+        system += "\n\nMEMORIE INTERNA JARVIS (grounding, NU sursa oficiala — Operational e adevarul; distinge FAPT de INFERENTA; daca lipseste, spune ca lipseste, nu inventa):\n" + lines.join("\n");
+      }
+    }
+  } catch { /* best-effort, ne-blocant */ }
   // §4/§24 — "ce i-ai cerut Danei/Nelu?" → raspuns FAPTUAL din ledger, nu din
   // memoria LLM. Injectam cererile reale ca sa nu se inventeze/reconstruiasca.
   try {

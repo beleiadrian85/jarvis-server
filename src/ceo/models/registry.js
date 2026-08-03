@@ -18,7 +18,9 @@ export const PROVIDERS = {
   openai: {
     id: "openai", label: "ChatGPT (OpenAI)", trust: "external", flag: "openai",
     capabilities: ["reasoning", "strategy", "structured_output", "brainstorm", "drafting"],
-    data_classifications_allowed: ["PUBLIC", "INTERNAL", "CONFIDENTIAL"],
+    // Rollout controlat (§5): OpenAI DOAR PUBLIC/INTERNAL initial. CONFIDENTIAL+ →
+    // provideri deja autorizati (privat) sau refuz egress. Se largeste doar cu decizie.
+    data_classifications_allowed: ["PUBLIC", "INTERNAL"],
     supports_tools: true, supports_json_schema: true, cost_class: "MEDIUM", latency_class: "MEDIUM",
     costPer1kIn: 0.0025, costPer1kOut: 0.01,
   },

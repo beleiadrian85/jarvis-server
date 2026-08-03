@@ -111,7 +111,14 @@ export async function assembleContext(query, opts = {}) {
     if (!eg.allowed) { droppedRel.push({ reason: eg.reason, channel: "relations" }); continue; }
     sections.RELATIONS.push(`${redactSecrets(String(e.subject))} —${e.predicate}→ ${redactSecrets(String(e.object))} (${Math.round((e.confidence || 0) * 100)}%)`);
   }
-  for (const c of contradictions) sections.CONTRADICTIONS.push(`⚠ ${c.detail} (${c.conflict})`);
+  // CONTRADICTII — detaliul contine titluri brute de memorii; trece prin egress.
+  // Daca detaliul e prea sensibil pentru provider, pastram SEMNALUL (exista un conflict)
+  // dar ascundem detaliul (managerial e important sa stii ca e o contradictie).
+  for (const c of contradictions) {
+    const eg = classifyForEgress({ text: String(c.detail || ""), sensitivity: "INTERNAL", providerTrust, maxClass: providerMaxClass });
+    if (!eg.allowed) sections.CONTRADICTIONS.push(`⚠ conflict pe „${redactSecrets(String(c.entity || "o entitate")).slice(0, 40)}" (${c.conflict}) [detaliu ascuns — clasa de date]`);
+    else sections.CONTRADICTIONS.push(`⚠ ${eg.redactedText.slice(0, 200)} (${c.conflict})`);
+  }
 
   // extraFacts verificate din Operational — trec si ele prin egress.
   const droppedFacts = [];

@@ -8,17 +8,19 @@ import { classifyWrite, persistsToLongTerm, redactSecrets, containsSecret } from
 const KEY = "ceo:memory:v1";
 const CORR_KEY = "ceo:memory:corrections"; // JarvisMemoryCorrection log (audit uitare/corectii)
 
-// Campuri de CONTROL/sistem excluse din scanarea de secrete (au id-uri/timestamp-uri cu
-// serii lungi de cifre → fals-pozitiv pe tiparul de card). Orice ALT camp (inclusiv unul
-// nou) e scanat implicit — denylist, nu allowlist.
-const SCAN_SKIP = new Set(["id", "supersedes", "superseded_by", "created_at", "updated_at", "valid_from", "valid_until", "version", "fingerprint", "confidence", "memory_type", "tenant_id", "owner_user_id", "store", "nowISO"]);
-/** Serializeaza campurile de continut ale candidatului pentru scanarea de secrete. */
+// Campuri de CONTROL/sistem excluse din scanarea de secrete: DOAR cele numerice/id
+// (serii lungi de cifre → fals-pozitiv pe tiparul de card). Orice camp free-text
+// (inclusiv unul nou, ex. retention_policy) e scanat implicit — denylist, nu allowlist.
+const SCAN_SKIP = new Set(["id", "supersedes", "superseded_by", "created_at", "updated_at", "valid_from", "valid_until", "version", "fingerprint", "confidence", "store", "nowISO"]);
+/** Serializeaza campurile de continut ale candidatului pentru scanarea de secrete.
+ *  Per-camp (un camp cu ref. circulara NU poate defecta scanarea celorlalte). */
 function serializeCandidate(cand) {
-  try {
-    const clone = {};
-    for (const [k, v] of Object.entries(cand || {})) if (!SCAN_SKIP.has(k)) clone[k] = v;
-    return `${cand.title || ""} ${cand.content || ""} ${JSON.stringify(clone)}`.trim();
-  } catch { return `${cand.title || ""} ${cand.content || ""} ${cand.structured_data ? JSON.stringify(cand.structured_data) : ""} ${Array.isArray(cand.entities) ? JSON.stringify(cand.entities) : ""} ${Array.isArray(cand.relations) ? JSON.stringify(cand.relations) : ""} ${cand.source_reference || ""} ${Array.isArray(cand.evidence_references) ? JSON.stringify(cand.evidence_references) : ""} ${cand.extracted_by || ""}`.trim(); }
+  const parts = [String(cand?.title || ""), String(cand?.content || "")];
+  for (const [k, v] of Object.entries(cand || {})) {
+    if (SCAN_SKIP.has(k) || k === "title" || k === "content") continue;
+    try { parts.push(typeof v === "string" ? v : JSON.stringify(v)); } catch { parts.push(String(v)); }
+  }
+  return parts.join(" ").trim();
 }
 
 /** Amprenta pentru deduplicare (acelasi continut, aceeasi sursa, acelasi tenant). */
@@ -77,7 +79,7 @@ export async function remember(cand = {}, opts = {}) {
   // A DOUA BARIERA: scaneaza campurile de CONTINUT ale itemului construit (nu campurile
   // generate de sistem — id/timestamp au serii lungi de cifre care ar da fals-pozitiv pe
   // tiparul de card). Prinde orice camp liber persistat.
-  const scanItem = JSON.stringify({ title: item.title, content: item.content, structured_data: item.structured_data, entities: item.entities, relations: item.relations, source_reference: item.source_reference, evidence_references: item.evidence_references, extracted_by: item.extracted_by, source_type: item.source_type });
+  const scanItem = JSON.stringify({ title: item.title, content: item.content, structured_data: item.structured_data, entities: item.entities, relations: item.relations, source_reference: item.source_reference, evidence_references: item.evidence_references, extracted_by: item.extracted_by, source_type: item.source_type, retention_policy: item.retention_policy, tenant_id: item.tenant_id, owner_user_id: item.owner_user_id, revoke_reason: item.revoke_reason });
   if (containsSecret(scanItem)) return { stored: false, category: "DO_NOT_STORE", reason: "secret detectat in itemul construit (a doua bariera de siguranta)", item: null };
   const v = validateMemoryItem(item);
   if (!v.ok) return { stored: false, category: gate.category, reason: `validare esuata: ${v.errors.join("; ")}`, item: null };

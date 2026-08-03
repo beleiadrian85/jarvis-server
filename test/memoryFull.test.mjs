@@ -280,5 +280,28 @@ const mkStore = () => { const mem = {}; return { get: async (k, f) => (k in mem 
   ok(r.ok === false && /clasa de date/i.test(r.note || ""), "D2: reviewer refuza cand contextText contine RESTRICTED (nu doar primaryOutput)");
 }
 
+// ═══ REZIDUURI FINALE (verificare finala) ═══
+// D3: secret in retention_policy (free-text) — blocat (scan per-camp, nu allowlist).
+{
+  const store = mkStore();
+  const r = await remember({ title: "X", content: "y", kind: "episode", source_type: "web", retention_policy: "password=Secret1234ABCD" }, { store });
+  ok(r.stored === false, "D3: secret in retention_policy blocat");
+  ok(!JSON.stringify(store).includes("Secret1234ABCD"), "D3: secretul din retention_policy NU ajunge in store");
+  // camp complet nou, necunoscut — scanat implicit (denylist).
+  const r2 = await remember({ title: "X", content: "y", kind: "episode", source_type: "web", camp_nou_oarecare: "AKIAIOSFODNN7EXAMPLE" }, { store });
+  ok(r2.stored === false, "D3: secret intr-un camp NOU necunoscut e scanat implicit (denylist)");
+}
+// D4: canalul CONTRADICTIONS trece prin egress — titluri RESTRICTED nu ajung la extern.
+{
+  const store = mkStore();
+  // Doua memorii sub-clasificate INTERNAL dar cu 'salariu' in titlu, contradictorii.
+  await remember({ title: "Salariu Ion platit", content: "-", kind: "fact", source_type: "hr", verification_status: "OBSERVED", entities: ["Ion"] }, { store });
+  await remember({ title: "Salariu Ion neplatit", content: "-", kind: "fact", source_type: "hr", verification_status: "OBSERVED", entities: ["Ion"] }, { store });
+  const ctx = await assemble2("situatia Ion", { store, providerTrust: "external", knownEntities: ["Ion"] });
+  const cs = (ctx.sections.CONTRADICTIONS || []).join(" ");
+  ok(!/platit|neplatit|salariu/i.test(cs) || /detaliu ascuns/.test(cs), "D4: detaliu contradictie RESTRICTED ascuns pt extern (semnalul ramane)");
+  ok(!/Salariu Ion (ne)?platit/i.test(ctx.contextText), "D4: titlurile RESTRICTED nu apar in contextText extern");
+}
+
 console.log(`\n${n} verificari · ${failed === 0 ? "TOATE TRECUTE" : failed + " ESUATE"} — memory+multimodel full`);
 process.exit(failed === 0 ? 0 : 1);

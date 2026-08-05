@@ -142,6 +142,24 @@ export function registerApi(app) {
     });
   });
 
+  // OPERATIONAL — harta functiilor (schema): ce tabele/domenii exista in Operational
+  // si care sunt deja citite de JARVIS. Read-only (opsdb e read-only), doar metadate
+  // (nume tabele + coloane + nr. randuri), NU date. Pentru sincronizarea completa.
+  app.get("/api/ops-schema", async (_req, res) => {
+    try {
+      const { opsQuery, hasOpsDb } = await import("./supervisor/opsdb.js");
+      if (!hasOpsDb) return res.status(503).json({ error: "OPERATIONAL_DATABASE_URL nesetat." });
+      const tables = await opsQuery(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`);
+      const out = [];
+      for (const t of tables) {
+        const cols = await opsQuery(`SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`, [t.table_name]);
+        let n = null; try { n = (await opsQuery(`SELECT count(*)::int c FROM "${t.table_name}"`))[0].c; } catch { /* view/perm */ }
+        out.push({ table: t.table_name, rows: n, columns: cols.map((c) => `${c.column_name}:${c.data_type}`) });
+      }
+      res.json({ count: out.length, tables: out });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Transcriere audio — OpenAI Whisper preferat, Deepgram fallback.
   app.post("/api/transcribe", async (req, res) => {
     const { data, mediaType } = req.body || {};

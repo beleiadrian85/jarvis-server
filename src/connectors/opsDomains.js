@@ -4,6 +4,9 @@
 // (nu doar taskuri): marketing, ofertare/produse, mentenanta, mementos etc.
 // READ-ONLY (opsQuery ruleaza pe pool read-only). Best-effort per tabel.
 import { opsQuery, hasOpsDb } from "../supervisor/opsdb.js";
+import { getState, setState } from "../state.js";
+
+const CACHE_KEY = "ops:overview:cache";
 
 // Domeniu → { label, tables[], latest? (coloana de timp pentru "ultima activitate") }.
 export const OPS_DOMAINS = [
@@ -51,6 +54,19 @@ export async function getOperationalOverview({ nowISO = null } = {}) {
     domains.push({ key: d.key, label: d.label, rows: total, has_data: total > 0, present: any, tables_with_data: withData, last_activity: latest });
   }
   return { connected: true, generated_at: nowISO || new Date().toISOString(), domain_count: domains.length, domains };
+}
+
+/** REFRESH: recalculeaza overview-ul si il salveaza in cache (jarvis_state). Chemat de
+ *  jobul din 10 in 10 min + on-demand. Returneaza overview-ul proaspat. */
+export async function refreshOverview({ nowISO = null } = {}) {
+  const ov = await getOperationalOverview({ nowISO });
+  if (ov.connected) { try { await setState(CACHE_KEY, { ...ov, cached_at: ov.generated_at }); } catch { /* best-effort */ } }
+  return ov;
+}
+
+/** Overview din cache (ieftin, pentru raspunsuri/UI). Null daca nu a rulat inca. */
+export async function getCachedOverview() {
+  try { return await getState(CACHE_KEY, null); } catch { return null; }
 }
 
 /** Lista domeniilor cu date (pentru sourceTruth.data_domains). */

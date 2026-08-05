@@ -160,11 +160,25 @@ export function registerApi(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // OPERATIONAL — overview LIVE pe DOMENII functionale (toate functiile sincronizate):
-  // per domeniu, nr. randuri + ultima activitate. Read-only.
-  app.get("/api/ops-overview", async (_req, res) => {
-    try { const { getOperationalOverview } = await import("./connectors/opsDomains.js"); res.json(await getOperationalOverview()); }
-    catch (e) { res.status(500).json({ error: e.message }); }
+  // OPERATIONAL — overview pe DOMENII (toate functiile). Implicit din cache (ieftin,
+  // reimprospatat de jobul din 10 in 10 min); ?fresh=1 recalculeaza live. Read-only.
+  app.get("/api/ops-overview", async (req, res) => {
+    try {
+      const m = await import("./connectors/opsDomains.js");
+      if (req.query.fresh === "1") return res.json(await m.refreshOverview());
+      const cached = await m.getCachedOverview();
+      res.json(cached || (await m.refreshOverview()));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // Sincronizare Operational ON-DEMAND (acelasi lucru ca jobul din 10 in 10 min).
+  app.post("/api/ops-sync", async (_req, res) => {
+    try {
+      const { refreshOverview } = await import("./connectors/opsDomains.js");
+      const ov = await refreshOverview();
+      let learned = null;
+      try { if (config.taskIntelligence) { const { runLearningCycle } = await import("./ceo/taskIntel/index.js"); learned = await runLearningCycle({}); } } catch { /* */ }
+      res.json({ ok: true, synced_at: ov.generated_at, domains_with_data: (ov.domains || []).filter((d) => d.has_data).length, domain_count: ov.domain_count, learned });
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   // Transcriere audio — OpenAI Whisper preferat, Deepgram fallback.

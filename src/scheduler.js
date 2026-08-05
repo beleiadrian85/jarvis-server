@@ -31,6 +31,28 @@ async function sendManagerial(draft, trigger) {
 }
 
 export function startScheduler() {
+  // SINCRONIZARE OPERATIONAL — din 10 in 10 minute. Reimprospateaza overview-ul TUTUROR
+  // functiilor Operational (cache) + re-invata din taskurile finalizate. Read-only pe
+  // Operational (scrie doar in jarvis_state). Gated: JARVIS_OPS_SYNC_ENABLED (implicit ON).
+  const opsSyncOn = !["off", "false", "0"].includes(String(process.env.JARVIS_OPS_SYNC_ENABLED || "on").toLowerCase());
+  if (opsSyncOn && hasOpsDb) {
+    const everyMin = Math.max(1, Number(process.env.JARVIS_OPS_SYNC_INTERVAL_MIN || 10));
+    cron.schedule(`*/${everyMin} * * * *`, async () => {
+      try {
+        const { refreshOverview } = await import("./connectors/opsDomains.js");
+        const ov = await refreshOverview();
+        let learned = null;
+        try {
+          if (config.taskIntelligence) { const { runLearningCycle } = await import("./ceo/taskIntel/index.js"); learned = await runLearningCycle({}); }
+        } catch (e) { console.error("[ops-sync.learn]", e.message); }
+        const withData = (ov.domains || []).filter((d) => d.has_data).length;
+        console.log(`[ops-sync] domenii=${withData}/${ov.domain_count} indexat=${learned?.indexed ?? "-"} @${new Date().toISOString()}`);
+        await audit("ops_sync", "sincronizare Operational (overview + learning)", `domenii=${withData} indexat=${learned?.indexed ?? "-"}`).catch(() => {});
+      } catch (e) { console.error("[ops-sync]", e.message); }
+    }, { timezone: "Europe/Bucharest" });
+    console.log(`[scheduler] ops-sync activ: din ${everyMin} in ${everyMin} min`);
+  }
+
   cron.schedule("0 9 * * *", async () => {
     // PROACTIVE MODE — CEO Home (Health Score + riscuri) intai: pagina de dimineata.
     if (hasOperational) {

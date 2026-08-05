@@ -5,6 +5,7 @@
 // unde datele lipsesc. Reutilizeaza connectivitatea deja calculata (config,
 // smartbillConfigured, getSourcesHealth) — zero sistem paralel.
 import { config, hasOperational, hasDb } from "../config.js";
+import { OPS_DOMAINS } from "../connectors/opsDomains.js";
 
 // §1 — CONTRACTUL DE EVIDENTA: cum se clasifica orice afirmatie operationala.
 export const EVIDENCE_CLASS = [
@@ -39,12 +40,13 @@ export async function buildSourceTruth({ nowMs = Date.now() } = {}) {
   sources.push({
     source: "Operational",
     status: opsReadOk ? "CONNECTED" : "NOT_CONNECTED",
-    read: hasDb ? "FULL (opsdb read-only: task-uri, cash, obligatii, extrase, vanzari, leads, furnizori, site)" : (hasOperational ? "PARTIAL (doar prin MCP list_tasks etc.)" : "NONE"),
+    // FULL READ pe TOATE domeniile Operational (107 tabele, ~14 functii). Scrierea ramane TASKS-ONLY.
+    read: hasDb ? `FULL (opsdb read-only, TOATE functiile: ${OPS_DOMAINS.map((d) => d.label).join("; ")})` : (hasOperational ? "PARTIAL (doar prin MCP list_tasks etc.)" : "NONE"),
     write: hasOperational ? "TASKS ONLY (create_task/update_task/add_observation) — granita structurala" : "NONE",
-    data_domains: ["tasks", "payment_obligations", "bank_statement_lines", "income_invoices", "sales_units", "leads", "suppliers", "site_visits"],
+    data_domains: OPS_DOMAINS.map((d) => d.key),
     freshness: "live la citire",
     confidence: opsReadOk ? "high" : "none",
-    limitations: ["scriere DOAR task-uri (nu obligatii/vanzari/cash/facturi)", "soldul bancar NU e in rulaje — necesita input manual"],
+    limitations: ["scriere DOAR task-uri (nu obligatii/vanzari/cash/facturi/marketing/oferte)", "soldul bancar NU e in rulaje — necesita input manual"],
     evidence: `OPERATIONAL_DATABASE_URL ${hasDb ? "set" : "lipsa"}; OPERATIONAL_MCP_URL ${hasOperational ? "set" : "lipsa"}`,
   });
 

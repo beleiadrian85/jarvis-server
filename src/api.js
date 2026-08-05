@@ -160,6 +160,13 @@ export function registerApi(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // OPERATIONAL — overview LIVE pe DOMENII functionale (toate functiile sincronizate):
+  // per domeniu, nr. randuri + ultima activitate. Read-only.
+  app.get("/api/ops-overview", async (_req, res) => {
+    try { const { getOperationalOverview } = await import("./connectors/opsDomains.js"); res.json(await getOperationalOverview()); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Transcriere audio — OpenAI Whisper preferat, Deepgram fallback.
   app.post("/api/transcribe", async (req, res) => {
     const { data, mediaType } = req.body || {};

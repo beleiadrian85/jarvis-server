@@ -29,6 +29,9 @@ export async function initDb() {
     connectionString: config.databaseUrl,
     ssl: internal ? false : { rejectUnauthorized: false },
   });
+  // CRITIC: handler pe erorile clientilor INACTIVI (ECONNRESET la conexiuni idle
+  // resetate de proxy). Fara el, pg-pool emite 'error' NEtratat → procesul MOARE.
+  pool.on("error", (err) => console.error("[db] conexiune idle resetata (recuperabil):", err.message));
 
   const schema = fs.readFileSync(path.join(__dirname, "db", "schema.sql"), "utf8");
   await pool.query(schema);

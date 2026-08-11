@@ -30,6 +30,11 @@ if (hasOpsDb) {
     client.query("SET default_transaction_read_only = on")
       .catch((e) => console.error("[opsdb] SET read_only ESUAT:", e.message));
   });
+  // (0) CRITIC: handler pe erorile clientilor INACTIVI din pool. Proxy-ul Railway
+  // reseteaza conexiunile idle (ECONNRESET); fara acest handler, pg-pool emite
+  // 'error' NEtratat → Node arunca exceptie necaptata → PROCESUL MOARE (502).
+  // Cu handler, conexiunea rea e doar aruncata; urmatorul query deschide una noua.
+  pool.on("error", (err) => console.error("[opsdb] conexiune idle resetata (recuperabil):", err.message));
 }
 
 /**

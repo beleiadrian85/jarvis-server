@@ -3,6 +3,13 @@ import { createTask, updateTask } from "./mcp.js";
 import { createEvent } from "./sources/calendar.js";
 import { audit } from "./audit.js";
 import { proposeAction } from "./approvalGate.js";
+import { config } from "./config.js";
+
+// PAUZA CREARE TASKURI: acelasi kill switch ca CommandBus (config.nervousKill,
+// env CEO_NERVOUS_KILL_SWITCH / CEO_AUTONOMOUS_TASKS_KILL_SWITCH). Cand e ON, JARVIS
+// NU mai propune si NU mai creeaza taskuri. Nu afecteaza calendarul.
+export function taskCreationPaused() { return config.nervousKill === true; }
+const PAUSED_MSG = "⏸️ Crearea de task-uri e oprită momentan (la cererea ta). Îți spun ce ar fi de făcut, dar nu creez task până nu reactivezi.";
 
 /**
  * Fluxuri cu confirmare pentru Operational:
@@ -14,6 +21,7 @@ import { proposeAction } from "./approvalGate.js";
 
 /** "Jarvis, creeaza task: ..." → structura + confirmare. */
 export async function prepareTaskCreate(rawText, channel) {
+  if (taskCreationPaused()) { await audit("task_creation_paused", "propunere blocata (kill switch)", channel).catch(() => {}); return { id: null, preview: PAUSED_MSG, paused: true }; }
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   let t;
   try {
@@ -100,6 +108,8 @@ export async function prepareTaskUpdate(args, humanSummary, channel) {
 /** Executa o actiune confirmata. */
 export async function executeConfirmed(p) {
   if (p.type === "create") {
+    // Plasa finala: chiar daca o propunere era deja in asteptare, pauza blocheaza crearea.
+    if (taskCreationPaused()) { await audit("task_creation_paused", "confirmare blocata (kill switch)", "-").catch(() => {}); return "⏸️ Crearea de task-uri e oprită momentan — nu am creat task-ul."; }
     const t = p.payload;
     const result = await createTask({
       title: t.title,

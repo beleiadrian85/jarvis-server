@@ -7,8 +7,18 @@ import { config, hasOperational } from "./config.js";
 
 let rpcId = 0;
 
+// COMENZI OPRITE (kill switch, config.nervousKill / CEO_NERVOUS_KILL_SWITCH): cand e ON,
+// JARVIS NU mai trimite NICIO comanda de scriere in Operational — chokepoint unic care
+// acopera TOATE caile (opsWrite, taskflow, action cards). Citirile raman functionale.
+const WRITE_TOOL_RX = /(create|update|delete|restore|revision|import_|add_observation|_save|_ack|assign|_set\b)/i;
+export function isWriteTool(name) { return WRITE_TOOL_RX.test(String(name || "")); }
+
 export async function mcpCall(toolName, args = {}) {
   if (!hasOperational) throw new Error("OPERATIONAL_MCP_URL nesetat.");
+  // BACKSTOP GLOBAL: orice comanda de scriere e blocata cand kill switch-ul e activ.
+  if (config.nervousKill === true && isWriteTool(toolName)) {
+    return "⏸️ Comenzile în Operational sunt oprite momentan (kill switch). Nu am executat nimic.";
+  }
   const res = await fetch(config.operationalMcpUrl, {
     method: "POST",
     headers: {

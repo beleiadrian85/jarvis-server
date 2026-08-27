@@ -77,7 +77,9 @@ export async function callClaudeWithMCP({ system, messages, mcpServers = [], web
   }
   const data = await res.json();
   console.log(`[timing] claude+tools mcp=${mcpServers.length > 0} web=${webSearch} ms=${Date.now() - t0}`);
-  return extractText(data);
+  const text = extractText(data);
+  // Cand s-a cautat pe web, propune linkurile gasite (nu le pierde).
+  return webSearch ? withProposedLinks(data, text) : text;
 }
 
 function extractText(data) {
@@ -87,4 +89,25 @@ function extractText(data) {
     .map((b) => b.text)
     .join("\n")
     .trim();
+}
+
+// Extrage LINKURILE/sursele gasite de web_search (altfel se pierd — extractText tine
+// doar text). Preferam citarile (cele folosite efectiv), apoi rezultatele brute.
+export function extractWebSources(data) {
+  const seen = new Set(); const out = [];
+  const add = (url, title) => { if (!url || seen.has(url)) return; seen.add(url); out.push({ url, title: (title || url).slice(0, 120) }); };
+  for (const b of data.content || []) {
+    if (b.type === "text" && Array.isArray(b.citations)) for (const c of b.citations) if (c?.url) add(c.url, c.title);
+  }
+  for (const b of data.content || []) {
+    if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) if (r?.type === "web_search_result" && r.url) add(r.url, r.title);
+  }
+  return out.slice(0, 6);
+}
+
+/** Text + sectiune de linkuri propuse (cand s-a cautat pe web). */
+export function withProposedLinks(data, text) {
+  const sources = extractWebSources(data).filter((s) => !text.includes(s.url));
+  if (!sources.length) return text;
+  return `${text}\n\n🔗 Linkuri:\n${sources.map((s) => `• ${s.title} — ${s.url}`).join("\n")}`;
 }

@@ -81,7 +81,9 @@ export function isCalendarTopic(text) {
 // Cand chiar e nevoie de internet (altfel chat rapid fara tool-uri).
 export function needsWeb(text) {
   const n = norm(text);
-  return /(cauta|caut[aă]|pe net|pe internet|google|cat costa|c[aâ]t cost|pret|preturi|curs|euro|dolar|vreme|vremea|meteo|stiri|noutati|adresa|telefon|program(ul)? de|deschis|cota|bursa|legea|reglementar|impozit|tva azi|astazi|acum pe piata)/.test(n);
+  return /(cauta|caut[aă]|pe net|pe internet|online|google|cat costa|c[aâ]t cost|pret|preturi|curs|euro|dolar|vreme|vremea|meteo|stiri|noutati|adresa|telefon|program(ul)? de|deschis|cota|bursa|legea|reglementar|impozit|tva azi|astazi|acum pe piata)/.test(n) ||
+    // Cereri explicite de LINKURI / SURSE (propune linkuri).
+    /(link|linkuri|url|surse?\b|site-?uri|site\b|pagini|recomand[a-z]*\s+(un |mi )?(site|link|sursa|pagina)|unde (gasesc|pot (gasi|cumpar|comand|citi|vedea))|gaseste[- ]?mi|cauta[- ]?mi|da[- ]?mi (niste )?(link|surse|site))/.test(n);
 }
 
 /**

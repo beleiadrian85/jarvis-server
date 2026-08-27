@@ -548,7 +548,9 @@ async function generalChat(channel, text) {
     if (useWeb) {
       system +=
         "\n\nINTERNET: ai cautare web. Foloseste-o cand intrebarea cere info curenta/externa " +
-        "(preturi, cursuri, vreme, stiri, firme, reglementari). Raspuns scurt, cu sursa daca e relevant.";
+        "(preturi, cursuri, vreme, stiri, firme, reglementari) SAU cand ti se cer linkuri/surse/site-uri. " +
+        "Cand ti se cer linkuri, PROPUNE 3-5 linkuri relevante, fiecare cu titlu scurt si URL exact (nu inventa URL-uri). " +
+        "Raspuns scurt: 1-2 randuri de context, apoi linkurile. Marcheaza ca sunt propuneri de verificat, nu recomandari validate.";
     }
     if (useOperational) {
       system +=

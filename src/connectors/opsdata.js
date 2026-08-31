@@ -74,6 +74,27 @@ export function getIncomeInvoices() {
   }, "income_invoices");
 }
 
+/** Instantaneu financiar REAL pentru Morning Brief — DOAR date existente (fara estimari
+ *  inventate). Sold bancar = null (nu e conectat, vine prin input manual). */
+export function getCashSnapshot() {
+  return safe(async () => {
+    const [backlog, invoices, inflows] = await Promise.all([getSupplierBacklog(), getIncomeInvoices(), getEstimatedInflows()]);
+    const now = Date.now();
+    const soon = (d) => d && (new Date(d).getTime() - now) <= 30 * 86400000;
+    const receivables = (invoices || []).filter((i) => (i.remainingRON || 0) > 0.5);
+    const toReceive = receivables.length ? {
+      count: receivables.length,
+      amount: Math.round(receivables.reduce((s, i) => s + i.remainingRON, 0)),
+      soon: Math.round(receivables.filter((i) => soon(i.dueDate)).reduce((s, i) => s + i.remainingRON, 0)),
+    } : null;
+    const toPay = backlog && backlog.unconfirmed_amount > 0
+      ? { count: backlog.unconfirmed || 0, amount: Math.round(backlog.unconfirmed_amount) } : null;
+    const estimated = (inflows || []).length
+      ? { count: inflows.length, amount: Math.round(inflows.reduce((s, i) => s + (i.amountRON || 0), 0)) } : null;
+    return { toReceive, toPay, estimated, bank_balance: null };
+  }, "cash_snapshot");
+}
+
 /** Traficul site-ului (Spion) — agregat zilnic, ultimele N zile. */
 export function getSiteTraffic(days = 28) {
   return safe(async () => {

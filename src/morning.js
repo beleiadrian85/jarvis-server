@@ -30,6 +30,19 @@ function groupTasks(rawLines) {
   return groups;
 }
 
+/** PUR: sectiunea CASH din snapshot-ul financiar. Fara placeholder; ce lipseste =
+ *  "Date insuficiente". Marcheaza incasarile estimate ca ASTEPTARI (Constitutia). */
+export function formatCashSection(cash) {
+  const fmt = (n) => Number(n).toLocaleString("ro-RO");
+  if (!cash) return "CASH / FINANCIAR: Date insuficiente (Operational financiar indisponibil).";
+  const l = [];
+  l.push(`  • De încasat (facturi neplătite): ${cash.toReceive ? `${fmt(cash.toReceive.amount)} lei · ${cash.toReceive.count} facturi (${fmt(cash.toReceive.soon)} lei scadente ≤30 zile)` : "Date insuficiente"}`);
+  l.push(`  • De plătit (furnizori neconfirmați): ${cash.toPay ? `${fmt(cash.toPay.amount)} lei · ${cash.toPay.count}` : "Date insuficiente"}`);
+  if (cash.estimated) l.push(`  • Încasări estimate (AȘTEPTĂRI, neconfirmate): ${fmt(cash.estimated.amount)} lei · ${cash.estimated.count}`);
+  l.push("  • Sold bancar: Date insuficiente (nu e conectat — vine prin extras/input manual).");
+  return "CASH / FINANCIAR (Operational, read-only):\n" + l.join("\n");
+}
+
 export async function buildMorningReport() {
   const [weather, events, emails, unanswered, tasksRaw, vault, reminders] = await Promise.all([
     getWeather(),
@@ -100,8 +113,13 @@ export async function buildMorningReport() {
     parts.push("TERMENE CRITICE / NEREZOLVATE (registrul reminders):\n" + formatReminders(reminders));
   } else parts.push("TERMENE CRITICE: nimic in registru.");
 
-  // Cash-flow: placeholder pana la Faza 5 (constitutie)
-  parts.push("CASH-FLOW / CREDITE: —");
+  // CASH / FINANCIAR — DOAR date reale din Operational (fara placeholder, fara estimari
+  // inventate). Ce lipseste = "Date insuficiente", niciodata o cifra inventata.
+  {
+    let cash = null;
+    if (hasOperational) { try { cash = await (await import("./connectors/opsdata.js")).getCashSnapshot(); } catch { cash = null; } }
+    parts.push(formatCashSection(cash));
+  }
 
   const raw = parts.join("\n\n");
   const now = new Date();
@@ -124,7 +142,9 @@ export async function buildMorningReport() {
       "🟠 Intarziate (detaliat), 🟢 Restul (doar numarul). Nu inventa grupuri goale.\n" +
       "6) Termene critice din registru (daca exista).\n" +
       "7) Sectiunea 'TOP 5 PRIORITATI AZI' — NUCLEUL raportului.\n" +
-      "8) Linia 'Cash-flow: —' (placeholder pana la Faza 5).\n\n" +
+      "8) Sectiunea 'CASH / FINANCIAR' — REDA EXACT cifrele reale primite (de încasat, de plătit, " +
+      "sold bancar). NU inventa nicio valoare. Unde scrie 'Date insuficiente', pastreaza asa — " +
+      "nu estima. Marcheaza incasarile estimate ca AȘTEPTĂRI, nu ca bani siguri.\n\n" +
       "REGULI TOP 5 PRIORITATI:\n" +
       "- Ordonezi dupa ierarhia stricta de impact: (1) cash-flow, (2) vanzari, (3) finantari, " +
       "(4) executie, (5) juridic. Impact pe criteriu superior bate criteriile inferioare. " +

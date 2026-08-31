@@ -49,9 +49,20 @@ export async function readEmailThread(threadRef, { gmail = null, ctx = {} } = {}
   const g = gmail || (await import("../../sources/gmail.js"));
   let thread;
   try { thread = await g.readThread?.(threadRef); } catch (e) { return { ok: false, reason: e.message }; }
-  await audit("email_read", `thread=${threadRef}`, "read-only", true).catch(() => {});
-  const fenced = fenceUntrusted(String(thread?.body || thread?.text || "").slice(0, 8000), `email:${threadRef}`);
-  return { ok: true, thread_ref: threadRef, fenced: fenced.fenced, injection: !fenced.scan.safe, evidence_class: "FOUND_IN_EMAIL" };
+  // readThread poate intoarce: (a) o LISTA de mesaje [{from,subject,date,body,...}],
+  // (b) un obiect {body/text}, (c) null/[]/incomplet. Normalizam robust in toate cazurile.
+  const messages = Array.isArray(thread) ? thread
+    : Array.isArray(thread?.messages) ? thread.messages
+    : (thread && typeof thread === "object") ? [thread] : [];
+  if (!messages.length) return { ok: true, thread_ref: threadRef, fenced: fenceUntrusted("(thread gol sau inaccesibil)", `email:${threadRef}`).fenced, injection: false, message_count: 0, evidence_class: "FOUND_IN_EMAIL", empty: true };
+  const body = messages.map((m, i) => {
+    const hdr = [m?.from && `De la: ${m.from}`, m?.date && `Data: ${m.date}`, m?.subject && `Subiect: ${m.subject}`].filter(Boolean).join(" · ");
+    const text = String(m?.body || m?.text || m?.snippet || "").trim();
+    return `— Mesaj ${i + 1}${hdr ? " — " + hdr : ""} —\n${text || "(fara continut text)"}`;
+  }).join("\n\n").slice(0, 8000);
+  await audit("email_read", `thread=${threadRef} msgs=${messages.length}`, "read-only", true).catch(() => {});
+  const fenced = fenceUntrusted(body, `email:${threadRef}`);
+  return { ok: true, thread_ref: threadRef, message_count: messages.length, fenced: fenced.fenced, injection: !fenced.scan.safe, evidence_class: "FOUND_IN_EMAIL" };
 }
 
 /** Citeste un atasament permis. UNTRUSTED. Necesita EMAIL_READ_ATTACHMENTS. */

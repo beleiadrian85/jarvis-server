@@ -11,7 +11,7 @@ export function planSources(intent, text = "") {
   const n = String(text).toLowerCase();
   if (/lege|reglementar|fiscal|tva|anaf|norm|hotarare|ordonanta|ocpi|cadastru/.test(n) || /LEGAL|REGULATION/i.test(intent))
     return ["official_primary", "official_secondary", "journalistic_context"];
-  if (/piata|concuren|pret|competitor/.test(n)) return ["official_source", "company_sites", "registries", "credible_publications"];
+  if (/piata|concuren|pret|competitor/.test(n)) return ["official_primary", "company_sites", "registries", "credible_publications"];
   // Intern financiar/documente → Operational + Email + atasamente.
   return ["operational", "email", "email_attachments", "authorized_drive"];
 }

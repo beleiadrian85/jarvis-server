@@ -6,6 +6,7 @@
 // smartbillConfigured, getSourcesHealth) — zero sistem paralel.
 import { config, hasOperational, hasDb } from "../config.js";
 import { OPS_DOMAINS } from "../connectors/opsDomains.js";
+import { hasOpsDb } from "../supervisor/opsdb.js";
 
 // §1 — CONTRACTUL DE EVIDENTA: cum se clasifica orice afirmatie operationala.
 export const EVIDENCE_CLASS = [
@@ -30,22 +31,38 @@ export const FORBIDDEN_UNLESS_PROVEN = [
  * Fiecare sursa: { source, status, read, write, data_domains, freshness,
  * confidence, limitations, evidence }. Determinist peste config + probe.
  */
+/**
+ * PUR: decide accesul la CITIREA Operational din disponibilitatea REALA a surselor.
+ * Regula anti-halucinatie: FULL doar cu opsdb (baza Operational); NICIODATA pe baza
+ * de stare a lui JARVIS (hasDb). Fara opsdb, doar MCP (task-uri) sau nimic.
+ * @returns {status, read, data_domains[], confidence}
+ */
+export function operationalAccess(hasOpsDb, hasOperational) {
+  const opsReadOk = !!hasOpsDb || !!hasOperational;
+  return {
+    status: opsReadOk ? "CONNECTED" : "NOT_CONNECTED",
+    read: hasOpsDb ? `FULL (opsdb read-only, TOATE functiile: ${OPS_DOMAINS.map((d) => d.label).join("; ")})`
+      : (hasOperational ? "PARTIAL (doar prin MCP list_tasks etc.)" : "NONE"),
+    data_domains: hasOpsDb ? OPS_DOMAINS.map((d) => d.key) : (hasOperational ? ["tasks"] : []),
+    confidence: opsReadOk ? "high" : "none",
+  };
+}
+
 export async function buildSourceTruth({ nowMs = Date.now() } = {}) {
   const sources = [];
 
   // ── OPERATIONAL (MCP write TASKS-ONLY + opsdb read complet) ──
   let sourcesHealth = {};
   try { sourcesHealth = (await import("../connectors/opsdata.js")).getSourcesHealth() || {}; } catch { /* */ }
-  const opsReadOk = hasDb || hasOperational;
+  const op = operationalAccess(hasOpsDb, hasOperational);
   sources.push({
     source: "Operational",
-    status: opsReadOk ? "CONNECTED" : "NOT_CONNECTED",
-    // FULL READ pe TOATE domeniile Operational (107 tabele, ~14 functii). Scrierea ramane TASKS-ONLY.
-    read: hasDb ? `FULL (opsdb read-only, TOATE functiile: ${OPS_DOMAINS.map((d) => d.label).join("; ")})` : (hasOperational ? "PARTIAL (doar prin MCP list_tasks etc.)" : "NONE"),
+    status: op.status,
+    read: op.read,
     write: hasOperational ? "TASKS ONLY (create_task/update_task/add_observation) — granita structurala" : "NONE",
-    data_domains: OPS_DOMAINS.map((d) => d.key),
+    data_domains: op.data_domains,
     freshness: "live la citire",
-    confidence: opsReadOk ? "high" : "none",
+    confidence: op.confidence,
     limitations: ["scriere DOAR task-uri (nu obligatii/vanzari/cash/facturi/marketing/oferte)", "soldul bancar NU e in rulaje — necesita input manual"],
     evidence: `OPERATIONAL_DATABASE_URL ${hasDb ? "set" : "lipsa"}; OPERATIONAL_MCP_URL ${hasOperational ? "set" : "lipsa"}`,
   });
@@ -95,8 +112,8 @@ export async function buildSourceTruth({ nowMs = Date.now() } = {}) {
     });
   }
 
-  // ── SITE / SPION (trafic din opsdb) ──
-  const spionOk = hasDb;
+  // ── SITE / SPION (trafic din opsdb) ── site_visits e in baza OPERATIONAL, deci hasOpsDb.
+  const spionOk = hasOpsDb;
   sources.push({
     source: "Site / Spion (trafic)",
     status: spionOk ? "CONNECTED" : "NOT_CONNECTED",

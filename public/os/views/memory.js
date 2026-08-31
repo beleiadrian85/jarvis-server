@@ -92,13 +92,19 @@ export async function render(root, ctx) {
     nodes.push(card("Memorii recente", listWrap));
   }
 
-  // Modele (motoare de rationament).
-  const mp = (models.providers_all || []).map((p) => pill(`${p.label}${(models.providers_active || []).includes(p.id) ? " ✓" : ""}`, (models.providers_active || []).includes(p.id) ? "ok" : null));
+  // Modele (motoare de rationament). Contract real modelsStatus(): { profiles[], providers_active[], cost:{today:{usd,cap}} }.
+  const LABELS = { openai: "ChatGPT (OpenAI)", anthropic: "Claude (Anthropic)", google: "Gemini (Google)", private: "Model privat" };
+  const active = models.providers_active || [];
+  const profiles = Array.isArray(models.profiles) ? models.profiles : [];
+  const mp = profiles.length
+    ? profiles.map((p) => pill(`${LABELS[p.provider] || p.provider}${p.enabled ? " ✓" : ""}`, p.enabled ? "ok" : null))
+    : [h("span", { class: "dim" }, "niciun provider")];
+  const today = (models.cost && models.cost.today) || {};
   nodes.push(card("Modele — motoare de raționament",
     h("div", { class: "form-row", style: "flex-wrap:wrap;gap:6px" }, ...mp),
     h("p", { class: "dim", style: "margin-top:8px" }, models.enabled
-      ? `Multi-Model activ. Data Routing: ${models.data_routing ? "pornit" : "oprit"}. Cheltuială azi: ${models.cost?.usd ?? 0}$ / plafon ${models.cost?.cap || "—"}$.`
-      : "Multi-Model OFF. Se activează cu JARVIS_MULTI_MODEL_ENABLED=on plus flag-ul fiecărui provider (ex. JARVIS_OPENAI_MODEL_ENABLED=on) și cheia API. Datele RESTRICTED nu pleacă niciodată la un model extern.")));
+      ? `Multi-Model activ (${active.length ? active.join(", ") : "niciun provider pornit"}). Data Routing: ${models.data_routing ? "pornit" : "oprit"}. Cheltuială azi: ${today.usd ?? 0}$ / plafon ${today.cap || "—"}$.`
+      : "Multi-Model OFF. Se activează cu JARVIS_MULTI_MODEL_ENABLED=on plus flag-ul fiecărui provider (ex. JARVIS_OPENAI_PROVIDER_ENABLED=on) și cheia API. Datele RESTRICTED nu pleacă niciodată la un model extern.")));
 
   root.replaceChildren(...nodes);
 }

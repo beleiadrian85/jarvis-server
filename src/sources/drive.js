@@ -1,5 +1,5 @@
-import { config, hasGoogle } from "../config.js";
-import { gapi } from "../google.js";
+import { config } from "../config.js";
+import { gapi, googleConnected } from "../google.js";
 
 /**
  * Drive readonly, limitat la folderul dedicat "JARVIS".
@@ -25,7 +25,7 @@ async function getFolderId() {
 
 /** Cauta fisiere dupa nume in folderul JARVIS. */
 export async function searchDrive(text, limit = 8) {
-  if (!hasGoogle) return null;
+  if (!(await googleConnected())) return null;
   try {
     const fid = await getFolderId();
     const d = await gapi(

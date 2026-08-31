@@ -28,6 +28,17 @@ export async function isConnected() {
 export async function emailStatus() {
   const connected = await isConnected();
   const missing = missingEnv();
+  // Scope-urile REALE acordate se afla in jarvis_state "google:oauth" (setate la OAuth
+  // callback), NU in env. Le citim ca statusul sa reflecte permisiunile efective.
+  let granted = null, canSend = false, scopeNote = null;
+  try {
+    const { getState } = await import("../../state.js");
+    const oauth = (await getState("google:oauth", null)) || {};
+    if (Array.isArray(oauth.granted_scopes)) granted = oauth.granted_scopes;
+    canSend = oauth.can_send === true;
+    scopeNote = oauth.scope_note || null;
+  } catch { /* best-effort */ }
+  const realScopes = (granted || buildScopes()).map((s) => ({ scope: s, label: SCOPE_LABELS[s] || s }));
   return {
     provider: "gmail",
     connected,
@@ -39,8 +50,10 @@ export async function emailStatus() {
     requested_scopes: buildScopes().map((s) => ({ scope: s, label: SCOPE_LABELS[s] || s })),
     compose_caveat: config.emailIntel?.drafts ? "Drafturile cer scope-ul gmail.compose, care permite tehnic trimiterea — blocată structural în cod." : null,
     missing_env: connected ? [] : missing, // ce trebuie admin sa seteze inainte de wizard
-    scopes: connected ? (config.google?.grantedScopes || buildScopes()).map((s) => ({ scope: s, label: SCOPE_LABELS[s] || s })) : [],
-    scope_warning: connected ? (config.google?.scopeWarning || null) : null,
+    scopes: connected ? realScopes : [],
+    granted_scopes_source: granted ? "state (acordate real)" : "requested (fallback)",
+    can_send_scope: canSend, // scope-ul tehnic permite send? (trimiterea ramane blocata structural oricum)
+    scope_warning: connected ? (scopeNote || (canSend ? "Tokenul are un scope care permite tehnic trimiterea — blocată structural în cod." : null)) : null,
     can_start_wizard: config.emailIntel?.oauth && missing.length === 0,
     note: connected ? "Gmail conectat — read-only + drafturi. Trimiterea e dezactivată." :
       missing.length ? "Adminul trebuie să seteze GOOGLE_CLIENT_ID/SECRET înainte de conectare." :

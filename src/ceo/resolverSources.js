@@ -86,19 +86,30 @@ export async function webChecker({ question }, { llm = null } = {}) {
   } catch { return []; }
 }
 
+/** CHECKER Drive autorizat (READ-ONLY) — cauta in Google Drive conectat. */
+export async function driveChecker({ question }) {
+  try {
+    const { searchDrive } = await import("../sources/drive.js");
+    const files = (await searchDrive(String(question || "").slice(0, 200), 6)) || [];
+    return arr(files).slice(0, 6).map((f) => ({ field: "drive", claim: f.name || "fisier", value: f.name || "drive", note: `${f.name || "fisier"}${f.modified ? " (" + f.modified + ")" : ""}`, url: f.link || null, observed_at: f.modified || null, evidence_class: "FOUND_IN_DRIVE" }));
+  } catch { return []; }
+}
+
 /** Set complet de checkere reale (mapeaza pe sursele din planSources). */
 export function defaultCheckers({ store = null, llm = null } = {}) {
+  // Fiecare cheie din planSources() TREBUIE sa aiba un checker aici (altfel sursa e sarita).
+  // Sursele web-based deleaga la webChecker (cautare reala); authorized_drive la Drive.
   return {
     operational: operationalChecker,
     email: (a) => emailChecker(a, { store }),
     email_attachments: (a) => emailChecker(a, { store }), // atasamentele apar in emailChecker
-    authorized_drive: async () => [],
+    authorized_drive: (a) => driveChecker(a),
     official_primary: (a) => webChecker(a, { llm }),
     official_secondary: (a) => webChecker(a, { llm }),
-    journalistic_context: async () => [],
-    company_sites: async () => [],
-    registries: async () => [],
-    credible_publications: async () => [],
+    journalistic_context: (a) => webChecker(a, { llm }),
+    company_sites: (a) => webChecker(a, { llm }),
+    registries: (a) => webChecker(a, { llm }),
+    credible_publications: (a) => webChecker(a, { llm }),
   };
 }
 

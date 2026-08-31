@@ -33,7 +33,10 @@ ok(typeof gate.proposeAction === "function" && typeof gate.confirmActionById ===
   const ceoImports = [...b.matchAll(/from\s+["']\.\/ceo\/([^"']+)["']/g), ...b.matchAll(/import\(\s*["']\.\/ceo\/([^"']+)["']/g)].map((m) => m[1]);
   // Grounding + guvernanta manageriala read-only (Constitution/ManagerialReasoning/
   // QualityGate = PURE; founderModel = invatare, jarvis_state). Fara executie.
-  const allowed = new Set(["sourceTruth.js", "actionLedger.js", "evidencePacket.js", "externalIntel.js", "constitution.js", "managerialReasoning.js", "qualityGate.js", "managerialClaimValidator.js", "managerialFinalizer.js", "sourcePipeline.js", "founderModel.js", "resolverSources.js", "memory/retrieval.js"]);
+  // memory/retrieval.js = grounding read-only; memory/autoIngest.js = scriere DOAR in
+  // memoria PROPRIE a lui JARVIS (jarvis_state, prin Write Gate) — NU in Operational,
+  // deci in interiorul granitei (TASKS-only priveste Operational, nu memoria interna).
+  const allowed = new Set(["sourceTruth.js", "actionLedger.js", "evidencePacket.js", "externalIntel.js", "constitution.js", "managerialReasoning.js", "qualityGate.js", "managerialClaimValidator.js", "managerialFinalizer.js", "sourcePipeline.js", "founderModel.js", "resolverSources.js", "memory/retrieval.js", "memory/autoIngest.js"]);
   ok(ceoImports.every((p) => allowed.has(p)), `brain.js importa din ceo/ DOAR grounding+guvernanta read-only — are: ${ceoImports.join(",") || "nimic"}`);
 }
 

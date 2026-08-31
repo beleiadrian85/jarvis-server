@@ -666,6 +666,14 @@ async function generalChat(channel, text) {
       await recordManagerialFeedback({ recommendation: prevAssistant.content, userMessage: text, context: String(text).slice(0, 120), provenance: channel });
   } catch { /* best-effort */ }
 
+  // FAZA 7 — AUTO-INGEST SELECTIV in memoria pe termen lung: DOAR daca mesajul fondatorului
+  // e o decizie/politica/fapt stabil/responsabilitate/preferinta/angajament clar. Gated de
+  // config.memory.longTerm; trece prin Write Gate (secrete blocate); majoritatea → ignorate.
+  try {
+    const { autoIngestFromMessage } = await import("./ceo/memory/autoIngest.js");
+    await autoIngestFromMessage(text, { source: `chat:${channel}` });
+  } catch { /* best-effort */ }
+
   remember(channel, text, reply);
 
   // FAZA FINALA — TOATE raspunsurile trec prin ResponseComposer + validare + trace

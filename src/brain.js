@@ -490,6 +490,23 @@ async function generalChat(channel, text) {
       // founder) trebuie sa aiba baza — nu fabricate. Repara continutul, nu formatul.
       const { CLAIM_DISCIPLINE_PROMPT } = await import("./ceo/managerialClaimValidator.js");
       system += "\n\n" + CLAIM_DISCIPLINE_PROMPT;
+      // FAZA 5+6 — MODELUL MANAGERIAL "ADRIAN" (read-side): ordinea de gandire +
+      // ce-ar face Adrian (din deciziile anterioare) + corectiile + calibrarea din
+      // feedback-ul managerial. Best-effort, read-only.
+      try {
+        const fm = await import("./ceo/founderModel.js");
+        system += "\n\n" + fm.MANAGERIAL_THINKING_PROMPT;
+        const { getState } = await import("./state.js");
+        const decMem = (await getState("ceo:decision-memory", { decisions: [] }).catch(() => null)) || { decisions: [] };
+        const fmPrompt = fm.founderModelForPrompt(fm.buildFounderModel(decMem.decisions || decMem.items || []));
+        if (fmPrompt) system += "\n\n" + fmPrompt;
+        const corr = (await getState("ceo:founder-corrections", { corrections: [] }).catch(() => null)) || { corrections: [] };
+        const corrPrompt = fm.correctionsForPrompt(corr);
+        if (corrPrompt) system += "\n\n" + corrPrompt;
+        const fb = (await getState("ceo:managerial-feedback", { items: [], counts: {} }).catch(() => null)) || { items: [], counts: {} };
+        const fbPrompt = fm.managerialFeedbackForPrompt(fb);
+        if (fbPrompt) system += "\n\n" + fbPrompt;
+      } catch { /* best-effort */ }
       // DATE STALE / DOCUMENTE INCARCATE: diagnostic pipeline (upload→...→reconciliat)
       // INAINTE de a propune munca manuala (P13 — root cause before process burden).
       try {
@@ -640,9 +657,13 @@ async function generalChat(channel, text) {
   // INVATARE DIN CORECTIILE LUI ADRIAN (Partea VI): daca mesajul curent e o corectie
   // pe raspunsul anterior, o inregistram in Founder Model (nu modifica Constitutia).
   try {
-    const { recordCorrection } = await import("./ceo/founderModel.js");
+    const { recordCorrection, recordManagerialFeedback } = await import("./ceo/founderModel.js");
     const prevAssistant = [...ctx.recent].reverse().find((m) => m.role === "assistant");
     await recordCorrection(text, prevAssistant?.content || "");
+    // FAZA 6 — bucla de feedback: daca raspunsul anterior a fost o recomandare manageriala
+    // si mesajul curent e o reactie (accept/respinge/modifica/corecteaza), o inregistram.
+    if (prevAssistant?.content && /RECOMANDARE|recomand|propun|ar trebui|sugerez|optiune/i.test(prevAssistant.content))
+      await recordManagerialFeedback({ recommendation: prevAssistant.content, userMessage: text, context: String(text).slice(0, 120), provenance: channel });
   } catch { /* best-effort */ }
 
   remember(channel, text, reply);

@@ -156,3 +156,61 @@ export function correctionsForPrompt(state) {
   return "CORECTII INVATATE de la Adrian (evita aceste tipare):\n" +
     list.map((c) => `- ${c.principle} (Adrian a corectat de ${c.confirmations}x: ${c.wrong})`).join("\n");
 }
+
+// ── FAZA 5: ordinea de gandire manageriala + separarea FACT/INFERENCE/RECOMMENDATION.
+export const MANAGERIAL_THINKING_PROMPT =
+  "GANDIRE MANAGERIALA (pentru orice problema importanta, in aceasta ordine):\n" +
+  "1) Care e problema REALA? 2) Impact financiar? 3) Impact pe termen? 4) Ce alte activitati depind de asta? " +
+  "5) Risc juridic/compliance? 6) Cine e responsabil (owner)? 7) Ce informatie lipseste? 8) Ce alternativa exista? " +
+  "9) Costul inactiunii? 10) Ce ar face probabil Adrian (pe baza regulilor + corectiilor de mai jos)? 11) Recomandarea JARVIS.\n" +
+  "SEPARA CLAR, cu etichete:\n" +
+  "• FAPT: ce e verificat in surse (cu proveniența).\n" +
+  "• INFERENȚĂ: ce deduci (marcheaza-l ca deductie, NU ca fapt).\n" +
+  "• RECOMANDARE: ce propui tu (clar, cu owner, si termen DOAR daca exista real).\n" +
+  "Nu prezenta inferentele ca fapte.";
+
+// ── FAZA 6: BUCLA DE FEEDBACK MANAGERIAL. Cand Adrian accepta/respinge/modifica/
+// corecteaza o recomandare importanta, inregistram (recomandare + decizie + diff +
+// context + provenienta + timestamp) ca sa calibram reasoning-ul viitor. NU modifica
+// automat Constitutia.
+const FEEDBACK_KEY = "ceo:managerial-feedback";
+const FB = [
+  { type: "accepted", rx: /\b(da|ok|bine|de acord|asa facem|corect|perfect|exact|merge|aprob|accept)\b/i },
+  { type: "rejected", rx: /\b(nu|resping|nu sunt de acord|nu asa|gresit total|nu merge asa|nu facem asa)\b/i },
+  { type: "corrected", rx: /\b(nu e corect|corecteaza|gresit|nu asa|de fapt|nu ti-am zis|ai presupus|nu e adevarat)\b/i },
+  { type: "modified", rx: /\b(mai bine|schimba|hai mai degraba|prefer sa|as vrea sa|modifica|altfel|in loc de)\b/i },
+];
+/** Clasifica reactia lui Adrian la o recomandare. @returns {type|null} */
+export function classifyManagerialFeedback(text) {
+  const t = norm(text);
+  // ordinea conteaza: corectiile/modificarile bat un "nu asa" simplu de reject.
+  if (FB[2].rx.test(t)) return { type: "corrected" };
+  if (FB[3].rx.test(t)) return { type: "modified" };
+  if (FB[1].rx.test(t)) return { type: "rejected" };
+  if (FB[0].rx.test(t)) return { type: "accepted" };
+  return { type: null };
+}
+/** Inregistreaza feedback managerial (best-effort). @returns {recorded, type} */
+export async function recordManagerialFeedback({ recommendation = "", userMessage = "", context = "", provenance = "chat", store = null, nowISO = null } = {}) {
+  const fb = classifyManagerialFeedback(userMessage);
+  if (!fb.type) return { recorded: false };
+  try {
+    const { getState, setState } = await import("../state.js");
+    const S = store || { get: getState, set: setState };
+    const st = (await S.get(FEEDBACK_KEY, { items: [], counts: {} })) || { items: [], counts: {} };
+    const entry = { type: fb.type, recommendation: String(recommendation).slice(0, 400), decision: String(userMessage).slice(0, 200), context: String(context).slice(0, 200), provenance, at: nowISO || new Date().toISOString() };
+    st.items = [entry, ...arr(st.items)].slice(0, 300);
+    st.counts = st.counts || {}; st.counts[fb.type] = (st.counts[fb.type] || 0) + 1;
+    await S.set(FEEDBACK_KEY, st).catch(() => {});
+    return { recorded: true, type: fb.type };
+  } catch (e) { return { recorded: false, error: e.message }; }
+}
+/** Feedback-ul managerial → semnal pentru prompt (ce tinde Adrian sa accepte/respinga). */
+export function managerialFeedbackForPrompt(state) {
+  const c = state?.counts || {}; const total = Object.values(c).reduce((a, b) => a + b, 0);
+  if (!total) return "";
+  const recent = arr(state?.items).slice(0, 3).filter((x) => x.type === "rejected" || x.type === "corrected");
+  const line = `CALIBRARE (istoric decizii Adrian): acceptat ${c.accepted || 0}, respins ${c.rejected || 0}, modificat ${c.modified || 0}, corectat ${c.corrected || 0}.`;
+  const ex = recent.length ? "\nRecent a respins/corectat: " + recent.map((x) => `"${x.recommendation.slice(0, 70)}…"`).join("; ") : "";
+  return line + ex + "\nFoloseste asta ca sa calibrezi recomandarile — nu repeta ce a respins deja.";
+}

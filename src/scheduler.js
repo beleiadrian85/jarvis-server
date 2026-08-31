@@ -10,6 +10,7 @@ import { buildBriefing } from "./supervisor/briefing.js";
 import { buildSalesReport } from "./supervisor/sales.js";
 import { hasOpsDb } from "./supervisor/opsdb.js";
 import { audit } from "./audit.js";
+import { withCronLock, dayKey, bucketKey } from "./cronLock.js";
 
 /**
  * FAZA 3 — cron 09:00 si 17:00 Europe/Bucharest.
@@ -53,7 +54,7 @@ export function startScheduler() {
     console.log(`[scheduler] ops-sync activ: din ${everyMin} in ${everyMin} min`);
   }
 
-  cron.schedule("0 9 * * *", async () => {
+  cron.schedule("0 9 * * *", () => withCronLock("morning_09", dayKey(), async () => {
     // PROACTIVE MODE — CEO Home (Health Score + riscuri) intai: pagina de dimineata.
     if (hasOperational) {
       try {
@@ -68,16 +69,16 @@ export function startScheduler() {
     } catch (e) {
       console.error("[cron09]", e.message);
     }
-  }, { timezone: "Europe/Bucharest" });
+  }).catch((e) => console.error("[cron09.lock]", e.message)), { timezone: "Europe/Bucharest" });
 
-  cron.schedule("0 17 * * *", async () => {
+  cron.schedule("0 17 * * *", () => withCronLock("evening_diff_17", dayKey(), async () => {
     try {
       await taskDiffReport();
       await audit("cron_diff_17", "verificare task-uri trimisa", "scheduler");
     } catch (e) {
       console.error("[cron17]", e.message);
     }
-  }, { timezone: "Europe/Bucharest" });
+  }).catch((e) => console.error("[cron17.lock]", e.message)), { timezone: "Europe/Bucharest" });
 
   // Igienizare zilnica a tabelului notified.
   cron.schedule("30 3 * * *", () => pruneNotified(14).catch(() => {}), {
@@ -100,30 +101,30 @@ export function startScheduler() {
   // PERSISTENT WATCHER legislativ/web (worker pe scheduler, NU bucla model). La
   // fiecare 3h in zile lucratoare; inregistreaza health; produce notificari. Gated.
   if (config.legislationMonitoring || config.webMonitoring) {
-    cron.schedule("15 */3 * * 1-5", async () => {
+    cron.schedule("15 */3 * * 1-5", () => withCronLock("monitor_watch", bucketKey(180), async () => {
       try {
         const { runWatch } = await import("./ceo/monitor/worker.js");
         const r = await runWatch({});
         await audit("monitor_watch", `checked=${r.checked} material=${r.material} notified=${r.notified}`, (r.errors || []).join("; ").slice(0, 300), true);
       } catch (e) { console.error("[monitor.watch]", e.message); }
-    }, { timezone: "Europe/Bucharest" });
+    }).catch(() => {}), { timezone: "Europe/Bucharest" });
     console.log("[monitor] legislation/web watcher activ (la 3h, L-V)");
     // Escaladare notificari critice nevazute (la fiecare ora).
-    cron.schedule("45 * * * *", async () => {
+    cron.schedule("45 * * * *", () => withCronLock("escalate_stale", bucketKey(60), async () => {
       try { const { escalateStale } = await import("./ceo/notifications/center.js"); await escalateStale({}); } catch { /* best-effort */ }
-    }, { timezone: "Europe/Bucharest" });
+    }).catch(() => {}), { timezone: "Europe/Bucharest" });
   }
 
   // SUPERVISOR AGENT F1 — briefing zilnic 07:30 (doar citire + recomandari).
   if (hasOpsDb) {
-    cron.schedule("30 7 * * *", async () => {
+    cron.schedule("30 7 * * *", () => withCronLock("briefing_0730", dayKey(), async () => {
       try {
         await sendManagerial(await buildBriefing(), "briefing_0730");
       } catch (e) { console.error("[supervisor]", e.message); }
       try {
         await sendManagerial(await buildSalesReport(), "sales_report_0730");
       } catch (e) { console.error("[sales]", e.message); }
-    }, { timezone: "Europe/Bucharest" });
+    }).catch((e) => console.error("[briefing.lock]", e.message)), { timezone: "Europe/Bucharest" });
     console.log("[supervisor] briefing + raport vânzări zilnic 07:30 activ (F1, read-only)");
   }
 

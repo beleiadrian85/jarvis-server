@@ -41,7 +41,7 @@ export function buildNotification(p = {}, { nowISO = null } = {}) {
 }
 
 /** Creeaza o notificare cu DEDUP pe deduplication_key. @returns {created, notification, deduped} */
-export async function pushNotification(p = {}, { store = null, nowISO = null } = {}) {
+export async function pushNotification(p = {}, { store = null, nowISO = null, sender = null, deliveryStore = null } = {}) {
   const S = store || { get: getState, set: setState };
   const all = (await S.get(KEY, { items: {} }).catch(() => null)) || { items: {} };
   const n = buildNotification(p, { nowISO });
@@ -55,7 +55,15 @@ export async function pushNotification(p = {}, { store = null, nowISO = null } =
   const ids = Object.keys(all.items);
   if (ids.length > 500) for (const d of ids.slice(0, ids.length - 500)) delete all.items[d];
   await S.set(KEY, all).catch(() => {});
-  return { created: true, deduped: false, notification: n };
+  // LIVRARE REALA pe Telegram (Faza 2), controlat: doar CRITICAL/FOUNDER_DECISION,
+  // cu cooldown/idempotenta. Best-effort, ne-blocant (nu strica scrierea notificarii).
+  let telegram = null;
+  try {
+    const { deliverToTelegram } = await import("./delivery.js");
+    telegram = await deliverToTelegram(n, { store: deliveryStore || store, sender, nowISO });
+    if (telegram?.sent) { n.telegram_sent_at = new Date().toISOString(); all.items[n.id] = n; await S.set(KEY, all).catch(() => {}); }
+  } catch { /* livrarea nu blocheaza crearea */ }
+  return { created: true, deduped: false, notification: n, telegram };
 }
 
 /** Tranzitie de status (seen/read/actioned/dismissed/snoozed). */
